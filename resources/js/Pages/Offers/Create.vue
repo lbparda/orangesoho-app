@@ -1,13 +1,14 @@
 <script setup>
-import { Head } from '@inertiajs/vue3';
+import { Head, Link } from '@inertiajs/vue3';
 import { ref, computed, watch } from 'vue';
+// NO se importa AuthenticatedLayout
+import SecondaryButton from '@/Components/SecondaryButton.vue';
 
-// Recibimos los datos del controlador
+// --- PROPS ---
 const props = defineProps({
     packages: Array,
     discounts: Array,
     operators: Array,
-    terminals: Array,
 });
 
 // --- ESTADO DEL FORMULARIO ---
@@ -15,10 +16,13 @@ const selectedPackageId = ref(null);
 const lines = ref([]);
 
 // --- LÓGICA COMPUTADA ---
-
 const selectedPackage = computed(() => {
-    if (!selectedPackageId.value) return null;
-    return props.packages.find(p => p.id === selectedPackageId.value);
+    return props.packages.find(p => p.id === selectedPackageId.value) || null;
+});
+
+const availableTerminals = computed(() => {
+    if (!selectedPackage.value) return [];
+    return selectedPackage.value.terminals || [];
 });
 
 const availableO2oDiscounts = computed(() => {
@@ -26,6 +30,7 @@ const availableO2oDiscounts = computed(() => {
     return selectedPackage.value.o2o_discounts || [];
 });
 
+// --- WATCHER ---
 watch(selectedPackageId, (newPackageId) => {
     lines.value = [];
     if (!newPackageId) return;
@@ -40,8 +45,9 @@ watch(selectedPackageId, (newPackageId) => {
             source_operator: null,
             has_vap: false,
             o2o_discount_id: null,
-            terminal_id: null,
+            terminal_pivot_id: null,
             selected_brand: null,
+            selected_model_id: null, // NUEVO: Para guardar el ID del modelo seleccionado
         });
     }
 });
@@ -59,74 +65,74 @@ const appliedDiscount = computed(() => {
     });
 });
 
-// --- LÓGICA DE CÁLCULO ACTUALIZADA ---
-
+// --- LÓGICA DE CÁLCULO (SIN CAMBIOS) ---
 const calculationSummary = computed(() => {
     if (!selectedPackage.value) {
-        return { basePrice: 0, finalPrice: 0, appliedO2oList: [], totalTerminalFee: 0 };
+        return { basePrice: 0, finalPrice: 0, appliedO2oList: [], totalTerminalFee: 0, totalInitialPayment: 0 };
     }
-
     let price = parseFloat(selectedPackage.value.base_price);
     const basePrice = price;
-
-    // 1. Aplicamos el descuento de tarifa (porcentaje)
     if (appliedDiscount.value) {
         price -= (price * (parseFloat(appliedDiscount.value.percentage) / 100));
     }
-
-    // 2. Calculamos los descuentos O2O y cuotas de terminales
     const appliedO2oList = [];
     let totalTerminalFee = 0;
-
+    let totalInitialPayment = 0;
     lines.value.forEach((line, index) => {
-        // Sumamos el coste mensual de cada terminal seleccionado
-        if (line.terminal_id) {
-            const terminalInfo = selectedPackage.value.terminals.find(t => t.id === line.terminal_id);
+        if (line.terminal_pivot_id) {
+            const terminalInfo = availableTerminals.value.find(t => t.pivot.id === line.terminal_pivot_id);
             if (terminalInfo) {
-                totalTerminalFee += parseFloat(terminalInfo.pivot.monthly_fee);
+                totalTerminalFee += parseFloat(terminalInfo.pivot.monthly_cost);
+                totalInitialPayment += parseFloat(terminalInfo.pivot.initial_cost);
             }
         }
-        
-        // Calculamos el descuento O2O
         if (line.o2o_discount_id) {
             const o2o = availableO2oDiscounts.value.find(d => d.id === line.o2o_discount_id);
             if (o2o) {
                 const monthlyValue = parseFloat(o2o.total_discount_amount) / parseFloat(o2o.duration_months);
-                price -= monthlyValue; // Restamos el descuento O2O al precio
-                
+                price -= monthlyValue;
                 appliedO2oList.push({
                     line: index === 0 ? 'Línea Principal' : `Linea ${index + 1} pack`,
-                    name: o2o.name,
-                    value: monthlyValue.toFixed(2)
+                    name: o2o.name, value: monthlyValue.toFixed(2)
                 });
             }
         }
     });
-
-    // 3. Sumamos la cuota total de los terminales al precio final
     price += totalTerminalFee;
-
     return {
         basePrice: basePrice.toFixed(2),
         finalPrice: Math.max(0, price).toFixed(2),
         appliedO2oList,
         totalTerminalFee: totalTerminalFee.toFixed(2),
+        totalInitialPayment: totalInitialPayment.toFixed(2),
     };
 });
 
+// --- FUNCIONES AUXILIARES PARA LOS DESPLEGABLES (MODIFICADAS) ---
+const brandsForSelectedPackage = computed(() => {
+    return [...new Set(availableTerminals.value.map(t => t.brand))];
+});
 
-const brands = computed(() => [...new Set(props.terminals.map(t => t.brand))]);
+// MODIFICADO: Devuelve modelos únicos por marca
 const modelsByBrand = (brand) => {
     if (!brand) return [];
-    return props.terminals.filter(t => t.brand === brand);
+    const terminalsOfBrand = availableTerminals.value.filter(t => t.brand === brand);
+    return terminalsOfBrand.filter((terminal, index, self) =>
+        index === self.findIndex((t) => t.id === terminal.id)
+    );
+};
+
+// NUEVO: Devuelve las duraciones disponibles para un modelo
+const durationsForModel = (line) => {
+    if (!line.selected_model_id) return [];
+    return availableTerminals.value.filter(t => t.id === line.selected_model_id);
 };
 
 const getTerminalPrices = (line) => {
-    if (!selectedPackage.value || !line.terminal_id) return null;
-    const terminalInPackage = selectedPackage.value.terminals.find(t => t.id === line.terminal_id);
-    return terminalInPackage ? terminalInPackage.pivot : null;
+    if (!selectedPackage.value || !line.terminal_pivot_id) return null;
+    const terminalInfo = availableTerminals.value.find(t => t.pivot.id === line.terminal_pivot_id);
+    return terminalInfo ? terminalInfo.pivot : null;
 };
-
 </script>
 
 <template>
@@ -136,7 +142,13 @@ const getTerminalPrices = (line) => {
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
             <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
                 <div class="p-8 bg-white border-b border-gray-200">
-                    <h1 class="text-2xl font-bold mb-6">Crear Nueva Oferta</h1>
+                    <div class="flex justify-between items-center mb-6">
+                        <h1 class="text-2xl font-bold">Crear Nueva Oferta</h1>
+                        <Link :href="route('terminals.import.create')">
+                            <SecondaryButton>Importar Terminales</SecondaryButton>
+                        </Link>
+                    </div>
+
                     <div class="mb-8">
                         <label for="package" class="block text-sm font-medium text-gray-700 mb-2">Selecciona un Paquete Base</label>
                         <select v-model="selectedPackageId" id="package" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
@@ -181,58 +193,74 @@ const getTerminalPrices = (line) => {
                                             <option v-for="o2o in availableO2oDiscounts" :key="o2o.id" :value="o2o.id">{{ o2o.name }}</option>
                                         </select>
                                     </div>
-                                    <div class="grid grid-cols-2 gap-2">
+                                    
+                                    <div class="grid grid-cols-3 gap-2">
                                         <div>
-                                            <label :for="`brand-${line.id}`" class="block text-sm font-medium text-gray-700">Marca Terminal</label>
-                                            <select v-model="line.selected_brand" @change="line.terminal_id = null" :id="`brand-${line.id}`" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm">
+                                            <label :for="`brand-${line.id}`" class="block text-sm font-medium text-gray-700">Marca</label>
+                                            <select v-model="line.selected_brand" @change="line.selected_model_id = null; line.terminal_pivot_id = null" :id="`brand-${line.id}`" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm">
                                                 <option :value="null">-- Marca --</option>
-                                                <option v-for="brand in brands" :key="brand" :value="brand">{{ brand }}</option>
+                                                <option v-for="brand in brandsForSelectedPackage" :key="brand" :value="brand">{{ brand }}</option>
                                             </select>
                                         </div>
                                         <div>
-                                            <label :for="`terminal-${line.id}`" class="block text-sm font-medium text-gray-700">Modelo</label>
-                                            <select v-model="line.terminal_id" :id="`terminal-${line.id}`" :disabled="!line.selected_brand" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm">
+                                            <label :for="`model-${line.id}`" class="block text-sm font-medium text-gray-700">Modelo</label>
+                                            <select v-model="line.selected_model_id" @change="line.terminal_pivot_id = null" :id="`model-${line.id}`" :disabled="!line.selected_brand" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm">
                                                 <option :value="null">-- Modelo --</option>
-                                                <option v-for="terminal in modelsByBrand(line.selected_brand)" :key="terminal.id" :value="terminal.id">{{ terminal.model }}</option>
+                                                <option v-for="terminal in modelsByBrand(line.selected_brand)" :key="terminal.id" :value="terminal.id">
+                                                    {{ terminal.model }}
+                                                </option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label :for="`duration-${line.id}`" class="block text-sm font-medium text-gray-700">Meses</label>
+                                            <select v-model="line.terminal_pivot_id" :id="`duration-${line.id}`" :disabled="!line.selected_model_id" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm">
+                                                <option :value="null">-- Meses --</option>
+                                                <option v-for="terminal in durationsForModel(line)" :key="terminal.pivot.id" :value="terminal.pivot.id">
+                                                    {{ terminal.pivot.duration_months }} meses
+                                                </option>
                                             </select>
                                         </div>
                                     </div>
                                 </div>
+                                
                                 <div v-if="getTerminalPrices(line)" class="mt-2 p-2 bg-blue-50 rounded-md text-sm">
                                     <span class="font-semibold">Precios del Terminal:</span>
-                                    <span> Pago Inicial: {{ getTerminalPrices(line).initial_payment }}€, </span>
-                                    <span> Cuota: {{ getTerminalPrices(line).monthly_fee }}€/mes</span>
+                                    <span> Pago Inicial: {{ getTerminalPrices(line).initial_cost }}€, </span>
+                                    <span> Cuota: {{ getTerminalPrices(line).monthly_cost }}€/mes</span>
                                 </div>
                             </div>
                         </div>
 
-                        <div class="p-6 bg-gray-50 rounded-lg space-y-2">
-                            <h2 class="text-xl font-semibold">{{ selectedPackage.name }}</h2>
-                            <p class="text-gray-500">Precio Base: {{ calculationSummary.basePrice }}€</p>
-                            
-                            <div v-if="appliedDiscount" class="text-green-600 font-semibold">
-                                Descuento Tarifa (Línea Principal): -{{ (calculationSummary.basePrice * (appliedDiscount.percentage / 100)).toFixed(2) }}€ ({{ appliedDiscount.percentage }}%)
-                            </div>
-                            
-                            <div v-if="calculationSummary.appliedO2oList.length > 0" class="border-t pt-2 mt-2">
-                                <h3 class="font-semibold text-blue-600">Subvenciones O2O Aplicadas:</h3>
-                                <div v-for="summary in calculationSummary.appliedO2oList" :key="summary.line" class="flex justify-between text-sm text-blue-600">
-                                    <span>{{ summary.line }} ({{ summary.name }})</span>
-                                    <span>-{{ summary.value }}€</span>
+                        <div v-if="selectedPackage" class="mt-8 p-6 bg-gray-50 rounded-lg space-y-2">
+                           <h2 class="text-xl font-semibold">{{ selectedPackage.name }}</h2>
+                                <p class="text-gray-500">Precio Base: {{ calculationSummary.basePrice }}€</p>
+                                
+                                <div v-if="appliedDiscount" class="text-green-600 font-semibold">
+                                    Descuento Tarifa (Línea Principal): -{{ (calculationSummary.basePrice * (appliedDiscount.percentage / 100)).toFixed(2) }}€ ({{ appliedDiscount.percentage }}%)
                                 </div>
-                            </div>
+                                
+                                <div v-if="calculationSummary.appliedO2oList.length > 0" class="border-t pt-2 mt-2">
+                                    <h3 class="font-semibold text-blue-600">Subvenciones O2O Aplicadas:</h3>
+                                    <div v-for="summary in calculationSummary.appliedO2oList" :key="summary.line" class="flex justify-between text-sm text-blue-600">
+                                        <span>{{ summary.line }} ({{ summary.name }})</span>
+                                        <span>-{{ summary.value }}€</span>
+                                    </div>
+                                </div>
 
-                             <div v-if="calculationSummary.totalTerminalFee > 0" class="border-t pt-2 mt-2">
-                                <h3 class="font-semibold text-purple-600">Cuotas de Terminales:</h3>
-                                <div class="flex justify-between text-sm text-purple-600">
-                                    <span>Total cuotas mensuales de terminales</span>
-                                    <span>+{{ calculationSummary.totalTerminalFee }}€</span>
+                                 <div v-if="calculationSummary.totalTerminalFee > 0" class="border-t pt-2 mt-2">
+                                    <h3 class="font-semibold text-purple-600">Cuotas de Terminales:</h3>
+                                    <div class="flex justify-between text-sm text-purple-600">
+                                        <span>Total cuotas mensuales de terminales</span>
+                                        <span>+{{ calculationSummary.totalTerminalFee }}€</span>
+                                    </div>
                                 </div>
-                            </div>
-                            
-                            <p class="mt-4 pt-2 border-t text-4xl font-extrabold text-gray-800">
-                                Precio Final: {{ calculationSummary.finalPrice }}<span class="text-xl font-medium text-gray-500">€/mes</span>
-                            </p>
+                                
+                                <p class="mt-4 pt-2 border-t text-2xl font-bold text-gray-800">
+                                    Pago Inicial Total: {{ calculationSummary.totalInitialPayment }}€
+                                </p>
+                                <p class="mt-4 text-4xl font-extrabold text-gray-800">
+                                    Precio Final: {{ calculationSummary.finalPrice }}<span class="text-xl font-medium text-gray-500">€/mes</span>
+                                </p>
                         </div>
                     </div>
                 </div>

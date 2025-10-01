@@ -9,8 +9,14 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 class Package extends Model
 {
     use HasFactory;
-    protected $guarded = [];
+    protected $guarded = ['id'];
 
+    public function terminals(): BelongsToMany
+    {
+        return $this->belongsToMany(Terminal::class)
+            ->withPivot('initial_cost', 'monthly_cost', 'duration_months') // UNIFICADO
+            ->withTimestamps();
+    }
     public function addons(): BelongsToMany
     {
         return $this->belongsToMany(Addon::class, 'addon_package')->withPivot('price', 'is_included', 'included_quantity', 'line_limit')->withTimestamps();
@@ -26,8 +32,5 @@ class Package extends Model
         return $this->belongsToMany(O2oDiscount::class, 'o2o_discount_package')->withPivot('subsidy_percentage', 'dho_payment', 'osp_payment')->withTimestamps();
     }
 
-    public function terminals(): BelongsToMany
-    {
-        return $this->belongsToMany(Terminal::class, 'package_terminal')->withPivot('initial_payment', 'monthly_fee')->withTimestamps();
-    }
+   
 }

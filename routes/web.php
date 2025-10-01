@@ -32,9 +32,6 @@ Route::get('/ofertas/crear', [OfferController::class, 'create'])->name('Crear Of
 
 Route::get('/ofertas', [OfferController::class, 'index'])
     ->name('Consultar Ofertas');
-    // Ruta para mostrar el formulario de subida
-Route::get('/importar-terminales', [ImportController::class, 'showForm'])->name('terminals.import.form');
-// Ruta para procesar el archivo que se suba
-Route::post('/importar-terminales', [ImportController::class, 'import'])->name('terminals.import.run');
-
+Route::get('/terminals/import', [ImportController::class, 'create'])->name('terminals.import.create');
+    Route::post('/terminals/import', [ImportController::class, 'store'])->name('terminals.import.store');
 require __DIR__.'/auth.php';

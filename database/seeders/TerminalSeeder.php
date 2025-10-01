@@ -24,14 +24,14 @@ class TerminalSeeder extends Seeder
         // 3. Asignamos los precios en la tabla intermedia
         // Para el GALAXY S24
         if ($s24) {
-            $s24->packages()->attach($group1, ['initial_payment' => 20.00, 'monthly_fee' => 25.00]); // Precios para el primer grupo
-            $s24->packages()->attach($group2, ['initial_payment' => 10.00, 'monthly_fee' => 22.00]); // Precios para el segundo grupo
+            $s24->packages()->attach($group1, ['initial_cost' => 20.00, 'monthly_cost' => 25.00]); // Precios para el primer grupo
+            $s24->packages()->attach($group2, ['initial_cost' => 10.00, 'monthly_cost' => 22.00]); // Precios para el segundo grupo
         }
 
         // Para el IPHONE 15
         if ($iphone15) {
-            $iphone15->packages()->attach($group1, ['initial_payment' => 30.00, 'monthly_fee' => 35.00]);
-            $iphone15->packages()->attach($group2, ['initial_payment' => 20.00, 'monthly_fee' => 32.00]);
+            $iphone15->packages()->attach($group1, ['initial_cost' => 30.00, 'monthly_cost' => 35.00]);
+            $iphone15->packages()->attach($group2, ['initial_cost' => 20.00, 'monthly_cost' => 32.00]);
         }
         
         // Y así sucesivamente con el resto de terminales...

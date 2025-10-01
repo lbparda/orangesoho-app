@@ -5,103 +5,81 @@ namespace App\Http\Controllers;
 use App\Models\Package;
 use App\Models\Terminal;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 
 class ImportController extends Controller
 {
-    /**
-     * Muestra el formulario para subir el archivo.
-     */
-    public function showForm()
+    public function create()
     {
         return Inertia::render('Terminals/Import');
     }
 
-    /**
-     * Procesa el archivo Excel importado.
-     */
-    public function import(Request $request)
+    public function store(Request $request)
     {
         $request->validate(['terminals_file' => 'required|mimes:xlsx,xls,xlsm']);
         $file = $request->file('terminals_file');
 
+        Log::channel('daily')->info('--- INICIANDO NUEVA IMPORTACIÓN DE TERMINALES ---');
+
         try {
-            // 1. Cargar el archivo Excel
             $spreadsheet = IOFactory::load($file->getRealPath());
-            $worksheet = $spreadsheet->getActiveSheet();
-            $rows = $worksheet->toArray();
+            $sheetNames = $spreadsheet->getSheetNames();
+            Log::info('Hojas encontradas en el Excel: ' . implode(', ', $sheetNames));
 
-            // 2. Procesar los encabezados de las filas 5 y 6
-            $tariff_header = $rows[4]; // Fila 5 en Excel
-            $payment_header = $rows[5]; // Fila 6 en Excel
-            
-            $packageColumnMap = [];
-            // Mapeo de los nombres en el Excel a los nombres en tu base de datos
-            $tariffToPackages = [
-                'BASE PLUS NEGOCIO Extra 1' => ['Base Plus', 'NEGOCIO Extra 1'],
-                'NEGOCIO Extra 3' => ['NEGOCIO Extra 3'],
-                'NEGOCIO Extra 5' => ['NEGOCIO Extra 5'],
-                'NEGOCIO EXTRA 10 NEGOCIO EXTRA 20' => ['NEGOCIO Extra 10', 'NEGOCIO Extra 20'],
-            ];
+            foreach ($sheetNames as $sheetName) {
+                $trimmedSheetName = trim($sheetName);
+                Log::info("--- Procesando hoja: '{$trimmedSheetName}' ---");
 
-            foreach ($payment_header as $index => $payment_type) {
-                if (empty($payment_type) || empty($tariff_header[$index])) continue;
+                $package = Package::where('name', $trimmedSheetName)->first();
+                if (!$package) {
+                    Log::warning("AVISO: No se encontró paquete para la hoja '{$trimmedSheetName}'.");
+                    continue;
+                }
+                
+                Log::info("Paquete encontrado: ID={$package->id}");
 
-                $tariff_name = $tariff_header[$index];
-                if (array_key_exists($tariff_name, $tariffToPackages)) {
-                    if (!isset($packageColumnMap[$tariff_name])) {
-                        $packageColumnMap[$tariff_name] = [
-                            'packages' => Package::whereIn('name', $tariffToPackages[$tariff_name])->get()
-                        ];
+                $worksheet = $spreadsheet->getSheetByName($sheetName);
+                $rows = $worksheet->toArray();
+                $terminalRows = array_slice($rows, 7);
+
+                foreach ($terminalRows as $rowIndex => $row) {
+                    // --- LÓGICA DE LECTURA ACTUALIZADA ---
+                    $brand           = $row[0] ?? null; // Columna A
+                    $model           = $row[1] ?? null; // Columna B
+                    $duration_months = $row[3] ?? null; // Columna D (MESES)
+                    $initial_cost    = $row[5] ?? 0;   // Columna F
+                    $monthly_cost    = $row[6] ?? 0;   // Columna G
+
+                    if (empty($brand) || empty($model) || !is_numeric($duration_months)) {
+                        continue;
                     }
+
+                    $terminal = Terminal::updateOrCreate(
+                        ['model' => trim($model)],
+                        ['brand' => trim($brand)]
+                    );
                     
-                    if (stripos($payment_type, 'Inicial') !== false) {
-                        $packageColumnMap[$tariff_name]['initial_index'] = $index;
-                    } elseif (stripos($payment_type, 'Cuota') !== false) {
-                        $packageColumnMap[$tariff_name]['monthly_index'] = $index;
-                    }
+                    Log::info("Terminal: ID={$terminal->id}, Modelo={$terminal->model}, Meses={$duration_months}");
+
+                    // La clave: Sincronizamos la relación para el terminal y paquete, usando los meses como condición
+                    $package->terminals()->syncWithoutDetaching([
+                        $terminal->id => [
+                            'duration_months' => $duration_months,
+                            'initial_cost' => is_numeric($initial_cost) ? $initial_cost : 0,
+                            'monthly_cost' => is_numeric($monthly_cost) ? $monthly_cost : 0,
+                        ]
+                    ]);
                 }
             }
-            
-            // 3. Empezar a leer los terminales desde la Fila 8 (índice 7)
-            $terminalRows = array_slice($rows, 7);
 
-            foreach ($terminalRows as $row) {
-                $brand = $row[1] ?? null; // Columna B
-                $model = $row[3] ?? null; // Columna D
-                if (empty($brand) || empty($model)) continue;
-
-                // 4. Crear o actualizar el terminal en la tabla `terminals`
-                $terminal = Terminal::updateOrCreate(
-                    ['model' => $model],
-                    ['brand' => $brand]
-                );
-
-                // 5. Limpiar precios antiguos para este terminal para evitar duplicados
-                $terminal->packages()->detach();
-
-                // 6. Asignar los nuevos precios por paquete
-                foreach ($packageColumnMap as $tariffInfo) {
-                    // Verificamos que los índices de las columnas existan
-                    if (isset($tariffInfo['initial_index']) && isset($tariffInfo['monthly_index'])) {
-                        $initial_payment = $row[$tariffInfo['initial_index']] ?? 0;
-                        $monthly_fee = $row[$tariffInfo['monthly_index']] ?? 0;
-
-                        if ($tariffInfo['packages']->isNotEmpty()) {
-                            $terminal->packages()->attach($tariffInfo['packages']->pluck('id'), [
-                                'initial_payment' => $initial_payment,
-                                'monthly_fee'     => $monthly_fee,
-                            ]);
-                        }
-                    }
-                }
-            }
         } catch (\Exception $e) {
-            // Devolvemos un error claro que incluye el mensaje y la línea
-            return redirect()->back()->withErrors(['terminals_file' => 'Error: ' . $e->getMessage() . ' en la línea ' . $e->getLine()]);
+            Log::error("ERROR CRÍTICO: " . $e->getMessage() . " en " . $e->getFile() . " línea " . $e->getLine());
+            return redirect()->back()->with('error', 'Error: ' . $e->getMessage());
         }
         
-        return redirect()->back()->with('success', '¡Terminales y precios por paquete importados con éxito!');
+        Log::info('--- IMPORTACIÓN FINALIZADA CON ÉXITO ---');
+        return redirect()->route('terminals.import.create')->with('success', '¡Terminales importados!');
     }
 }

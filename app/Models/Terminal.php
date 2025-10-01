@@ -9,10 +9,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 class Terminal extends Model
 {
     use HasFactory;
-    protected $guarded = [];
+    protected $guarded = ['id'];
 
     public function packages(): BelongsToMany
     {
-        return $this->belongsToMany(Package::class, 'package_terminal')->withPivot('initial_payment', 'monthly_fee')->withTimestamps();
+        return $this->belongsToMany(Package::class)
+            ->withPivot('initial_cost', 'monthly_cost', 'duration_months') // UNIFICADO
+            ->withTimestamps();
     }
 }

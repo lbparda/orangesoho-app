@@ -6,22 +6,18 @@ use Illuminate\Database\Seeder;
 
 class DatabaseSeeder extends Seeder
 {
-    /**
-     * Seed the application's database.
-     */
     public function run(): void
     {
-        // 1. Primero, creamos todos los "ingredientes" base.
+        // 1. Primero, creamos TODAS las entidades base (los "ingredientes").
         $this->call([
             PackageSeeder::class,
             AddonSeeder::class,
             DiscountSeeder::class,
             O2oDiscountSeeder::class,
-            TerminalSeeder::class,
+            TerminalSeeder::class, // Seeder de terminales de prueba
         ]);
 
-        // 2. Una vez que todo existe, creamos las relaciones complejas.
-        // Para ello, llamaremos a un nuevo seeder de relaciones.
+        // 2. Al final, ejecutamos un seeder que se dedica SOLO a crear las relaciones.
         $this->call(RelationshipSeeder::class);
     }
 }

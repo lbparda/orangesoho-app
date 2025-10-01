@@ -69,11 +69,11 @@ class RelationshipSeeder extends Seeder
 
 
 
-
-        // 3. Creamos las relaciones de Terminales
+// 3. Creamos las relaciones de Terminales
         if ($s24 && $packages->isNotEmpty()) {
             $group1_ids = Package::whereIn('name', ['NEGOCIO Extra 1', 'NEGOCIO Extra 3', 'NEGOCIO Extra 5'])->pluck('id');
-            $s24->packages()->attach($group1_ids, ['initial_payment' => 24.00, 'monthly_fee' => 25.00]);
+            // 👇 LÍNEA CORREGIDA 👇
+            $s24->packages()->attach($group1_ids, ['initial_cost' => 24.00, 'monthly_cost' => 25.00]);
         }
     }
 }
