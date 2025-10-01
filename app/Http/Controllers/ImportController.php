@@ -30,7 +30,7 @@ class ImportController extends Controller
 
                 $worksheet = $spreadsheet->getSheetByName($sheetName);
                 $rows = $worksheet->toArray();
-                $terminalRows = array_slice($rows, 7);
+                $terminalRows = array_slice($rows, 2);
 
                 $dataToUpsert = [];
 
