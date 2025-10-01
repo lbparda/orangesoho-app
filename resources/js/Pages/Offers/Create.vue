@@ -4,18 +4,18 @@ import { ref, computed, watch } from 'vue';
 // NO se importa AuthenticatedLayout
 import SecondaryButton from '@/Components/SecondaryButton.vue';
 
-// --- PROPS ---
+// --- PROPS (Tu código) ---
 const props = defineProps({
     packages: Array,
     discounts: Array,
     operators: Array,
 });
 
-// --- ESTADO DEL FORMULARIO ---
+// --- ESTADO DEL FORMULARIO (Tu código, con una adición) ---
 const selectedPackageId = ref(null);
 const lines = ref([]);
 
-// --- LÓGICA COMPUTADA ---
+// --- LÓGICA COMPUTADA (Tu código) ---
 const selectedPackage = computed(() => {
     return props.packages.find(p => p.id === selectedPackageId.value) || null;
 });
@@ -30,7 +30,7 @@ const availableO2oDiscounts = computed(() => {
     return selectedPackage.value.o2o_discounts || [];
 });
 
-// --- WATCHER ---
+// --- WATCHER (Tu código, con una adición) ---
 watch(selectedPackageId, (newPackageId) => {
     lines.value = [];
     if (!newPackageId) return;
@@ -65,7 +65,7 @@ const appliedDiscount = computed(() => {
     });
 });
 
-// --- LÓGICA DE CÁLCULO (SIN CAMBIOS) ---
+// --- LÓGICA DE CÁLCULO (Tu código, sin cambios) ---
 const calculationSummary = computed(() => {
     if (!selectedPackage.value) {
         return { basePrice: 0, finalPrice: 0, appliedO2oList: [], totalTerminalFee: 0, totalInitialPayment: 0 };
@@ -108,12 +108,12 @@ const calculationSummary = computed(() => {
     };
 });
 
-// --- FUNCIONES AUXILIARES PARA LOS DESPLEGABLES (MODIFICADAS) ---
+// --- FUNCIONES AUXILIARES (Tu código, con las funciones para los 3 desplegables) ---
 const brandsForSelectedPackage = computed(() => {
     return [...new Set(availableTerminals.value.map(t => t.brand))];
 });
 
-// MODIFICADO: Devuelve modelos únicos por marca
+// Devuelve modelos únicos por marca
 const modelsByBrand = (brand) => {
     if (!brand) return [];
     const terminalsOfBrand = availableTerminals.value.filter(t => t.brand === brand);
@@ -122,7 +122,7 @@ const modelsByBrand = (brand) => {
     );
 };
 
-// NUEVO: Devuelve las duraciones disponibles para un modelo
+// Devuelve las duraciones disponibles para un modelo
 const durationsForModel = (line) => {
     if (!line.selected_model_id) return [];
     return availableTerminals.value.filter(t => t.id === line.selected_model_id);

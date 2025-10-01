@@ -5,7 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Package;
 use App\Models\Terminal;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB; // <-- AÑADIR ESTE IMPORT
 use Inertia\Inertia;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 
@@ -21,34 +21,23 @@ class ImportController extends Controller
         $request->validate(['terminals_file' => 'required|mimes:xlsx,xls,xlsm']);
         $file = $request->file('terminals_file');
 
-        Log::channel('daily')->info('--- INICIANDO NUEVA IMPORTACIÓN DE TERMINALES ---');
-
         try {
             $spreadsheet = IOFactory::load($file->getRealPath());
-            $sheetNames = $spreadsheet->getSheetNames();
-            Log::info('Hojas encontradas en el Excel: ' . implode(', ', $sheetNames));
 
-            foreach ($sheetNames as $sheetName) {
-                $trimmedSheetName = trim($sheetName);
-                Log::info("--- Procesando hoja: '{$trimmedSheetName}' ---");
-
-                $package = Package::where('name', $trimmedSheetName)->first();
-                if (!$package) {
-                    Log::warning("AVISO: No se encontró paquete para la hoja '{$trimmedSheetName}'.");
-                    continue;
-                }
-                
-                Log::info("Paquete encontrado: ID={$package->id}");
+            foreach ($spreadsheet->getSheetNames() as $sheetName) {
+                $package = Package::where('name', trim($sheetName))->first();
+                if (!$package) continue;
 
                 $worksheet = $spreadsheet->getSheetByName($sheetName);
                 $rows = $worksheet->toArray();
                 $terminalRows = array_slice($rows, 7);
 
-                foreach ($terminalRows as $rowIndex => $row) {
-                    // --- LÓGICA DE LECTURA ACTUALIZADA ---
+                $dataToUpsert = [];
+
+                foreach ($terminalRows as $row) {
                     $brand           = $row[0] ?? null; // Columna A
                     $model           = $row[1] ?? null; // Columna B
-                    $duration_months = $row[3] ?? null; // Columna D (MESES)
+                    $duration_months = $row[3] ?? null; // Columna D
                     $initial_cost    = $row[5] ?? 0;   // Columna F
                     $monthly_cost    = $row[6] ?? 0;   // Columna G
 
@@ -60,26 +49,34 @@ class ImportController extends Controller
                         ['model' => trim($model)],
                         ['brand' => trim($brand)]
                     );
-                    
-                    Log::info("Terminal: ID={$terminal->id}, Modelo={$terminal->model}, Meses={$duration_months}");
 
-                    // La clave: Sincronizamos la relación para el terminal y paquete, usando los meses como condición
-                    $package->terminals()->syncWithoutDetaching([
-                        $terminal->id => [
-                            'duration_months' => $duration_months,
-                            'initial_cost' => is_numeric($initial_cost) ? $initial_cost : 0,
-                            'monthly_cost' => is_numeric($monthly_cost) ? $monthly_cost : 0,
-                        ]
-                    ]);
+                    // Preparamos los datos para una inserción masiva y eficiente
+                    $dataToUpsert[] = [
+                        'package_id'      => $package->id,
+                        'terminal_id'     => $terminal->id,
+                        'duration_months' => $duration_months,
+                        'initial_cost'    => is_numeric($initial_cost) ? $initial_cost : 0,
+                        'monthly_cost'    => is_numeric($monthly_cost) ? $monthly_cost : 0,
+                        'created_at'      => now(),
+                        'updated_at'      => now(),
+                    ];
+                }
+
+                // --- LÓGICA CORREGIDA Y DEFINITIVA ---
+                // 'upsert' inserta o actualiza múltiples filas de una sola vez.
+                // Lo hará basado en la clave única (paquete, terminal, meses).
+                if (!empty($dataToUpsert)) {
+                    DB::table('package_terminal')->upsert(
+                        $dataToUpsert,
+                        ['package_id', 'terminal_id', 'duration_months'], // La clave única para identificar duplicados
+                        ['initial_cost', 'monthly_cost', 'updated_at']   // Las columnas a actualizar si se encuentra un duplicado
+                    );
                 }
             }
-
         } catch (\Exception $e) {
-            Log::error("ERROR CRÍTICO: " . $e->getMessage() . " en " . $e->getFile() . " línea " . $e->getLine());
-            return redirect()->back()->with('error', 'Error: ' . $e->getMessage());
+            return redirect()->back()->with('error', 'Error: ' . $e->getMessage() . ' en la línea ' . $e->getLine());
         }
         
-        Log::info('--- IMPORTACIÓN FINALIZADA CON ÉXITO ---');
         return redirect()->route('terminals.import.create')->with('success', '¡Terminales importados!');
     }
 }
