@@ -30,9 +30,20 @@ const brandsForSelectedPackage = computed(() => {
     return [...new Set(availableTerminals.value.map(t => t.brand))];
 });
 
+// FUNCIÓN CORREGIDA - Eliminar modelos duplicados
 const modelsByBrand = (brand) => {
     if (!brand) return [];
-    return availableTerminals.value.filter(t => t.brand === brand);
+    
+    const terminalsOfBrand = availableTerminals.value.filter(t => t.brand === brand);
+    
+    // Eliminar duplicados por modelo
+    const uniqueModels = terminalsOfBrand.filter((terminal, index, self) =>
+        index === self.findIndex(t => t.model === terminal.model)
+    );
+    
+    console.log('📱 Modelos únicos para', brand + ':', uniqueModels.map(m => m.model));
+    
+    return uniqueModels;
 };
 
 // FUNCIÓN CORREGIDA - Buscar por terminal_id y duration_months
@@ -80,7 +91,6 @@ const getDurationsForModel = (line) => {
     const durations = [...new Set(terminals.map(t => t.pivot.duration_months))];
     
     console.log('📅 Duraciones para modelo', line.selected_model_id, ':', durations);
-    console.log('📅 Terminales encontrados:', terminals);
     
     return durations.sort((a, b) => a - b);
 };
