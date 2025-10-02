@@ -21,8 +21,10 @@ class RelationshipSeeder extends Seeder
         if ($mobileAddon && $packages->isNotEmpty()) {
             $packages['Base Plus']->addons()->attach($mobileAddon->id, ['price' => 15.00, 'is_included' => true, 'included_quantity' => 1, 'line_limit' => 4]);
             $packages['NEGOCIO Extra 1']->addons()->attach($mobileAddon->id, ['price' => 13.00, 'is_included' => true, 'included_quantity' => 1, 'line_limit' => 4]);
-            $packages['NEGOCIO Extra 3']->addons()->attach($mobileAddon->id, ['price' => 13.00, 'is_included' => true, 'included_quantity' => 3, 'line_limit' => 9]);
-            $packages['NEGOCIO Extra 5']->addons()->attach($mobileAddon->id, ['price' => 13.00, 'is_included' => true, 'included_quantity' => 5, 'line_limit' => 9]);
+            $packages['NEGOCIO Extra 3']->addons()->attach($mobileAddon->id, ['price' => 13.00, 'is_included' => true, 'included_quantity' => 3, 'line_limit' => 4]);
+            $packages['NEGOCIO Extra 5']->addons()->attach($mobileAddon->id, ['price' => 13.00, 'is_included' => true, 'included_quantity' => 5, 'line_limit' => 4]);
+            $packages['NEGOCIO Extra 10']->addons()->attach($mobileAddon->id, ['price' => 13.00, 'is_included' => true, 'included_quantity' => 10, 'line_limit' => 9]);
+            $packages['NEGOCIO Extra 20']->addons()->attach($mobileAddon->id, ['price' => 11.00, 'is_included' => true, 'included_quantity' => 20, 'line_limit' => 20]);
         }
         
         // 2. Creamos las relaciones de O2O Discounts (LA LÓGICA QUE FALTABA)
