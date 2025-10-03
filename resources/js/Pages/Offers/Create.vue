@@ -48,8 +48,8 @@ const modelsByBrand = (brand) => {
 
 const findTerminalPivot = (line) => {
     if (!line.selected_model_id || !line.selected_duration) return null;
-    const terminal = availableTerminals.value.find(t => 
-        t.id === line.selected_model_id && 
+    const terminal = availableTerminals.value.find(t =>
+        t.id === line.selected_model_id &&
         t.pivot.duration_months === line.selected_duration
     );
     return terminal ? terminal.pivot : null;
@@ -86,31 +86,21 @@ const getDurationsForModel = (line) => {
     return [...new Set(terminals.map(t => t.pivot.duration_months))].sort((a, b) => a - b);
 };
 
-// --- NUEVA FUNCIÓN PARA FILTRAR DESCUENTOS O2O ---
 const getO2oDiscountsForLine = (line, index) => {
     if (!mobileAddonInfo.value) return availableO2oDiscounts.value;
-
-    
+    const includedQty = mobileAddonInfo.value.pivot.included_quantity;
     const promoLimit = mobileAddonInfo.value.pivot.line_limit;
-
-    // Contamos cuántas líneas extra hay ANTES de la actual
     const extraLinesBeforeThis = lines.value.slice(0, index).filter(l => l.is_extra).length;
-
-    // Es una línea extra promocionada si es extra y el número total de líneas no supera el límite
-    const isPromotionalExtra = line.is_extra && (  extraLinesBeforeThis + 1) <= promoLimit;
+    const isPromotionalExtra = line.is_extra && (extraLinesBeforeThis + 1) <= promoLimit;
 
     if (isPromotionalExtra) {
-        // Filtra los descuentos para que el valor mensual sea <= 1 euro
         return availableO2oDiscounts.value.filter(d => {
             const monthlyValue = parseFloat(d.total_discount_amount) / parseFloat(d.duration_months);
             return monthlyValue <= 1;
         });
     }
-
-    // Para todas las demás líneas, devuelve la lista completa
     return availableO2oDiscounts.value;
 };
-
 
 watch(selectedPackageId, (newPackageId) => {
     lines.value = [];
@@ -144,9 +134,10 @@ const appliedDiscount = computed(() => {
     });
 });
 
+// MODIFICADO: Añadimos el cálculo de comisiones
 const calculationSummary = computed(() => {
     if (!selectedPackage.value || !mobileAddonInfo.value) {
-        return { basePrice: 0, finalPrice: 0, appliedO2oList: [], totalTerminalFee: 0, totalInitialPayment: 0, extraLinesCost: 0 };
+        return { basePrice: 0, finalPrice: 0, appliedO2oList: [], totalTerminalFee: 0, totalInitialPayment: 0, extraLinesCost: 0, totalCommission: 0 };
     }
     let price = parseFloat(selectedPackage.value.base_price) || 0;
     const basePrice = price;
@@ -158,11 +149,16 @@ const calculationSummary = computed(() => {
     let totalInitialPayment = 0;
     let extraLinesCost = 0;
     let extraLinesCounter = 0;
+    let totalCommission = 0; // NUEVO: Inicializamos la comisión total
 
     const includedQty = mobileAddonInfo.value.pivot.included_quantity;
     const promoLimit = mobileAddonInfo.value.pivot.line_limit;
     const promoPrice = 8.22;
     const standardPrice = mobileAddonInfo.value.pivot.price;
+    
+    // NUEVO: Extraemos las comisiones de la información del addon
+    const includedCommission = parseFloat(mobileAddonInfo.value.pivot.included_line_commission) || 0;
+    const additionalCommission = parseFloat(mobileAddonInfo.value.pivot.additional_line_commission) || 0;
 
     lines.value.forEach((line, index) => {
         totalTerminalFee += parseFloat(line.monthly_cost || 0);
@@ -170,11 +166,14 @@ const calculationSummary = computed(() => {
 
         if (line.is_extra) {
             extraLinesCounter++;
+            totalCommission += additionalCommission; // Sumamos comisión de línea adicional
             if ((extraLinesCounter) <= promoLimit) {
                 extraLinesCost += promoPrice;
             } else {
                 extraLinesCost += parseFloat(standardPrice);
             }
+        } else {
+            totalCommission += includedCommission; // Sumamos comisión de línea incluida
         }
 
         if (line.o2o_discount_id) {
@@ -197,6 +196,7 @@ const calculationSummary = computed(() => {
         totalTerminalFee: totalTerminalFee.toFixed(2),
         totalInitialPayment: totalInitialPayment.toFixed(2),
         extraLinesCost: extraLinesCost.toFixed(2),
+        totalCommission: totalCommission.toFixed(2), // NUEVO: Devolvemos la comisión total
     };
 });
 </script>
@@ -283,6 +283,11 @@ const calculationSummary = computed(() => {
                             <div class="border-t pt-3 mt-3">
                                 <p class="text-lg font-bold text-gray-800">Pago Inicial Total: {{ calculationSummary.totalInitialPayment }}€</p>
                                 <p class="mt-2 text-3xl font-extrabold text-gray-900">Precio Final: {{ calculationSummary.finalPrice }}<span class="text-lg font-medium text-gray-600">€/mes</span></p>
+                            </div>
+                            <div class="border-t pt-3 mt-3">
+                                <p class="text-xl font-bold text-emerald-600">
+                                    Comisión Total: {{ calculationSummary.totalCommission }}€
+                                </p>
                             </div>
                         </div>
                     </div>
