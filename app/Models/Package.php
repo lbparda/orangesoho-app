@@ -14,7 +14,7 @@ class Package extends Model
     public function terminals(): BelongsToMany
     {
         return $this->belongsToMany(Terminal::class)
-            ->withPivot('initial_cost', 'monthly_cost', 'duration_months') // UNIFICADO
+            ->withPivot('initial_cost', 'monthly_cost', 'duration_months','included_line_commission', 'additional_line_commission') // UNIFICADO
             ->withTimestamps();
     }
     public function addons(): BelongsToMany

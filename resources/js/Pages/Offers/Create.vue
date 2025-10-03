@@ -2,7 +2,7 @@
 import { Head, Link } from '@inertiajs/vue3';
 import { ref, computed, watch } from 'vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
-import PrimaryButton from '@/Components/PrimaryButton.vue'; // NUEVO: Importamos para el botón
+import PrimaryButton from '@/Components/PrimaryButton.vue';
 
 const props = defineProps({
     packages: Array,
@@ -17,13 +17,11 @@ const selectedPackage = computed(() => {
     return props.packages.find(p => p.id === selectedPackageId.value) || null;
 });
 
-// NUEVO: Obtenemos la información del addon de línea móvil para el paquete actual
 const mobileAddonInfo = computed(() => {
     if (!selectedPackage.value?.addons) return null;
     return selectedPackage.value.addons.find(a => a.type === 'mobile_line');
 });
 
-// NUEVO: Lógica para saber si se puede añadir una línea (sin límite superior)
 const canAddLine = computed(() => !!selectedPackage.value);
 
 const availableTerminals = computed(() => {
@@ -70,12 +68,11 @@ const assignTerminalPrices = (line) => {
     }
 };
 
-// NUEVO: Función para añadir una línea
 const addLine = () => {
     if (!canAddLine.value) return;
     lines.value.push({
         id: Date.now(),
-        is_extra: true, // La marcamos como adicional
+        is_extra: true,
         phone_number: '', source_operator: null, has_vap: false,
         o2o_discount_id: null, selected_brand: null, selected_model_id: null,
         selected_duration: null, terminal_pivot: null,
@@ -89,6 +86,32 @@ const getDurationsForModel = (line) => {
     return [...new Set(terminals.map(t => t.pivot.duration_months))].sort((a, b) => a - b);
 };
 
+// --- NUEVA FUNCIÓN PARA FILTRAR DESCUENTOS O2O ---
+const getO2oDiscountsForLine = (line, index) => {
+    if (!mobileAddonInfo.value) return availableO2oDiscounts.value;
+
+    
+    const promoLimit = mobileAddonInfo.value.pivot.line_limit;
+
+    // Contamos cuántas líneas extra hay ANTES de la actual
+    const extraLinesBeforeThis = lines.value.slice(0, index).filter(l => l.is_extra).length;
+
+    // Es una línea extra promocionada si es extra y el número total de líneas no supera el límite
+    const isPromotionalExtra = line.is_extra && (  extraLinesBeforeThis + 1) <= promoLimit;
+
+    if (isPromotionalExtra) {
+        // Filtra los descuentos para que el valor mensual sea <= 1 euro
+        return availableO2oDiscounts.value.filter(d => {
+            const monthlyValue = parseFloat(d.total_discount_amount) / parseFloat(d.duration_months);
+            return monthlyValue <= 1;
+        });
+    }
+
+    // Para todas las demás líneas, devuelve la lista completa
+    return availableO2oDiscounts.value;
+};
+
+
 watch(selectedPackageId, (newPackageId) => {
     lines.value = [];
     if (!newPackageId) return;
@@ -99,7 +122,7 @@ watch(selectedPackageId, (newPackageId) => {
     for (let i = 1; i <= quantity; i++) {
         lines.value.push({
             id: i,
-            is_extra: false, // MODIFICADO: La marcamos como incluida
+            is_extra: false,
             phone_number: '', source_operator: null, has_vap: false,
             o2o_discount_id: null, selected_brand: null, selected_model_id: null,
             selected_duration: null, terminal_pivot: null,
@@ -121,7 +144,6 @@ const appliedDiscount = computed(() => {
     });
 });
 
-// MODIFICADO: Añadimos el cálculo de líneas adicionales
 const calculationSummary = computed(() => {
     if (!selectedPackage.value || !mobileAddonInfo.value) {
         return { basePrice: 0, finalPrice: 0, appliedO2oList: [], totalTerminalFee: 0, totalInitialPayment: 0, extraLinesCost: 0 };
@@ -135,7 +157,7 @@ const calculationSummary = computed(() => {
     let totalTerminalFee = 0;
     let totalInitialPayment = 0;
     let extraLinesCost = 0;
-    let extraLinesCounter = 0; // NUEVO: Contador solo para líneas extra
+    let extraLinesCounter = 0;
 
     const includedQty = mobileAddonInfo.value.pivot.included_quantity;
     const promoLimit = mobileAddonInfo.value.pivot.line_limit;
@@ -147,8 +169,7 @@ const calculationSummary = computed(() => {
         totalInitialPayment += parseFloat(line.initial_cost || 0);
 
         if (line.is_extra) {
-            extraLinesCounter++; // Incrementamos el contador de líneas extra
-            // Comparamos el número TOTAL de líneas con el límite promocional
+            extraLinesCounter++;
             if ((extraLinesCounter) <= promoLimit) {
                 extraLinesCost += promoPrice;
             } else {
@@ -214,7 +235,13 @@ const calculationSummary = computed(() => {
                                     <div class="col-span-5 md:col-span-3 flex items-end pb-1"><div class="flex items-center h-full"><input v-model="line.has_vap" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-indigo-600"><label class="ml-2 block text-sm text-gray-900">con VAP</label></div></div>
                                 </div>
                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div v-if="availableO2oDiscounts.length > 0"><label class="block text-sm font-medium text-gray-700">Descuento O2O</label><select v-model="line.o2o_discount_id" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm"><option :value="null">-- Sin subvención --</option><option v-for="o2o in availableO2oDiscounts" :key="o2o.id" :value="o2o.id">{{ o2o.name }}</option></select></div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700">Descuento O2O</label>
+                                        <select v-model="line.o2o_discount_id" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm">
+                                            <option :value="null">-- Sin subvención --</option>
+                                            <option v-for="o2o in getO2oDiscountsForLine(line, index)" :key="o2o.id" :value="o2o.id">{{ o2o.name }}</option>
+                                        </select>
+                                    </div>
                                     <div class="grid grid-cols-3 gap-2">
                                         <div><label class="block text-sm font-medium text-gray-700">Marca</label><select v-model="line.selected_brand" @change="line.selected_model_id = null; line.selected_duration = null; assignTerminalPrices(line);" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm"><option :value="null">-- Marca --</option><option v-for="brand in brandsForSelectedPackage" :key="brand" :value="brand">{{ brand }}</option></select></div>
                                         <div><label class="block text-sm font-medium text-gray-700">Modelo</label><select v-model="line.selected_model_id" @change="line.selected_duration = null; assignTerminalPrices(line);" :disabled="!line.selected_brand" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm"><option :value="null">-- Modelo --</option><option v-for="terminal in modelsByBrand(line.selected_brand)" :key="terminal.id" :value="terminal.id">{{ terminal.model }}</option></select></div>
