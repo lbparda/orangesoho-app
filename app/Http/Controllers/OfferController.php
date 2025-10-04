@@ -35,6 +35,7 @@ class OfferController extends Controller
         $operators = ['Movistar', 'Vodafone', 'Orange', 'MasMovil', 'Otros'];
         $terminals = Terminal::all();
         $portabilityCommission = config('commissions.portability_extra');
+        $additionalInternetAddons = Addon::where('type', 'internet_additional')->get();
         // Devolvemos la vista de Vue y le pasamos todos los datos como props
         return Inertia::render('Offers/Create', [
             'packages' => $packages,
@@ -42,6 +43,7 @@ class OfferController extends Controller
             'operators' => $operators,
             'terminals' => $terminals,
             'portabilityCommission' => $portabilityCommission,
+            'additionalInternetAddons' => $additionalInternetAddons,
         ]);
     }
 

@@ -13,13 +13,17 @@ const props = defineProps({
         required: true,
         default: 0,
     },
+    // NUEVO: Prop para las opciones de internet adicionales
+    additionalInternetAddons: Array,
 });
 
 const selectedPackageId = ref(null);
 const lines = ref([]);
+const selectedInternetAddonId = ref(null);
+// NUEVO: Estado para las líneas de internet adicionales que se añadan
+const additionalInternetLines = ref([]);
 
-// --- El resto de computed properties y funciones se mantienen igual ---
-
+// --- Computeds ---
 const selectedPackage = computed(() => {
     return props.packages.find(p => p.id === selectedPackageId.value) || null;
 });
@@ -27,6 +31,16 @@ const selectedPackage = computed(() => {
 const mobileAddonInfo = computed(() => {
     if (!selectedPackage.value?.addons) return null;
     return selectedPackage.value.addons.find(a => a.type === 'mobile_line');
+});
+
+const internetAddonOptions = computed(() => {
+    if (!selectedPackage.value?.addons) return [];
+    return selectedPackage.value.addons.filter(a => a.type === 'internet');
+});
+
+const selectedInternetAddonInfo = computed(() => {
+    if (!selectedInternetAddonId.value || !internetAddonOptions.value.length) return null;
+    return internetAddonOptions.value.find(a => a.id === selectedInternetAddonId.value);
 });
 
 const canAddLine = computed(() => !!selectedPackage.value);
@@ -88,6 +102,19 @@ const addLine = () => {
     });
 };
 
+// NUEVO: Funciones para gestionar las líneas de internet adicionales
+const addInternetLine = () => {
+    additionalInternetLines.value.push({
+        id: Date.now(),
+        addon_id: null, // El usuario deberá seleccionarlo
+    });
+};
+
+const removeInternetLine = (index) => {
+    additionalInternetLines.value.splice(index, 1);
+};
+
+
 const getDurationsForModel = (line) => {
     if (!line.selected_model_id) return [];
     const terminals = availableTerminals.value.filter(t => t.id === line.selected_model_id);
@@ -112,7 +139,16 @@ const getO2oDiscountsForLine = (line, index) => {
 
 watch(selectedPackageId, (newPackageId) => {
     lines.value = [];
+    selectedInternetAddonId.value = null;
+    additionalInternetLines.value = []; // Limpiamos las líneas de internet adicionales
+
     if (!newPackageId) return;
+
+    if (internetAddonOptions.value.length > 0) {
+        const defaultOption = internetAddonOptions.value.sort((a, b) => a.pivot.price - b.pivot.price)[0];
+        selectedInternetAddonId.value = defaultOption.id;
+    }
+
     const pkg = props.packages.find(p => p.id === newPackageId);
     if (!pkg?.addons) return;
     const mobileAddon = pkg.addons.find(a => a.type === 'mobile_line');
@@ -143,74 +179,89 @@ const appliedDiscount = computed(() => {
     });
 });
 
-// NUEVO: Observador para limpiar los datos del terminal si se desmarca "con VAP"
 watch(() => lines.value.map(line => line.has_vap), (newVapStates, oldVapStates) => {
     newVapStates.forEach((isVap, index) => {
-        // Si el estado ha cambiado de true a false
-        if (oldVapStates[index] && !isVap) {
+        if (oldVapStates && oldVapStates[index] && !isVap) {
             const line = lines.value[index];
             line.selected_brand = null;
             line.selected_model_id = null;
             line.selected_duration = null;
-            // La siguiente función ya resetea los costes y el pivot
             assignTerminalPrices(line);
         }
     });
-});
+}, { deep: true });
 
 
 const calculationSummary = computed(() => {
-    if (!selectedPackage.value || !mobileAddonInfo.value) {
+    if (!selectedPackage.value) {
         return { basePrice: 0, finalPrice: 0, appliedO2oList: [], totalTerminalFee: 0, totalInitialPayment: 0, extraLinesCost: 0, totalCommission: 0 };
     }
+    
     let price = parseFloat(selectedPackage.value.base_price) || 0;
     const basePrice = price;
+    let totalCommission = 0;
+
+    // 1. Sumar precio y comisión de la FIBRA PRINCIPAL
+    if (selectedInternetAddonInfo.value) {
+        price += parseFloat(selectedInternetAddonInfo.value.pivot.price) || 0;
+        totalCommission += parseFloat(selectedInternetAddonInfo.value.pivot.included_line_commission) || 0;
+    }
+
+    // 2. Sumar precio y comisión de las LÍNEAS DE INTERNET ADICIONALES
+    additionalInternetLines.value.forEach(line => {
+        if (line.addon_id) {
+            const addonInfo = props.additionalInternetAddons.find(a => a.id === line.addon_id);
+            if (addonInfo) {
+                price += parseFloat(addonInfo.price) || 0;
+                totalCommission += parseFloat(addonInfo.commission) || 0;
+            }
+        }
+    });
+
     if (appliedDiscount.value) {
         price -= (price * (parseFloat(appliedDiscount.value.percentage) / 100));
     }
+    
     const appliedO2oList = [];
     let totalTerminalFee = 0;
     let totalInitialPayment = 0;
     let extraLinesCost = 0;
     let extraLinesCounter = 0;
-    let totalCommission = 0;
 
-    const promoLimit = mobileAddonInfo.value.pivot.line_limit;
-    const promoPrice = 8.22;
-    const standardPrice = mobileAddonInfo.value.pivot.price;
+    // 3. Sumar precios y comisiones de las LÍNEAS MÓVILES
+    if (mobileAddonInfo.value) {
+        const promoLimit = mobileAddonInfo.value.pivot.line_limit;
+        const promoPrice = 8.22;
+        const standardPrice = mobileAddonInfo.value.pivot.price;
+        const includedCommission = parseFloat(mobileAddonInfo.value.pivot.included_line_commission) || 0;
+        const additionalCommission = parseFloat(mobileAddonInfo.value.pivot.additional_line_commission) || 0;
 
-    const includedCommission = parseFloat(mobileAddonInfo.value.pivot.included_line_commission) || 0;
-    const additionalCommission = parseFloat(mobileAddonInfo.value.pivot.additional_line_commission) || 0;
+        lines.value.forEach((line, index) => {
+            totalTerminalFee += parseFloat(line.monthly_cost || 0);
+            totalInitialPayment += parseFloat(line.initial_cost || 0);
 
-    lines.value.forEach((line, index) => {
-        totalTerminalFee += parseFloat(line.monthly_cost || 0);
-        totalInitialPayment += parseFloat(line.initial_cost || 0);
-
-        if (line.is_extra) {
-            extraLinesCounter++;
-            totalCommission += additionalCommission;
-            if ((extraLinesCounter) <= promoLimit) {
-                extraLinesCost += promoPrice;
+            if (line.is_extra) {
+                extraLinesCounter++;
+                totalCommission += additionalCommission;
+                extraLinesCost += (extraLinesCounter <= promoLimit) ? promoPrice : parseFloat(standardPrice);
             } else {
-                extraLinesCost += parseFloat(standardPrice);
+                totalCommission += includedCommission;
             }
-        } else {
-            totalCommission += includedCommission;
-        }
 
-        if (line.is_portability) {
-            totalCommission += props.portabilityCommission;
-        }
-
-        if (line.o2o_discount_id) {
-            const o2o = availableO2oDiscounts.value.find(d => d.id === line.o2o_discount_id);
-            if (o2o) {
-                const monthlyValue = parseFloat(o2o.total_discount_amount) / parseFloat(o2o.duration_months);
-                price -= monthlyValue;
-                appliedO2oList.push({ line: index === 0 ? 'Línea Principal' : `Línea ${index + 1}`, name: o2o.name, value: monthlyValue.toFixed(2) });
+            if (line.is_portability) {
+                totalCommission += props.portabilityCommission;
             }
-        }
-    });
+
+            if (line.o2o_discount_id) {
+                const o2o = availableO2oDiscounts.value.find(d => d.id === line.o2o_discount_id);
+                if (o2o) {
+                    const monthlyValue = parseFloat(o2o.total_discount_amount) / parseFloat(o2o.duration_months);
+                    price -= monthlyValue;
+                    appliedO2oList.push({ line: index === 0 ? 'Línea Principal' : `Línea ${index + 1}`, name: o2o.name, value: monthlyValue.toFixed(2) });
+                }
+            }
+        });
+    }
 
     price += totalTerminalFee;
     price += extraLinesCost;
@@ -242,7 +293,7 @@ const calculationSummary = computed(() => {
                     </div>
 
                     <div class="mb-8 max-w-lg mx-auto">
-                        <label for="package" class="block text-sm font-medium text-gray-700 mb-2">Selecciona un Paquete Base</label>
+                        <label for="package" class="block text-sm font-medium text-gray-700 mb-2">1. Selecciona un Paquete Base</label>
                         <select v-model="selectedPackageId" id="package" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
                             <option :value="null" disabled>-- Elige un paquete --</option>
                             <option v-for="pkg in packages" :key="pkg.id" :value="pkg.id">{{ pkg.name }}</option>
@@ -250,6 +301,37 @@ const calculationSummary = computed(() => {
                     </div>
 
                     <div v-if="selectedPackage" class="space-y-8">
+                        <div v-if="internetAddonOptions.length > 0" class="mb-8 max-w-lg mx-auto">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">2. Elige la velocidad de la Fibra Principal</label>
+                            <div class="flex space-x-4 mt-1">
+                                <label v-for="addon in internetAddonOptions" :key="addon.id"
+                                    :class="['flex-1 text-center px-4 py-3 rounded-md border cursor-pointer transition', { 'bg-indigo-600 text-white border-indigo-600 shadow-lg': selectedInternetAddonId === addon.id, 'bg-white border-gray-300 hover:bg-gray-50': selectedInternetAddonId !== addon.id }]">
+                                    <input type="radio" :value="addon.id" v-model="selectedInternetAddonId" class="sr-only">
+                                    <span class="block font-semibold">{{ addon.name }}</span>
+                                    <span class="block text-xs mt-1" v-if="parseFloat(addon.pivot.price) > 0">+{{ addon.pivot.price }}€/mes</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="space-y-4">
+                            <h3 class="text-lg font-semibold text-gray-800">Líneas de Internet Adicionales</h3>
+                            <div v-for="(line, index) in additionalInternetLines" :key="line.id" class="p-4 border rounded-lg bg-blue-50 border-blue-200 flex items-center justify-between">
+                                <div class="flex-1">
+                                    <label class="block text-xs font-medium text-gray-500">Velocidad Línea Adicional {{ index + 1 }}</label>
+                                    <select v-model="line.addon_id" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm">
+                                        <option :value="null" disabled>-- Selecciona una velocidad --</option>
+                                        <option v-for="addon in additionalInternetAddons" :key="addon.id" :value="addon.id">
+                                            {{ addon.name }} (+{{ addon.price }}€)
+                                        </option>
+                                    </select>
+                                </div>
+                                <button @click="removeInternetLine(index)" class="ml-4 text-red-500 hover:text-red-700">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                </button>
+                            </div>
+                            <PrimaryButton @click="addInternetLine">Añadir Internet Adicional</PrimaryButton>
+                        </div>
+
                         <div v-if="lines.length > 0" class="space-y-4">
                             <h3 class="text-lg font-semibold text-gray-800">Líneas Móviles</h3>
                             <div v-for="(line, index) in lines" :key="line.id" class="p-4 border rounded-lg" :class="{'bg-gray-50 border-gray-200': !line.is_extra, 'bg-green-50 border-green-200': line.is_extra}">
@@ -315,7 +397,7 @@ const calculationSummary = computed(() => {
                         </div>
 
                         <div v-if="canAddLine" class="flex justify-start pt-4">
-                                <PrimaryButton @click="addLine">Añadir Línea Adicional</PrimaryButton>
+                                <PrimaryButton @click="addLine">Añadir Línea Móvil Adicional</PrimaryButton>
                         </div>
                         
                         <div class="mt-8 p-6 bg-gray-50 rounded-lg space-y-3">
