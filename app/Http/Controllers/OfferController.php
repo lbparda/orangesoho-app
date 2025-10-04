@@ -29,18 +29,19 @@ class OfferController extends Controller
     {
         // Cargamos los paquetes con TODAS sus relaciones (addons, descuentos, etc.)
         $packages = Package::with(['addons', 'o2oDiscounts', 'terminals'])->get();
-       // dd($packages->toArray());
+       
         // Obtenemos el resto de datos necesarios para los desplegables
         $discounts = Discount::all();
         $operators = ['Movistar', 'Vodafone', 'Orange', 'MasMovil', 'Otros'];
         $terminals = Terminal::all();
-
+        $portabilityCommission = config('commissions.portability_extra');
         // Devolvemos la vista de Vue y le pasamos todos los datos como props
         return Inertia::render('Offers/Create', [
             'packages' => $packages,
             'discounts' => $discounts,
             'operators' => $operators,
             'terminals' => $terminals,
+            'portabilityCommission' => $portabilityCommission,
         ]);
     }
 
