@@ -43,5 +43,11 @@ class AddonSeeder extends Seeder
             'commission' => 30.00, // Comisión de ejemplo
             'description' => 'Línea de fibra adicional de 1Gbps.'
         ]);
+        // NUEVO: Añadimos el addon para la Centralita
+        Addon::create([
+            'name' => 'Centralita Virtual',
+            'type' => 'centralita',
+            'description' => 'Servicio de centralita virtual para empresas.'
+        ]);
     }
 }

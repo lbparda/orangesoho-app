@@ -21,7 +21,8 @@ class RelationshipSeeder extends Seeder
         // Buscamos los addons de internet que creamos en AddonSeeder
         $internetAddon1Gb = Addon::where('name', 'Fibra 1Gb')->first();
         $internetAddon10Gb = Addon::where('name', 'Fibra 10Gb')->first();
-
+        // NUEVO: Buscamos el addon de Centralita
+        $centralitaAddon = Addon::where('type', 'centralita')->first();
         // 1. Creamos las relaciones de Addons (Líneas)
         if ($mobileAddon && $packages->isNotEmpty()) {
             $packages['Base Plus']->addons()->attach($mobileAddon->id, ['price' => 15.00, 'is_included' => true, 'included_quantity' => 1, 'line_limit' => 4,'included_line_commission' => 50.00, 'additional_line_commission' => 50.00]);
@@ -101,6 +102,32 @@ class RelationshipSeeder extends Seeder
                     'included_line_commission' => 200.00,
                     
                 ]);
+            }
+        }
+        if ($centralitaAddon && $packages->isNotEmpty()) {
+            
+            // PAQUETES DONDE ES UN EXTRA (OPCIONAL)
+            $paquetesOpcionales = ['NEGOCIO Extra 1', 'NEGOCIO Extra 3', 'NEGOCIO Extra 5'];
+            foreach ($paquetesOpcionales as $nombrePaquete) {
+                if (isset($packages[$nombrePaquete])) {
+                    $packages[$nombrePaquete]->addons()->attach($centralitaAddon->id, [
+                        'price' => 12.00, // Precio si se contrata como extra
+                        'is_included' => false,
+                        'included_line_commission' => 25.00, // Comisión si se vende como extra
+                    ]);
+                }
+            }
+
+            // PAQUETES DONDE VIENE INCLUIDA
+            $paquetesIncluidos = ['NEGOCIO Extra 10', 'NEGOCIO Extra 20'];
+            foreach ($paquetesIncluidos as $nombrePaquete) {
+                if (isset($packages[$nombrePaquete])) {
+                    $packages[$nombrePaquete]->addons()->attach($centralitaAddon->id, [
+                        'price' => 0.00, // Sin coste, va incluida
+                        'is_included' => true,
+                        'included_line_commission' => 35.00, // Comisión por defecto al ir incluida
+                    ]);
+                }
             }
         }
     }

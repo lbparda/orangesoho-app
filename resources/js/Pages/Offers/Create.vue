@@ -13,15 +13,15 @@ const props = defineProps({
         required: true,
         default: 0,
     },
-    // NUEVO: Prop para las opciones de internet adicionales
     additionalInternetAddons: Array,
 });
 
 const selectedPackageId = ref(null);
 const lines = ref([]);
 const selectedInternetAddonId = ref(null);
-// NUEVO: Estado para las líneas de internet adicionales que se añadan
 const additionalInternetLines = ref([]);
+// NUEVO: Estado para controlar si se añade la centralita opcional
+const addOptionalCentralita = ref(false);
 
 // --- Computeds ---
 const selectedPackage = computed(() => {
@@ -41,6 +41,12 @@ const internetAddonOptions = computed(() => {
 const selectedInternetAddonInfo = computed(() => {
     if (!selectedInternetAddonId.value || !internetAddonOptions.value.length) return null;
     return internetAddonOptions.value.find(a => a.id === selectedInternetAddonId.value);
+});
+
+// NUEVO: Computed para encontrar la información de la centralita en el paquete actual
+const centralitaAddonInfo = computed(() => {
+    if (!selectedPackage.value?.addons) return null;
+    return selectedPackage.value.addons.find(a => a.type === 'centralita');
 });
 
 const canAddLine = computed(() => !!selectedPackage.value);
@@ -102,11 +108,10 @@ const addLine = () => {
     });
 };
 
-// NUEVO: Funciones para gestionar las líneas de internet adicionales
 const addInternetLine = () => {
     additionalInternetLines.value.push({
         id: Date.now(),
-        addon_id: null, // El usuario deberá seleccionarlo
+        addon_id: null,
     });
 };
 
@@ -140,7 +145,8 @@ const getO2oDiscountsForLine = (line, index) => {
 watch(selectedPackageId, (newPackageId) => {
     lines.value = [];
     selectedInternetAddonId.value = null;
-    additionalInternetLines.value = []; // Limpiamos las líneas de internet adicionales
+    additionalInternetLines.value = [];
+    addOptionalCentralita.value = false; // Resetea la centralita
 
     if (!newPackageId) return;
 
@@ -201,13 +207,13 @@ const calculationSummary = computed(() => {
     const basePrice = price;
     let totalCommission = 0;
 
-    // 1. Sumar precio y comisión de la FIBRA PRINCIPAL
+    // 1. Sumar Fibra Principal
     if (selectedInternetAddonInfo.value) {
         price += parseFloat(selectedInternetAddonInfo.value.pivot.price) || 0;
         totalCommission += parseFloat(selectedInternetAddonInfo.value.pivot.included_line_commission) || 0;
     }
 
-    // 2. Sumar precio y comisión de las LÍNEAS DE INTERNET ADICIONALES
+    // 2. Sumar Líneas de Internet Adicionales
     additionalInternetLines.value.forEach(line => {
         if (line.addon_id) {
             const addonInfo = props.additionalInternetAddons.find(a => a.id === line.addon_id);
@@ -218,6 +224,16 @@ const calculationSummary = computed(() => {
         }
     });
 
+    // 3. Sumar Centralita
+    if (centralitaAddonInfo.value) {
+        if (centralitaAddonInfo.value.pivot.is_included) {
+            totalCommission += parseFloat(centralitaAddonInfo.value.pivot.included_line_commission) || 0;
+        } else if (addOptionalCentralita.value) {
+            price += parseFloat(centralitaAddonInfo.value.pivot.price) || 0;
+            totalCommission += parseFloat(centralitaAddonInfo.value.pivot.included_line_commission) || 0;
+        }
+    }
+    
     if (appliedDiscount.value) {
         price -= (price * (parseFloat(appliedDiscount.value.percentage) / 100));
     }
@@ -228,7 +244,7 @@ const calculationSummary = computed(() => {
     let extraLinesCost = 0;
     let extraLinesCounter = 0;
 
-    // 3. Sumar precios y comisiones de las LÍNEAS MÓVILES
+    // 4. Sumar Líneas Móviles
     if (mobileAddonInfo.value) {
         const promoLimit = mobileAddonInfo.value.pivot.line_limit;
         const promoPrice = 8.22;
@@ -309,6 +325,20 @@ const calculationSummary = computed(() => {
                                     <input type="radio" :value="addon.id" v-model="selectedInternetAddonId" class="sr-only">
                                     <span class="block font-semibold">{{ addon.name }}</span>
                                     <span class="block text-xs mt-1" v-if="parseFloat(addon.pivot.price) > 0">+{{ addon.pivot.price }}€/mes</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div v-if="centralitaAddonInfo" class="max-w-lg mx-auto">
+                            <h3 class="text-lg font-semibold text-gray-800 mb-2">Centralita Virtual</h3>
+                            <div v-if="centralitaAddonInfo.pivot.is_included" class="p-4 bg-green-100 border border-green-300 rounded-md text-center">
+                                <p class="font-semibold text-green-800">✅ Centralita Virtual Incluida</p>
+                            </div>
+                            <div v-else class="flex items-center p-4 border rounded-md">
+                                <input v-model="addOptionalCentralita" id="centralita_checkbox" type="checkbox" class="h-5 w-5 rounded border-gray-300 text-indigo-600">
+                                <label for="centralita_checkbox" class="ml-3 flex flex-col">
+                                    <span class="font-medium text-gray-900">Añadir Centralita Virtual</span>
+                                    <span class="text-sm text-gray-500">+{{ centralitaAddonInfo.pivot.price }}€/mes</span>
                                 </label>
                             </div>
                         </div>
