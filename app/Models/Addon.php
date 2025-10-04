@@ -13,6 +13,6 @@ class Addon extends Model
 
     public function packages(): BelongsToMany
     {
-        return $this->belongsToMany(Package::class, 'addon_package')->withPivot('price', 'is_included', 'included_quantity', 'line_limit')->withTimestamps();
+        return $this->belongsToMany(Package::class, 'addon_package')->withPivot('price', 'is_included', 'included_quantity', 'line_limit','included_line_commission', 'additional_line_commission')->withTimestamps();
     }
 }
