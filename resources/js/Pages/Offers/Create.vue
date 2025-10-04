@@ -4,7 +4,6 @@ import { ref, computed, watch } from 'vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 
-// NUEVO: Añadimos la prop para la comisión de portabilidad
 const props = defineProps({
     packages: Array,
     discounts: Array,
@@ -18,6 +17,8 @@ const props = defineProps({
 
 const selectedPackageId = ref(null);
 const lines = ref([]);
+
+// --- El resto de computed properties y funciones se mantienen igual ---
 
 const selectedPackage = computed(() => {
     return props.packages.find(p => p.id === selectedPackageId.value) || null;
@@ -74,13 +75,12 @@ const assignTerminalPrices = (line) => {
     }
 };
 
-// NUEVO: Añadimos 'is_portability' al añadir una línea
 const addLine = () => {
     if (!canAddLine.value) return;
     lines.value.push({
         id: Date.now(),
         is_extra: true,
-        is_portability: false, // <-- AÑADIDO
+        is_portability: false,
         phone_number: '', source_operator: null, has_vap: false,
         o2o_discount_id: null, selected_brand: null, selected_model_id: null,
         selected_duration: null, terminal_pivot: null,
@@ -110,7 +110,6 @@ const getO2oDiscountsForLine = (line, index) => {
     return availableO2oDiscounts.value;
 };
 
-// NUEVO: Añadimos 'is_portability' al crear las líneas iniciales
 watch(selectedPackageId, (newPackageId) => {
     lines.value = [];
     if (!newPackageId) return;
@@ -122,7 +121,7 @@ watch(selectedPackageId, (newPackageId) => {
         lines.value.push({
             id: i,
             is_extra: false,
-            is_portability: false, // <-- AÑADIDO
+            is_portability: false,
             phone_number: '', source_operator: null, has_vap: false,
             o2o_discount_id: null, selected_brand: null, selected_model_id: null,
             selected_duration: null, terminal_pivot: null,
@@ -143,6 +142,22 @@ const appliedDiscount = computed(() => {
         return true;
     });
 });
+
+// NUEVO: Observador para limpiar los datos del terminal si se desmarca "con VAP"
+watch(() => lines.value.map(line => line.has_vap), (newVapStates, oldVapStates) => {
+    newVapStates.forEach((isVap, index) => {
+        // Si el estado ha cambiado de true a false
+        if (oldVapStates[index] && !isVap) {
+            const line = lines.value[index];
+            line.selected_brand = null;
+            line.selected_model_id = null;
+            line.selected_duration = null;
+            // La siguiente función ya resetea los costes y el pivot
+            assignTerminalPrices(line);
+        }
+    });
+});
+
 
 const calculationSummary = computed(() => {
     if (!selectedPackage.value || !mobileAddonInfo.value) {
@@ -183,7 +198,6 @@ const calculationSummary = computed(() => {
             totalCommission += includedCommission;
         }
 
-        // NUEVO: Añadimos la comisión extra por portabilidad
         if (line.is_portability) {
             totalCommission += props.portabilityCommission;
         }
@@ -217,7 +231,7 @@ const calculationSummary = computed(() => {
     <Head title="Crear Oferta" />
 
     <div class="py-12">
-        <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
+        <div class="sm:px-6 lg:px-8">
             <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
                 <div class="p-8 bg-white border-b border-gray-200">
                     <div class="flex justify-between items-center mb-6">
@@ -227,7 +241,7 @@ const calculationSummary = computed(() => {
                         </Link>
                     </div>
 
-                    <div class="mb-8">
+                    <div class="mb-8 max-w-lg mx-auto">
                         <label for="package" class="block text-sm font-medium text-gray-700 mb-2">Selecciona un Paquete Base</label>
                         <select v-model="selectedPackageId" id="package" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
                             <option :value="null" disabled>-- Elige un paquete --</option>
@@ -281,25 +295,29 @@ const calculationSummary = computed(() => {
                                                 <option v-for="o2o in getO2oDiscountsForLine(line, index)" :key="o2o.id" :value="o2o.id">{{ o2o.name }}</option>
                                             </select>
                                         </div>
-                                        <div class="grid grid-cols-3 gap-2">
-                                            <div><label class="block text-sm font-medium text-gray-700">Marca</label><select v-model="line.selected_brand" @change="line.selected_model_id = null; line.selected_duration = null; assignTerminalPrices(line);" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm"><option :value="null">-- Marca --</option><option v-for="brand in brandsForSelectedPackage" :key="brand" :value="brand">{{ brand }}</option></select></div>
-                                            <div><label class="block text-sm font-medium text-gray-700">Modelo</label><select v-model="line.selected_model_id" @change="line.selected_duration = null; assignTerminalPrices(line);" :disabled="!line.selected_brand" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm"><option :value="null">-- Modelo --</option><option v-for="terminal in modelsByBrand(line.selected_brand)" :key="terminal.id" :value="terminal.id">{{ terminal.model }}</option></select></div>
-                                            <div><label class="block text-sm font-medium text-gray-700">Meses</label><select v-model="line.selected_duration" @change="assignTerminalPrices(line)" :disabled="!line.selected_model_id" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm"><option :value="null">-- Meses --</option><option v-for="duration in getDurationsForModel(line)" :key="duration" :value="duration">{{ duration }} meses</option></select></div>
+                                    </div>
+
+                                    <div v-if="line.has_vap" class="space-y-4 pt-4 border-t border-dashed">
+                                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div class="grid grid-cols-3 gap-2">
+                                                <div><label class="block text-sm font-medium text-gray-700">Marca</label><select v-model="line.selected_brand" @change="line.selected_model_id = null; line.selected_duration = null; assignTerminalPrices(line);" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm"><option :value="null">-- Marca --</option><option v-for="brand in brandsForSelectedPackage" :key="brand" :value="brand">{{ brand }}</option></select></div>
+                                                <div><label class="block text-sm font-medium text-gray-700">Modelo</label><select v-model="line.selected_model_id" @change="line.selected_duration = null; assignTerminalPrices(line);" :disabled="!line.selected_brand" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm"><option :value="null">-- Modelo --</option><option v-for="terminal in modelsByBrand(line.selected_brand)" :key="terminal.id" :value="terminal.id">{{ terminal.model }}</option></select></div>
+                                                <div><label class="block text-sm font-medium text-gray-700">Meses</label><select v-model="line.selected_duration" @change="assignTerminalPrices(line)" :disabled="!line.selected_model_id" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm"><option :value="null">-- Meses --</option><option v-for="duration in getDurationsForModel(line)" :key="duration" :value="duration">{{ duration }} meses</option></select></div>
+                                            </div>
+                                        </div>
+                                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div><label class="block text-sm font-medium text-gray-700">Pago Inicial (€)</label><input v-model.number="line.initial_cost" type="number" step="0.01" min="0" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm"></div>
+                                            <div><label class="block text-sm font-medium text-gray-700">Cuota Mensual (€)</label><input v-model.number="line.monthly_cost" type="number" step="0.01" min="0" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm"></div>
                                         </div>
                                     </div>
-                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        <div><label class="block text-sm font-medium text-gray-700">Pago Inicial (€)</label><input v-model.number="line.initial_cost" type="number" step="0.01" min="0" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm"></div>
-                                        <div><label class="block text-sm font-medium text-gray-700">Cuota Mensual (€)</label><input v-model.number="line.monthly_cost" type="number" step="0.01" min="0" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm"></div>
-                                    </div>
                                 </div>
-
                             </div>
                         </div>
 
                         <div v-if="canAddLine" class="flex justify-start pt-4">
                                 <PrimaryButton @click="addLine">Añadir Línea Adicional</PrimaryButton>
                         </div>
-
+                        
                         <div class="mt-8 p-6 bg-gray-50 rounded-lg space-y-3">
                             <h2 class="text-xl font-semibold text-gray-800">{{ selectedPackage.name }}</h2>
                             <div class="space-y-1">
