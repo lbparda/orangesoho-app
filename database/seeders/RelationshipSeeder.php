@@ -15,7 +15,7 @@ class RelationshipSeeder extends Seeder
         $packages = Package::all()->keyBy('name');
         $mobileAddon = Addon::where('type', 'mobile_line')->first();
         $o2o_discounts = O2oDiscount::all()->keyBy('total_discount_amount');
-        // $s24 = Terminal::where('model', 'GALAXY S24')->first();
+        $s24 = Terminal::where('model', 'GALAXY S24')->first();
 
         // ✅ LÍNEAS QUE FALTABAN ✅
         // Buscamos los addons de internet que creamos en AddonSeeder
@@ -76,11 +76,11 @@ class RelationshipSeeder extends Seeder
         }
 
         // 3. Creamos las relaciones de Terminales
-       // if (/*$s24 &&*/ $packages->isNotEmpty()) {
-         //   $group1_ids = Package::whereIn('name', ['NEGOCIO Extra 1', 'NEGOCIO Extra 3', 'NEGOCIO Extra 5'])->pluck('id');
+        if ($s24 && $packages->isNotEmpty()) {
+              $group1_ids = Package::whereIn('name', ['NEGOCIO Extra 1', 'NEGOCIO Extra 3', 'NEGOCIO Extra 5'])->pluck('id');
             // La línea attach estaba incompleta, la restauro como ejemplo
-           // $s24->packages()->attach($group1_ids, ['initial_cost' => 24.00, 'monthly_cost' => 25.00]);
-        //}
+              $s24->packages()->attach($group1_ids, ['initial_cost' => 24.00, 'monthly_cost' => 25.00]);
+        }
         
         // 4. Creamos las relaciones de Addons de Internet
         if ($internetAddon1Gb && $internetAddon10Gb && $packages->isNotEmpty()) {
