@@ -13,8 +13,9 @@ class Package extends Model
 
     public function terminals(): BelongsToMany
     {
-        return $this->belongsToMany(Terminal::class)
-            ->withPivot('initial_cost', 'monthly_cost', 'duration_months','included_line_commission', 'additional_line_commission') // UNIFICADO
+        return $this->belongsToMany(Terminal::class, 'package_terminal')
+            // MODIFICACIÓN CRÍTICA: Se añade 'id' para que el guardado funcione
+            ->withPivot('id', 'initial_cost', 'monthly_cost', 'duration_months','included_line_commission', 'additional_line_commission')
             ->withTimestamps();
     }
     public function addons(): BelongsToMany
@@ -31,6 +32,5 @@ class Package extends Model
     {
         return $this->belongsToMany(O2oDiscount::class, 'o2o_discount_package')->withPivot('subsidy_percentage', 'dho_payment', 'osp_payment')->withTimestamps();
     }
-
-   
 }
+

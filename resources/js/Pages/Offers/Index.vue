@@ -1,31 +1,55 @@
 <script setup>
-import { Head } from '@inertiajs/vue3';
+import { Head, Link } from '@inertiajs/vue3';
+import PrimaryButton from '@/Components/PrimaryButton.vue';
 
-// Recibimos la variable 'packages' que nos manda el controlador
 defineProps({
-    packages: Array,
+    offers: Object, // Viene paginado desde Laravel
 });
 </script>
 
 <template>
-    <Head title="Consultar Ofertas" />
+    <Head title="Listado de Ofertas" />
 
-    <div class="py-12 bg-gray-100 min-h-screen">
+    <div class="py-12">
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
-            <h1 class="text-3xl font-bold text-gray-800 mb-8">Nuestras Ofertas</h1>
-            
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <div v-for="pkg in packages" :key="pkg.id" class="bg-white overflow-hidden shadow-sm rounded-lg p-6">
-                    <h2 class="text-2xl font-semibold text-gray-900">{{ pkg.name }}</h2>
-                    <p class="mt-4 text-4xl font-extrabold text-gray-800">
-                        {{ pkg.base_price }}<span class="text-xl font-medium text-gray-500">€/mes</span>
-                    </p>
-                    <p class="mt-2 text-sm text-gray-500">
-                        Precio base sin descuentos
-                    </p>
-                </div>
+            <div class="flex justify-between items-center mb-6">
+                <h1 class="text-2xl font-bold text-gray-800">Ofertas Guardadas</h1>
+                <Link :href="route('offers.create')">
+                    <PrimaryButton>Crear Nueva Oferta</PrimaryButton>
+                </Link>
             </div>
 
+            <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
+                <div class="p-6 bg-white border-b border-gray-200">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID Oferta</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Paquete</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Precio Final</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha Creación</th>
+                                <th scope="col" class="relative px-6 py-3">
+                                    <span class="sr-only">Ver</span>
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200">
+                            <tr v-for="offer in offers.data" :key="offer.id">
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">#{{ offer.id }}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ offer.package.name }}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ offer.summary.finalPrice }}€/mes</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ new Date(offer.created_at).toLocaleDateString() }}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                    <Link :href="route('offers.show', offer.id)" class="text-indigo-600 hover:text-indigo-900">Ver Detalles</Link>
+                                </td>
+                            </tr>
+                            <tr v-if="offers.data.length === 0">
+                                <td colspan="5" class="px-6 py-4 text-center text-sm text-gray-500">No hay ofertas guardadas todavía.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
     </div>
 </template>

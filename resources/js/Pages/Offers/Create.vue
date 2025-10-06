@@ -1,5 +1,5 @@
 <script setup>
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, useForm } from '@inertiajs/vue3';
 import { ref, computed, watch } from 'vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
@@ -23,7 +23,16 @@ const selectedInternetAddonId = ref(null);
 const additionalInternetLines = ref([]);
 const selectedCentralitaId = ref(null); // Guarda el ID de la centralita opcional seleccionada
 const centralitaExtensionQuantities = ref({});
-const isOperadoraAutomaticaSelected = ref(false); // NUEVO: State para la operadora automática
+const isOperadoraAutomaticaSelected = ref(false); 
+
+const form = useForm({
+    package_id: null,
+    lines: [],
+    internet_addon_id: null,
+    additional_internet_lines: [],
+    centralita: null,
+    summary: null,
+});
 
 
 // --- Computeds ---
@@ -46,20 +55,16 @@ const selectedInternetAddonInfo = computed(() => {
     return internetAddonOptions.value.find(a => a.id === selectedInternetAddonId.value);
 });
 
-// Opciones de centralita opcionales para el paquete actual
 const centralitaAddonOptions = computed(() => {
     if (!selectedPackage.value?.addons) return [];
-    // Filtra addons de tipo 'centralita' que NO estén incluidos por defecto
     return selectedPackage.value.addons.filter(a => a.type === 'centralita' && !a.pivot.is_included);
 });
 
-// La centralita que viene INCLUIDA en el paquete (si existe)
 const includedCentralita = computed(() => {
     if (!selectedPackage.value?.addons) return null;
     return selectedPackage.value.addons.find(a => a.type === 'centralita' && a.pivot.is_included);
 });
 
-// La centralita está activa si está incluida O si se ha seleccionado una opcional.
 const isCentralitaActive = computed(() => {
     return !!includedCentralita.value || !!selectedCentralitaId.value;
 });
@@ -71,7 +76,6 @@ const includedCentralitaExtensions = computed(() => {
     );
 });
 
-// NUEVO: Computed para la Operadora Automática
 const operadoraAutomaticaInfo = computed(() => {
     if (!selectedPackage.value?.addons) return null;
     return selectedPackage.value.addons.find(a => a.type === 'centralita_feature');
@@ -136,7 +140,6 @@ const addLine = () => {
     });
 };
 
-// MODIFICACIÓN: Función para borrar una línea móvil adicional
 const removeLine = (index) => {
     if (lines.value[index] && lines.value[index].is_extra) {
         lines.value.splice(index, 1);
@@ -175,13 +178,55 @@ const getO2oDiscountsForLine = (line, index) => {
     return availableO2oDiscounts.value;
 };
 
+const saveOffer = () => {
+    if (!selectedPackage.value) {
+        alert("Por favor, selecciona un paquete antes de guardar.");
+        return;
+    }
+    
+    form.package_id = selectedPackageId.value;
+    form.lines = lines.value.map(line => ({
+        is_extra: line.is_extra,
+        is_portability: line.is_portability,
+        phone_number: line.phone_number,
+        source_operator: line.source_operator,
+        has_vap: line.has_vap,
+        o2o_discount_id: line.o2o_discount_id,
+        terminal_pivot_id: line.terminal_pivot ? line.terminal_pivot.id : null, // Asegúrate de que tu backend espera esto
+        initial_cost: line.initial_cost,
+        monthly_cost: line.monthly_cost,
+    }));
+    form.internet_addon_id = selectedInternetAddonId.value;
+    form.additional_internet_lines = additionalInternetLines.value.filter(l => l.addon_id).map(l => ({ addon_id: l.addon_id }));
+    form.centralita = {
+        id: selectedCentralitaId.value || (includedCentralita.value ? includedCentralita.value.id : null),
+        operadora_automatica_selected: isOperadoraAutomaticaSelected.value,
+        operadora_automatica_id: operadoraAutomaticaInfo.value ? operadoraAutomaticaInfo.value.id : null,
+        extensions: Object.entries(centralitaExtensionQuantities.value)
+            .filter(([, quantity]) => quantity > 0)
+            .map(([addonId, quantity]) => ({ addon_id: addonId, quantity: quantity })),
+    };
+    form.summary = calculationSummary.value;
+
+    form.post(route('offers.store'), {
+        onSuccess: () => {
+            alert('¡Oferta guardada con éxito!');
+        },
+        onError: (errors) => {
+            console.error('Error al guardar la oferta:', errors);
+            alert('Hubo un error al guardar la oferta. Revisa la consola para más detalles.');
+        }
+    });
+};
+
+
 watch(selectedPackageId, (newPackageId) => {
     lines.value = [];
     selectedInternetAddonId.value = null;
     additionalInternetLines.value = [];
-    selectedCentralitaId.value = null; // Resetea la centralita opcional
+    selectedCentralitaId.value = null;
     centralitaExtensionQuantities.value = {};
-    isOperadoraAutomaticaSelected.value = false; // NUEVO: Resetea la operadora automática
+    isOperadoraAutomaticaSelected.value = false;
 
     if (!newPackageId) return;
 
@@ -242,7 +287,7 @@ const calculationSummary = computed(() => {
     const basePrice = price;
     let totalCommission = 0;
 
-    // 1. Sumar Fibra Principal y Adicionales
+    // Fibra
     if (selectedInternetAddonInfo.value) {
         price += parseFloat(selectedInternetAddonInfo.value.pivot.price) || 0;
         totalCommission += parseFloat(selectedInternetAddonInfo.value.pivot.included_line_commission) || 0;
@@ -257,12 +302,10 @@ const calculationSummary = computed(() => {
         }
     });
 
-    // 2. LÓGICA DE CENTRALITA
-    // Si hay una centralita INCLUIDA
+    // Centralita
     if (includedCentralita.value) {
         totalCommission += parseFloat(includedCentralita.value.pivot.included_line_commission) || 0;
     }
-    // Si se ha SELECCIONADO una centralita opcional
     else if (selectedCentralitaId.value) {
         const selectedCentralita = centralitaAddonOptions.value.find(c => c.id === selectedCentralitaId.value);
         if (selectedCentralita) {
@@ -271,7 +314,7 @@ const calculationSummary = computed(() => {
         }
     }
 
-    // NUEVO: Sumar Operadora Automática
+    // Operadora Automática
     if (isCentralitaActive.value && operadoraAutomaticaInfo.value) {
         if (operadoraAutomaticaInfo.value.pivot.is_included) {
             totalCommission += parseFloat(operadoraAutomaticaInfo.value.pivot.included_line_commission) || 0;
@@ -281,16 +324,14 @@ const calculationSummary = computed(() => {
         }
     }
 
-    // 3. Sumar Extensiones de Centralita (solo si está activa)
+    // Extensiones
     if (isCentralitaActive.value) {
-        // Sumar comisiones de extensiones INCLUIDAS en el paquete
         includedCentralitaExtensions.value.forEach(ext => {
             const commissionPerUnit = parseFloat(ext.pivot.included_line_commission) || 0;
             const quantity = ext.pivot.included_quantity || 0;
             totalCommission += quantity * commissionPerUnit;
         });
 
-        // Sumar precio y comisión de extensiones ADICIONALES
         for (const addonId in centralitaExtensionQuantities.value) {
             const quantity = centralitaExtensionQuantities.value[addonId];
             if (quantity > 0) {
@@ -303,7 +344,7 @@ const calculationSummary = computed(() => {
         }
     }
 
-    // 4. Lógica de Líneas Móviles y Terminales
+    // Líneas Móviles y Terminales
     const appliedO2oList = [];
     let totalTerminalFee = 0;
     let totalInitialPayment = 0;
@@ -499,10 +540,10 @@ const calculationSummary = computed(() => {
                                 <div class="grid grid-cols-12 gap-4 items-center mb-4">
                                     <div class="col-span-12 md:col-span-3 flex justify-between items-center">
                                         <span class="font-medium text-gray-700">{{ index === 0 ? 'Línea Principal' : `Línea ${index + 1}` }}</span>
-                                        <!-- MODIFICACIÓN: Botón de borrar línea -->
                                         <button v-if="line.is_extra" @click="removeLine(index)" class="text-red-500 hover:text-red-700 p-1 rounded-full hover:bg-red-100">
-                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 -2.6 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                            
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                            </svg>
                                         </button>
                                     </div>
                                     <div class="col-span-12 md:col-span-5">
@@ -606,10 +647,17 @@ const calculationSummary = computed(() => {
                                 </p>
                             </div>
                         </div>
+
+                        <!-- MODIFICACIÓN: Botón de guardar oferta -->
+                        <div class="mt-10 flex justify-center">
+                            <PrimaryButton @click="saveOffer" :disabled="form.processing">
+                                Guardar Oferta
+                            </PrimaryButton>
+                        </div>
+
                     </div>
                 </div>
             </div>
         </div>
     </div>
 </template>
-

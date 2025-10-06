@@ -34,4 +34,9 @@ Route::get('/ofertas', [OfferController::class, 'index'])
     ->name('Consultar Ofertas');
 Route::get('/terminals/import', [ImportController::class, 'create'])->name('terminals.import.create');
     Route::post('/terminals/import', [ImportController::class, 'store'])->name('terminals.import.store');
+
+Route::get('/offers/create', [OfferController::class, 'create'])->name('offers.create');
+Route::post('/offers', [OfferController::class, 'store'])->name('offers.store');
+Route::resource('offers', OfferController::class);
+
 require __DIR__.'/auth.php';
