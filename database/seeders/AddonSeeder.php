@@ -9,66 +9,69 @@ class AddonSeeder extends Seeder
 {
     public function run(): void
     {
-        // Este es el addon que ya tenías
-        Addon::create([
-            'name' => 'Líneas adicionales móviles',
-            'type' => 'mobile_line',
-            'description' => 'Servicio para añadir líneas móviles adicionales a un paquete.'
-        ]);
+        // --- LÍNEAS MÓVILES ---
+        Addon::updateOrCreate(
+            ['name' => 'Líneas adicionales móviles'],
+            ['type' => 'mobile_line', 'description' => 'Servicio para añadir líneas móviles adicionales a un paquete.']
+        );
 
-        // NUEVO: Añadimos los addons para las velocidades de internet
-        Addon::create([
-            'name' => 'Fibra 1Gb',
-            'type' => 'internet',
-            'description' => 'Conexión de fibra óptica a 1Gbps.'
-        ]);
+        // --- FIBRA PRINCIPAL ---
+        Addon::updateOrCreate(
+            ['name' => 'Fibra 1Gb'],
+            ['type' => 'internet', 'description' => 'Conexión de fibra óptica a 1Gbps.']
+        );
+        Addon::updateOrCreate(
+            ['name' => 'Fibra 10Gb'],
+            ['type' => 'internet', 'description' => 'Conexión de fibra óptica a 10Gbps.']
+        );
 
-        Addon::create([
-            'name' => 'Fibra 10Gb',
-            'type' => 'internet',
-            'description' => 'Conexión de fibra óptica a 10Gbps.'
-        ]);
-            Addon::create([
-        'name' => 'Fibra Adicional 600Mb',
-        'type' => 'internet_additional',
-        'price' => 8.22,
-        'commission' => 15.00, // Comisión de ejemplo
-        'description' => 'Línea de fibra adicional de 600Mbps.'
-        ]);
+        // --- FIBRA ADICIONAL ---
+        Addon::updateOrCreate(
+            ['name' => 'Fibra Adicional 600Mb'],
+            ['type' => 'internet_additional', 'price' => 8.22, 'commission' => 15.00]
+        );
+        Addon::updateOrCreate(
+            ['name' => 'Fibra Adicional 1Gb'],
+            ['type' => 'internet_additional', 'price' => 15.00, 'commission' => 30.00]
+        );
 
-        Addon::create([
-            'name' => 'Fibra Adicional 1Gb',
-            'type' => 'internet_additional',
-            'price' => 15.00,
-            'commission' => 30.00, // Comisión de ejemplo
-            'description' => 'Línea de fibra adicional de 1Gbps.'
-        ]);
-        // NUEVO: Añadimos el addon para la Centralita
-        Addon::create([
-            'name' => 'Centralita Virtual',
-            'type' => 'centralita',
-            'description' => 'Servicio de centralita virtual para empresas.'
-        ]);
-        // NUEVO: Añadimos las extensiones de la centralita
-        Addon::create([
-            'name' => 'Extensión Básica',
-            'type' => 'centralita_extension',
-            'price' => 10.00,
-            'commission' => 5.00, // Comisión de ejemplo, ajústala a tu valor real
-        ]);
+        // --- LÓGICA DE CENTRALITA - ESTRUCTURA CORRECTA ---
 
-        Addon::create([
-            'name' => 'Extensión Avanzada',
-            'type' => 'centralita_extension',
-            'price' => 17.00,
-            'commission' => 8.00, // Comisión de ejemplo, ajústala a tu valor real
-        ]);
+        // 1. LAS CENTRALITAS (Servicios Principales que se eligen)
+        // El usuario elegirá UNA de estas para los paquetes 1, 3, 5.
+        Addon::updateOrCreate(
+            ['name' => 'Centralita Básica'],
+            ['type' => 'centralita', 'price' => 5.00, 'commission' => 100.00, 'description' => 'Servicio principal de Centralita Básica.']
+        );
+        Addon::updateOrCreate(
+            ['name' => 'Centralita Inalámbrica'],
+            ['type' => 'centralita', 'price' => 7.00, 'commission' => 100.00, 'description' => 'Servicio principal de Centralita Inalámbrica.']
+        );
+        Addon::updateOrCreate(
+            ['name' => 'Centralita Avanzada'],
+            ['type' => 'centralita', 'price' => 14.00, 'commission' => 120.00, 'description' => 'Servicio principal de Centralita Avanzada.']
+        );
+        
+        // LA CENTRALITA INCLUIDA (Para paquetes grandes)
+        Addon::updateOrCreate(
+            ['name' => 'Centralita Avanzada Incluida'],
+            ['type' => 'centralita', 'price' => 0.00, 'commission' => 120.00, 'description' => 'Centralita Avanzada incluida en paquetes superiores.']
+        );
 
-        Addon::create([
-            'name' => 'Extensión Inalámbrica',
-            'type' => 'centralita_extension',
-            'price' => 12.00,
-            'commission' => 6.00, // Comisión de ejemplo, ajústala a tu valor real
-        ]);
+        // 2. LAS EXTENSIONES (Puestos adicionales)
+        // Se pueden añadir después de elegir una centralita.
+        // **NOTA: He asumido estos precios. ¡Ajústalos si es necesario!**
+        Addon::updateOrCreate(
+            ['name' => 'Extensión Básica'],
+            ['type' => 'centralita_extension', 'price' => 4.00, 'commission' => 20.00]
+        );
+        Addon::updateOrCreate(
+            ['name' => 'Extensión Inalámbrica'],
+            ['type' => 'centralita_extension', 'price' => 6.00, 'commission' => 25.00]
+        );
+        Addon::updateOrCreate(
+            ['name' => 'Extensión Avanzada'],
+            ['type' => 'centralita_extension', 'price' => 12.00, 'commission' => 45.00]
+        );
     }
 }

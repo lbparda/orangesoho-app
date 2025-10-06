@@ -14,7 +14,6 @@ const props = defineProps({
         default: 0,
     },
     additionalInternetAddons: Array,
-    // NUEVO: Prop para recibir los tipos de extensiones de centralita
     centralitaExtensions: Array,
 });
 
@@ -22,8 +21,7 @@ const selectedPackageId = ref(null);
 const lines = ref([]);
 const selectedInternetAddonId = ref(null);
 const additionalInternetLines = ref([]);
-const addOptionalCentralita = ref(false);
-// NUEVO: Estado para guardar la cantidad de cada tipo de extensión
+const selectedCentralitaId = ref(null); // Guarda el ID de la centralita opcional seleccionada
 const centralitaExtensionQuantities = ref({});
 
 
@@ -47,25 +45,30 @@ const selectedInternetAddonInfo = computed(() => {
     return internetAddonOptions.value.find(a => a.id === selectedInternetAddonId.value);
 });
 
-const centralitaAddonInfo = computed(() => {
+// Opciones de centralita opcionales para el paquete actual
+const centralitaAddonOptions = computed(() => {
+    if (!selectedPackage.value?.addons) return [];
+    // Filtra addons de tipo 'centralita' que NO estén incluidos por defecto
+    return selectedPackage.value.addons.filter(a => a.type === 'centralita' && !a.pivot.is_included);
+});
+
+// La centralita que viene INCLUIDA en el paquete (si existe)
+const includedCentralita = computed(() => {
     if (!selectedPackage.value?.addons) return null;
-    return selectedPackage.value.addons.find(a => a.type === 'centralita');
+    return selectedPackage.value.addons.find(a => a.type === 'centralita' && a.pivot.is_included);
 });
 
+// La centralita está activa si está incluida O si se ha seleccionado una opcional.
 const isCentralitaActive = computed(() => {
-    if (!centralitaAddonInfo.value) return false;
-    return centralitaAddonInfo.value.pivot.is_included || addOptionalCentralita.value;
+    return !!includedCentralita.value || !!selectedCentralitaId.value;
 });
 
-// NUEVO: Computed para encontrar las extensiones YA INCLUIDAS en el paquete
 const includedCentralitaExtensions = computed(() => {
     if (!isCentralitaActive.value || !selectedPackage.value?.addons) return [];
-    // Filtra los addons del paquete que son de tipo 'centralita_extension' y están marcados como incluidos
-    return selectedPackage.value.addons.filter(addon => 
+    return selectedPackage.value.addons.filter(addon =>
         addon.type === 'centralita_extension' && addon.pivot.is_included
     );
 });
-
 
 const canAddLine = computed(() => !!selectedPackage.value);
 
@@ -137,7 +140,6 @@ const removeInternetLine = (index) => {
     additionalInternetLines.value.splice(index, 1);
 };
 
-
 const getDurationsForModel = (line) => {
     if (!line.selected_model_id) return [];
     const terminals = availableTerminals.value.filter(t => t.id === line.selected_model_id);
@@ -146,7 +148,6 @@ const getDurationsForModel = (line) => {
 
 const getO2oDiscountsForLine = (line, index) => {
     if (!mobileAddonInfo.value) return availableO2oDiscounts.value;
-    const includedQty = mobileAddonInfo.value.pivot.included_quantity;
     const promoLimit = mobileAddonInfo.value.pivot.line_limit;
     const extraLinesBeforeThis = lines.value.slice(0, index).filter(l => l.is_extra).length;
     const isPromotionalExtra = line.is_extra && (extraLinesBeforeThis + 1) <= promoLimit;
@@ -164,7 +165,7 @@ watch(selectedPackageId, (newPackageId) => {
     lines.value = [];
     selectedInternetAddonId.value = null;
     additionalInternetLines.value = [];
-    addOptionalCentralita.value = false;
+    selectedCentralitaId.value = null; // Resetea la centralita opcional
     centralitaExtensionQuantities.value = {};
 
     if (!newPackageId) return;
@@ -180,9 +181,7 @@ watch(selectedPackageId, (newPackageId) => {
     const quantity = mobileAddon ? mobileAddon.pivot.included_quantity : 0;
     for (let i = 1; i <= quantity; i++) {
         lines.value.push({
-            id: i,
-            is_extra: false,
-            is_portability: false,
+            id: i, is_extra: false, is_portability: false,
             phone_number: '', source_operator: null, has_vap: false,
             o2o_discount_id: null, selected_brand: null, selected_model_id: null,
             selected_duration: null, terminal_pivot: null,
@@ -199,22 +198,13 @@ const appliedDiscount = computed(() => {
     const packageName = selectedPackage.value.name;
     return props.discounts.find(d => {
         const conditions = d.conditions;
-        if (conditions.package_names && !conditions.package_names.includes(packageName)) {
-            return false;
-        }
-        if (conditions.requires_vap !== principalLine.has_vap) {
-            return false;
-        }
-        if (conditions.excluded_operators?.includes(principalLine.source_operator)) {
-            return false;
-        }
-        if (conditions.source_operators && !conditions.source_operators.includes(principalLine.source_operator)) {
-            return false;
-        }
+        if (conditions.package_names && !conditions.package_names.includes(packageName)) return false;
+        if (conditions.requires_vap !== principalLine.has_vap) return false;
+        if (conditions.excluded_operators?.includes(principalLine.source_operator)) return false;
+        if (conditions.source_operators && !conditions.source_operators.includes(principalLine.source_operator)) return false;
         return true;
     });
 });
-
 
 watch(() => lines.value.map(line => line.has_vap), (newVapStates, oldVapStates) => {
     newVapStates.forEach((isVap, index) => {
@@ -228,23 +218,20 @@ watch(() => lines.value.map(line => line.has_vap), (newVapStates, oldVapStates) 
     });
 }, { deep: true });
 
-
 const calculationSummary = computed(() => {
     if (!selectedPackage.value) {
         return { basePrice: 0, finalPrice: 0, appliedO2oList: [], totalTerminalFee: 0, totalInitialPayment: 0, extraLinesCost: 0, totalCommission: 0 };
     }
-    
+
     let price = parseFloat(selectedPackage.value.base_price) || 0;
     const basePrice = price;
     let totalCommission = 0;
 
-    // 1. Sumar Fibra Principal
+    // 1. Sumar Fibra Principal y Adicionales
     if (selectedInternetAddonInfo.value) {
         price += parseFloat(selectedInternetAddonInfo.value.pivot.price) || 0;
         totalCommission += parseFloat(selectedInternetAddonInfo.value.pivot.included_line_commission) || 0;
     }
-
-    // 2. Sumar Líneas de Internet Adicionales
     additionalInternetLines.value.forEach(line => {
         if (line.addon_id) {
             const addonInfo = props.additionalInternetAddons.find(a => a.id === line.addon_id);
@@ -255,25 +242,29 @@ const calculationSummary = computed(() => {
         }
     });
 
-    // 3. Sumar Centralita
-    if (centralitaAddonInfo.value) {
-        if (centralitaAddonInfo.value.pivot.is_included) {
-            totalCommission += parseFloat(centralitaAddonInfo.value.pivot.included_line_commission) || 0;
-        } else if (addOptionalCentralita.value) {
-            price += parseFloat(centralitaAddonInfo.value.pivot.price) || 0;
-            totalCommission += parseFloat(centralitaAddonInfo.value.pivot.included_line_commission) || 0;
+    // 2. LÓGICA DE CENTRALITA
+    // Si hay una centralita INCLUIDA
+    if (includedCentralita.value) {
+        totalCommission += parseFloat(includedCentralita.value.pivot.included_line_commission) || 0;
+    }
+    // Si se ha SELECCIONADO una centralita opcional
+    else if (selectedCentralitaId.value) {
+        const selectedCentralita = centralitaAddonOptions.value.find(c => c.id === selectedCentralitaId.value);
+        if (selectedCentralita) {
+            price += parseFloat(selectedCentralita.pivot.price) || 0;
+            totalCommission += parseFloat(selectedCentralita.commission) || 0;
         }
     }
-    
-    // 4. Sumar Extensiones de Centralita
+
+    // 3. Sumar Extensiones de Centralita (solo si está activa)
     if (isCentralitaActive.value) {
-        // Sumar comisiones de extensiones INCLUIDAS (precio es 0)
+        // Sumar comisiones de extensiones INCLUIDAS en el paquete
         includedCentralitaExtensions.value.forEach(ext => {
             const commissionPerUnit = parseFloat(ext.pivot.included_line_commission) || 0;
             const quantity = ext.pivot.included_quantity || 0;
             totalCommission += quantity * commissionPerUnit;
         });
-        
+
         // Sumar precio y comisión de extensiones ADICIONALES
         for (const addonId in centralitaExtensionQuantities.value) {
             const quantity = centralitaExtensionQuantities.value[addonId];
@@ -287,18 +278,13 @@ const calculationSummary = computed(() => {
         }
     }
 
-    // 5. Aplicar descuento porcentual (tu lógica original)
-    if (appliedDiscount.value) {
-        price -= (price * (parseFloat(appliedDiscount.value.percentage) / 100));
-    }
-    
+    // 4. Lógica de Líneas Móviles y Terminales
     const appliedO2oList = [];
     let totalTerminalFee = 0;
     let totalInitialPayment = 0;
     let extraLinesCost = 0;
     let extraLinesCounter = 0;
 
-    // 6. Sumar y restar de Líneas Móviles
     if (mobileAddonInfo.value) {
         const promoLimit = mobileAddonInfo.value.pivot.line_limit;
         const promoPrice = 8.22;
@@ -336,6 +322,10 @@ const calculationSummary = computed(() => {
     price += totalTerminalFee;
     price += extraLinesCost;
 
+    if (appliedDiscount.value) {
+        price -= (price * (parseFloat(appliedDiscount.value.percentage) / 100));
+    }
+
     return {
         basePrice: basePrice.toFixed(2),
         finalPrice: Math.max(0, price).toFixed(2),
@@ -352,7 +342,7 @@ const calculationSummary = computed(() => {
     <Head title="Crear Oferta" />
 
     <div class="py-12">
-        <div class="sm:px-6 lg:px-8">
+        <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
             <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
                 <div class="p-8 bg-white border-b border-gray-200">
                     <div class="flex justify-between items-center mb-6">
@@ -364,14 +354,15 @@ const calculationSummary = computed(() => {
 
                     <div class="mb-8 max-w-lg mx-auto">
                         <label for="package" class="block text-sm font-medium text-gray-700 mb-2">1. Selecciona un Paquete Base</label>
-                        <select v-model="selectedPackageId" id="package" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                        <select v-model="selectedPackageId" id="package" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
                             <option :value="null" disabled>-- Elige un paquete --</option>
                             <option v-for="pkg in packages" :key="pkg.id" :value="pkg.id">{{ pkg.name }}</option>
                         </select>
                     </div>
 
-                    <div v-if="selectedPackage" class="space-y-8">
-                        
+                    <div v-if="selectedPackage" class="space-y-10">
+
+                        <!-- SECCIÓN FIBRA -->
                         <div v-if="internetAddonOptions.length > 0" class="max-w-lg mx-auto">
                             <label class="block text-sm font-medium text-gray-700 mb-2">2. Elige la velocidad de la Fibra Principal</label>
                             <div class="flex space-x-4 mt-1">
@@ -379,58 +370,66 @@ const calculationSummary = computed(() => {
                                     :class="['flex-1 text-center px-4 py-3 rounded-md border cursor-pointer transition', { 'bg-indigo-600 text-white border-indigo-600 shadow-lg': selectedInternetAddonId === addon.id, 'bg-white border-gray-300 hover:bg-gray-50': selectedInternetAddonId !== addon.id }]">
                                     <input type="radio" :value="addon.id" v-model="selectedInternetAddonId" class="sr-only">
                                     <span class="block font-semibold">{{ addon.name }}</span>
-                                    <span class="block text-xs mt-1" v-if="parseFloat(addon.pivot.price) > 0">+{{ addon.pivot.price }}€/mes</span>
+                                    <span class="block text-xs mt-1" v-if="parseFloat(addon.pivot.price) > 0">+{{ parseFloat(addon.pivot.price).toFixed(2) }}€/mes</span>
                                 </label>
                             </div>
                         </div>
 
-                        <div v-if="centralitaAddonInfo" class="max-w-lg mx-auto space-y-4">
+                        <!-- SECCIÓN CENTRALITA -->
+                        <div v-if="centralitaAddonOptions.length > 0 || includedCentralita" class="max-w-3xl mx-auto space-y-4 p-6 bg-slate-50 rounded-lg">
                             <h3 class="text-lg font-semibold text-gray-800 mb-2">Centralita Virtual</h3>
-                            
-                            <div v-if="centralitaAddonInfo.pivot.is_included" class="p-4 bg-green-100 border border-green-300 rounded-md text-center">
-                                <p class="font-semibold text-green-800">✅ Centralita Virtual Incluida</p>
-                            </div>
-                            <div v-else class="flex items-center p-4 border rounded-md">
-                                <input v-model="addOptionalCentralita" id="centralita_checkbox" type="checkbox" class="h-5 w-5 rounded border-gray-300 text-indigo-600">
-                                <label for="centralita_checkbox" class="ml-3 flex flex-col">
-                                    <span class="font-medium text-gray-900">Añadir Centralita Virtual</span>
-                                    <span class="text-sm text-gray-500">+{{ centralitaAddonInfo.pivot.price }}€/mes</span>
-                                </label>
+
+                            <!-- Caso 1: La centralita está INCLUIDA -->
+                            <div v-if="includedCentralita" class="p-4 bg-green-100 border border-green-300 rounded-md text-center">
+                                <p class="font-semibold text-green-800">✅ {{ includedCentralita.name }} Incluida</p>
                             </div>
 
+                            <!-- Caso 2: La centralita es OPCIONAL (con desplegable) -->
+                            <div v-else-if="centralitaAddonOptions.length > 0">
+                                <label for="centralita_optional" class="block text-sm font-medium text-gray-700">Añadir Centralita</label>
+                                <select v-model="selectedCentralitaId" id="centralita_optional" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                    <option :value="null">No añadir centralita</option>
+                                    <option v-for="centralita in centralitaAddonOptions" :key="centralita.id" :value="centralita.id">
+                                        {{ centralita.name }} (+{{ parseFloat(centralita.pivot.price).toFixed(2) }}€)
+                                    </option>
+                                </select>
+                            </div>
+
+                            <!-- Sección para añadir más extensiones (solo si la centralita está activa) -->
                             <div v-if="isCentralitaActive" class="space-y-3 pt-4 border-t border-dashed">
-                                <!-- NUEVO: Mostrar extensiones ya incluidas -->
                                 <div v-if="includedCentralitaExtensions.length > 0" class="mb-4 space-y-2">
-                                    <p class="text-sm font-medium text-gray-700">Extensiones Incluidas:</p>
+                                    <p class="text-sm font-medium text-gray-700">Extensiones Incluidas por Paquete:</p>
                                     <div v-for="ext in includedCentralitaExtensions" :key="`inc_${ext.id}`" class="p-2 bg-gray-100 rounded-md text-sm text-gray-800">
                                         ✅ {{ ext.pivot.included_quantity }}x {{ ext.name }}
                                     </div>
                                 </div>
-                                
+
                                 <p class="text-sm font-medium text-gray-700">Añadir Extensiones Adicionales:</p>
                                 <div v-for="extension in centralitaExtensions" :key="extension.id" class="flex items-center justify-between">
-                                    <label :for="`ext_${extension.id}`" class="text-gray-800">{{ extension.name }} (+{{ extension.price }}€)</label>
-                                    <input 
-                                        :id="`ext_${extension.id}`"
+                                    <label :for="`ext_add_${extension.id}`" class="text-gray-800">{{ extension.name }} (+{{ parseFloat(extension.price).toFixed(2) }}€)</label>
+                                    <input
+                                        :id="`ext_add_${extension.id}`"
                                         type="number"
                                         min="0"
                                         v-model.number="centralitaExtensionQuantities[extension.id]"
-                                        class="w-20 rounded-md border-gray-300 shadow-sm text-center"
+                                        class="w-20 rounded-md border-gray-300 shadow-sm text-center focus:border-indigo-500 focus:ring-indigo-500"
                                         placeholder="0"
                                     >
                                 </div>
                             </div>
                         </div>
 
-                        <div class="space-y-4">
-                            <h3 class="text-lg font-semibold text-gray-800">Líneas de Internet Adicionales</h3>
+
+                        <!-- SECCIÓN INTERNET ADICIONAL -->
+                        <div class="max-w-3xl mx-auto space-y-4 p-6 bg-slate-50 rounded-lg">
+                             <h3 class="text-lg font-semibold text-gray-800">Líneas de Internet Adicionales</h3>
                             <div v-for="(line, index) in additionalInternetLines" :key="line.id" class="p-4 border rounded-lg bg-blue-50 border-blue-200 flex items-center justify-between">
                                 <div class="flex-1">
                                     <label class="block text-xs font-medium text-gray-500">Velocidad Línea Adicional {{ index + 1 }}</label>
-                                    <select v-model="line.addon_id" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm">
+                                    <select v-model="line.addon_id" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-indigo-500 focus:ring-indigo-500">
                                         <option :value="null" disabled>-- Selecciona una velocidad --</option>
                                         <option v-for="addon in additionalInternetAddons" :key="addon.id" :value="addon.id">
-                                            {{ addon.name }} (+{{ addon.price }}€)
+                                            {{ addon.name }} (+{{ parseFloat(addon.price).toFixed(2) }}€)
                                         </option>
                                     </select>
                                 </div>
@@ -441,21 +440,23 @@ const calculationSummary = computed(() => {
                             <PrimaryButton @click="addInternetLine">Añadir Internet Adicional</PrimaryButton>
                         </div>
 
-                        <div v-if="lines.length > 0" class="space-y-4">
-                            <h3 class="text-lg font-semibold text-gray-800">Líneas Móviles</h3>
-                            <div v-for="(line, index) in lines" :key="line.id" class="p-4 border rounded-lg" :class="{'bg-gray-50 border-gray-200': !line.is_extra, 'bg-green-50 border-green-200': line.is_extra}">
-                                
+
+                        <!-- SECCIÓN LÍNEAS MÓVILES -->
+                        <div class="space-y-6">
+                            <h3 class="text-lg font-semibold text-gray-800 text-center">Líneas Móviles</h3>
+                            <div v-for="(line, index) in lines" :key="line.id" class="p-6 border rounded-lg max-w-4xl mx-auto" :class="{'bg-gray-50 border-gray-200': !line.is_extra, 'bg-green-50 border-green-200': line.is_extra}">
+
                                 <div class="grid grid-cols-12 gap-4 items-center mb-4">
                                     <div class="col-span-12 md:col-span-3">
                                         <span class="font-medium text-gray-700">{{ index === 0 ? 'Línea Principal' : `Línea ${index + 1}` }}</span>
                                     </div>
                                     <div class="col-span-12 md:col-span-5">
                                         <label class="block text-xs font-medium text-gray-500">Nº Teléfono</label>
-                                        <input v-model="line.phone_number" type="tel" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm" placeholder="Ej: 612345678">
+                                        <input v-model="line.phone_number" type="tel" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-indigo-500 focus:ring-indigo-500" placeholder="Ej: 612345678">
                                     </div>
                                     <div class="col-span-12 md:col-span-4 flex items-end pb-1">
                                         <div class="flex items-center h-full">
-                                            <input v-model="line.is_portability" :id="`portability_${line.id}`" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-indigo-600">
+                                            <input v-model="line.is_portability" :id="`portability_${line.id}`" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
                                             <label :for="`portability_${line.id}`" class="ml-2 block text-sm text-gray-900">¿Es Portabilidad?</label>
                                         </div>
                                     </div>
@@ -465,23 +466,23 @@ const calculationSummary = computed(() => {
                                     <div class="grid grid-cols-12 gap-4 items-center">
                                         <div class="col-span-12 md:col-span-8">
                                             <label class="block text-xs font-medium text-gray-500">Operador Origen</label>
-                                            <select v-model="line.source_operator" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm">
+                                            <select v-model="line.source_operator" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-indigo-500 focus:ring-indigo-500">
                                                 <option :value="null" disabled>-- Selecciona --</option>
                                                 <option v-for="op in operators" :key="op" :value="op">{{ op }}</option>
                                             </select>
                                         </div>
                                         <div class="col-span-12 md:col-span-4 flex items-end pb-1">
                                             <div class="flex items-center h-full">
-                                                <input v-model="line.has_vap" :id="`vap_${line.id}`" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-indigo-600">
+                                                <input v-model="line.has_vap" :id="`vap_${line.id}`" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
                                                 <label :for="`vap_${line.id}`" class="ml-2 block text-sm text-gray-900">con VAP</label>
                                             </div>
                                         </div>
                                     </div>
-                                    
+
                                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         <div>
                                             <label class="block text-sm font-medium text-gray-700">Descuento O2O</label>
-                                            <select v-model="line.o2o_discount_id" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm">
+                                            <select v-model="line.o2o_discount_id" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-indigo-500 focus:ring-indigo-500">
                                                 <option :value="null">-- Sin subvención --</option>
                                                 <option v-for="o2o in getO2oDiscountsForLine(line, index)" :key="o2o.id" :value="o2o.id">{{ o2o.name }}</option>
                                             </select>
@@ -491,51 +492,61 @@ const calculationSummary = computed(() => {
                                     <div v-if="line.has_vap" class="space-y-4 pt-4 border-t border-dashed">
                                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                             <div class="grid grid-cols-3 gap-2">
-                                                <div><label class="block text-sm font-medium text-gray-700">Marca</label><select v-model="line.selected_brand" @change="line.selected_model_id = null; line.selected_duration = null; assignTerminalPrices(line);" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm"><option :value="null">-- Marca --</option><option v-for="brand in brandsForSelectedPackage" :key="brand" :value="brand">{{ brand }}</option></select></div>
-                                                <div><label class="block text-sm font-medium text-gray-700">Modelo</label><select v-model="line.selected_model_id" @change="line.selected_duration = null; assignTerminalPrices(line);" :disabled="!line.selected_brand" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm"><option :value="null">-- Modelo --</option><option v-for="terminal in modelsByBrand(line.selected_brand)" :key="terminal.id" :value="terminal.id">{{ terminal.model }}</option></select></div>
-                                                <div><label class="block text-sm font-medium text-gray-700">Meses</label><select v-model="line.selected_duration" @change="assignTerminalPrices(line)" :disabled="!line.selected_model_id" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm"><option :value="null">-- Meses --</option><option v-for="duration in getDurationsForModel(line)" :key="duration" :value="duration">{{ duration }} meses</option></select></div>
+                                                <div><label class="block text-sm font-medium text-gray-700">Marca</label><select v-model="line.selected_brand" @change="line.selected_model_id = null; line.selected_duration = null; assignTerminalPrices(line);" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-indigo-500 focus:ring-indigo-500"><option :value="null">-- Marca --</option><option v-for="brand in brandsForSelectedPackage" :key="brand" :value="brand">{{ brand }}</option></select></div>
+                                                <div><label class="block text-sm font-medium text-gray-700">Modelo</label><select v-model="line.selected_model_id" @change="line.selected_duration = null; assignTerminalPrices(line);" :disabled="!line.selected_brand" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-indigo-500 focus:ring-indigo-500"><option :value="null">-- Modelo --</option><option v-for="terminal in modelsByBrand(line.selected_brand)" :key="terminal.id" :value="terminal.id">{{ terminal.model }}</option></select></div>
+                                                <div><label class="block text-sm font-medium text-gray-700">Meses</label><select v-model="line.selected_duration" @change="assignTerminalPrices(line)" :disabled="!line.selected_model_id" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-indigo-500 focus:ring-indigo-500"><option :value="null">-- Meses --</option><option v-for="duration in getDurationsForModel(line)" :key="duration" :value="duration">{{ duration }} meses</option></select></div>
                                             </div>
                                         </div>
                                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            <div><label class="block text-sm font-medium text-gray-700">Pago Inicial (€)</label><input v-model.number="line.initial_cost" type="number" step="0.01" min="0" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm"></div>
-                                            <div><label class="block text-sm font-medium text-gray-700">Cuota Mensual (€)</label><input v-model.number="line.monthly_cost" type="number" step="0.01" min="0" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm"></div>
+                                            <div><label class="block text-sm font-medium text-gray-700">Pago Inicial (€)</label><input v-model.number="line.initial_cost" type="number" step="0.01" min="0" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-indigo-500 focus:ring-indigo-500"></div>
+                                            <div><label class="block text-sm font-medium text-gray-700">Cuota Mensual (€)</label><input v-model.number="line.monthly_cost" type="number" step="0.01" min="0" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-indigo-500 focus:ring-indigo-500"></div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
 
-                        <div v-if="canAddLine" class="flex justify-start pt-4">
-                                <PrimaryButton @click="addLine">Añadir Línea Móvil Adicional</PrimaryButton>
+                        <div class="flex justify-center pt-4">
+                             <PrimaryButton @click="addLine">Añadir Línea Móvil Adicional</PrimaryButton>
                         </div>
-                        
-                        <div class="mt-8 p-6 bg-gray-50 rounded-lg space-y-3">
-                            <h2 class="text-xl font-semibold text-gray-800">{{ selectedPackage.name }}</h2>
-                            <div class="space-y-1">
-                                <p class="text-gray-600">Precio Base: <span class="font-medium">{{ calculationSummary.basePrice }}€</span></p>
-                                <div v-if="appliedDiscount" class="text-green-600 font-semibold">Descuento Tarifa: -{{ (calculationSummary.basePrice * (appliedDiscount.percentage / 100)).toFixed(2) }}€ ({{ appliedDiscount.percentage }}%)</div>
+
+                        <!-- SECCIÓN RESUMEN -->
+                        <div class="mt-10 p-6 bg-gray-100 rounded-lg space-y-3 max-w-2xl mx-auto sticky top-10">
+                            <h2 class="text-xl font-semibold text-gray-800 text-center">{{ selectedPackage.name }}</h2>
+                            <div class="space-y-2">
+                                <div class="flex justify-between text-gray-600">
+                                    <span>Precio Base:</span>
+                                    <span class="font-medium">{{ calculationSummary.basePrice }}€</span>
+                                </div>
+                                <div v-if="appliedDiscount" class="flex justify-between text-green-600 font-semibold">
+                                    <span>Descuento Tarifa ({{ appliedDiscount.percentage }}%):</span>
+                                    <span>-{{ (calculationSummary.basePrice * (appliedDiscount.percentage / 100)).toFixed(2) }}€</span>
+                                </div>
                                 <div v-if="calculationSummary.appliedO2oList.length > 0" class="border-t pt-2 mt-2">
                                     <h3 class="font-semibold text-blue-600">Subvenciones O2O:</h3>
                                     <div v-for="summary in calculationSummary.appliedO2oList" :key="summary.line" class="flex justify-between text-sm text-blue-600"><span>{{ summary.line }} ({{ summary.name }})</span><span>-{{ summary.value }}€</span></div>
                                 </div>
-                                <div v-if="parseFloat(calculationSummary.extraLinesCost) > 0" class="border-t pt-2 mt-2">
-                                    <h3 class="font-semibold text-cyan-600">Coste Líneas Adicionales:</h3>
-                                    <div class="flex justify-between text-sm text-cyan-600">
-                                        <span>Total líneas adicionales</span>
-                                        <span>+{{ calculationSummary.extraLinesCost }}€</span>
-                                    </div>
+                                <div v-if="parseFloat(calculationSummary.extraLinesCost) > 0" class="flex justify-between text-cyan-600">
+                                    <span>Coste Líneas Adicionales:</span>
+                                    <span>+{{ calculationSummary.extraLinesCost }}€</span>
                                 </div>
-                                <div v-if="parseFloat(calculationSummary.totalTerminalFee) > 0" class="border-t pt-2 mt-2">
-                                    <h3 class="font-semibold text-purple-600">Costes del Terminal:</h3>
-                                    <div class="flex justify-between text-sm text-purple-600"><span>Total cuotas mensuales</span><span>+{{ calculationSummary.totalTerminalFee }}€</span></div>
+                                <div v-if="parseFloat(calculationSummary.totalTerminalFee) > 0" class="flex justify-between text-purple-600">
+                                   <span>Cuotas mensuales de Terminales:</span>
+                                   <span>+{{ calculationSummary.totalTerminalFee }}€</span>
                                 </div>
                             </div>
-                            <div class="border-t pt-3 mt-3">
-                                <p class="text-lg font-bold text-gray-800">Pago Inicial Total: {{ calculationSummary.totalInitialPayment }}€</p>
-                                <p class="mt-2 text-3xl font-extrabold text-gray-900">Precio Final: {{ calculationSummary.finalPrice }}<span class="text-lg font-medium text-gray-600">€/mes</span></p>
+                            <div class="border-t pt-4 mt-4 space-y-3">
+                                <div class="flex justify-between text-lg font-bold text-gray-800">
+                                    <span>Pago Inicial Total:</span>
+                                    <span>{{ calculationSummary.totalInitialPayment }}€</span>
+                                </div>
+                                <div class="flex justify-between text-3xl font-extrabold text-gray-900 items-baseline">
+                                    <span>Precio Final:</span>
+                                    <span>{{ calculationSummary.finalPrice }}<span class="text-lg font-medium text-gray-600">€/mes</span></span>
+                                </div>
                             </div>
-                            <div class="border-t pt-3 mt-3">
-                                <p class="text-xl font-bold text-emerald-600">
+                            <div class="border-t pt-4 mt-4">
+                                <p class="text-xl font-bold text-emerald-600 text-center">
                                     Comisión Total: {{ calculationSummary.totalCommission }}€
                                 </p>
                             </div>
@@ -546,4 +557,3 @@ const calculationSummary = computed(() => {
         </div>
     </div>
 </template>
-
