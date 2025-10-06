@@ -28,6 +28,7 @@ class RelationshipSeeder extends Seeder
         $centralitaAvanzada = Addon::where('name', 'Centralita Avanzada')->first();
         $centralitaAvanzadaIncluida = Addon::where('name', 'Centralita Avanzada Incluida')->first();
         $extensionAvanzada = Addon::where('name', 'Extensión Avanzada')->first();
+        $operadoraAutomatica = Addon::where('name', 'Operadora Automática')->first();
 
         // --- 2. RELACIONES DE LÍNEAS MÓVILES ---
         if ($mobileAddon) {
@@ -62,21 +63,40 @@ class RelationshipSeeder extends Seeder
                         ]);
                     }
                 }
+                // Asocia la Operadora Automática como opcional
+                if ($operadoraAutomatica) {
+                    $packages[$nombrePaquete]->addons()->attach($operadoraAutomatica->id, [
+                        'is_included' => false,
+                        'price' => 10.00, // Precio específico para la relación
+                        'included_line_commission' => 10.00 // Usamos este campo aunque no esté incluida
+                    ]);
+                }
             }
         }
 
-        // PAQUETES 10, 20 (Incluida la Avanzada + Extensiones gratis)
-        if (isset($packages['NEGOCIO Extra 10']) && $centralitaAvanzadaIncluida && $extensionAvanzada) {
-            $packages['NEGOCIO Extra 10']->addons()->attach($centralitaAvanzadaIncluida->id, ['is_included' => true, 'price' => 0, 'included_line_commission' => 120]);
-            // Se le añade 1 extensión avanzada gratis
-            $packages['NEGOCIO Extra 10']->addons()->attach($extensionAvanzada->id, ['is_included' => true, 'included_quantity' => 1, 'price' => 0, 'included_line_commission' => 45]);
+        // PAQUETES 10, 20
+        $paquetesGrandes = ['NEGOCIO Extra 10', 'NEGOCIO Extra 20'];
+        foreach($paquetesGrandes as $nombrePaquete) {
+            if (isset($packages[$nombrePaquete])) {
+                // Incluir Centralita Avanzada
+                if ($centralitaAvanzadaIncluida) {
+                     $packages[$nombrePaquete]->addons()->attach($centralitaAvanzadaIncluida->id, ['is_included' => true, 'price' => 0, 'included_line_commission' => 120]);
+                }
+                // Incluir Operadora Automática
+                if ($operadoraAutomatica) {
+                    $packages[$nombrePaquete]->addons()->attach($operadoraAutomatica->id, [
+                        'is_included' => true,
+                        'price' => 0.00,
+                        'included_line_commission' => 10.00
+                    ]);
+                }
+                // Incluir Extensiones Gratis
+                if ($extensionAvanzada) {
+                    $qty = ($nombrePaquete === 'NEGOCIO Extra 10') ? 1 : 2;
+                    $packages[$nombrePaquete]->addons()->attach($extensionAvanzada->id, ['is_included' => true, 'included_quantity' => $qty, 'price' => 0, 'included_line_commission' => 45]);
+                }
+            }
         }
-        if (isset($packages['NEGOCIO Extra 20']) && $centralitaAvanzadaIncluida && $extensionAvanzada) {
-            $packages['NEGOCIO Extra 20']->addons()->attach($centralitaAvanzadaIncluida->id, ['is_included' => true, 'price' => 0, 'included_line_commission' => 120]);
-            // Se le añaden 2 extensiones avanzadas gratis
-            $packages['NEGOCIO Extra 20']->addons()->attach($extensionAvanzada->id, ['is_included' => true, 'included_quantity' => 2, 'price' => 0, 'included_line_commission' => 45]);
-        }
-
         // --- 5. RELACIONES DE O2O DISCOUNTS ---
         if ($o2o_discounts->isNotEmpty()) {
             if (isset($o2o_discounts['24.00'])) {

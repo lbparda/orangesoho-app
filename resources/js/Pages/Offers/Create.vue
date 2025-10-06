@@ -23,6 +23,7 @@ const selectedInternetAddonId = ref(null);
 const additionalInternetLines = ref([]);
 const selectedCentralitaId = ref(null); // Guarda el ID de la centralita opcional seleccionada
 const centralitaExtensionQuantities = ref({});
+const isOperadoraAutomaticaSelected = ref(false); // NUEVO: State para la operadora automática
 
 
 // --- Computeds ---
@@ -68,6 +69,12 @@ const includedCentralitaExtensions = computed(() => {
     return selectedPackage.value.addons.filter(addon =>
         addon.type === 'centralita_extension' && addon.pivot.is_included
     );
+});
+
+// NUEVO: Computed para la Operadora Automática
+const operadoraAutomaticaInfo = computed(() => {
+    if (!selectedPackage.value?.addons) return null;
+    return selectedPackage.value.addons.find(a => a.type === 'centralita_feature');
 });
 
 const canAddLine = computed(() => !!selectedPackage.value);
@@ -167,6 +174,7 @@ watch(selectedPackageId, (newPackageId) => {
     additionalInternetLines.value = [];
     selectedCentralitaId.value = null; // Resetea la centralita opcional
     centralitaExtensionQuantities.value = {};
+    isOperadoraAutomaticaSelected.value = false; // NUEVO: Resetea la operadora automática
 
     if (!newPackageId) return;
 
@@ -253,6 +261,16 @@ const calculationSummary = computed(() => {
         if (selectedCentralita) {
             price += parseFloat(selectedCentralita.pivot.price) || 0;
             totalCommission += parseFloat(selectedCentralita.commission) || 0;
+        }
+    }
+
+    // NUEVO: Sumar Operadora Automática
+    if (isCentralitaActive.value && operadoraAutomaticaInfo.value) {
+        if (operadoraAutomaticaInfo.value.pivot.is_included) {
+            totalCommission += parseFloat(operadoraAutomaticaInfo.value.pivot.included_line_commission) || 0;
+        } else if (isOperadoraAutomaticaSelected.value) {
+            price += parseFloat(operadoraAutomaticaInfo.value.pivot.price) || 0;
+            totalCommission += parseFloat(operadoraAutomaticaInfo.value.pivot.included_line_commission) || 0;
         }
     }
 
@@ -379,12 +397,10 @@ const calculationSummary = computed(() => {
                         <div v-if="centralitaAddonOptions.length > 0 || includedCentralita" class="max-w-3xl mx-auto space-y-4 p-6 bg-slate-50 rounded-lg">
                             <h3 class="text-lg font-semibold text-gray-800 mb-2">Centralita Virtual</h3>
 
-                            <!-- Caso 1: La centralita está INCLUIDA -->
                             <div v-if="includedCentralita" class="p-4 bg-green-100 border border-green-300 rounded-md text-center">
                                 <p class="font-semibold text-green-800">✅ {{ includedCentralita.name }} Incluida</p>
                             </div>
 
-                            <!-- Caso 2: La centralita es OPCIONAL (con desplegable) -->
                             <div v-else-if="centralitaAddonOptions.length > 0">
                                 <label for="centralita_optional" class="block text-sm font-medium text-gray-700">Añadir Centralita</label>
                                 <select v-model="selectedCentralitaId" id="centralita_optional" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
@@ -395,26 +411,37 @@ const calculationSummary = computed(() => {
                                 </select>
                             </div>
 
-                            <!-- Sección para añadir más extensiones (solo si la centralita está activa) -->
-                            <div v-if="isCentralitaActive" class="space-y-3 pt-4 border-t border-dashed">
-                                <div v-if="includedCentralitaExtensions.length > 0" class="mb-4 space-y-2">
-                                    <p class="text-sm font-medium text-gray-700">Extensiones Incluidas por Paquete:</p>
-                                    <div v-for="ext in includedCentralitaExtensions" :key="`inc_${ext.id}`" class="p-2 bg-gray-100 rounded-md text-sm text-gray-800">
-                                        ✅ {{ ext.pivot.included_quantity }}x {{ ext.name }}
+                            <div v-if="isCentralitaActive" class="space-y-4 pt-4 border-t border-dashed">
+                                <div v-if="operadoraAutomaticaInfo">
+                                    <div v-if="operadoraAutomaticaInfo.pivot.is_included" class="p-2 bg-gray-100 rounded-md text-sm text-gray-800">
+                                         ✅ Operadora Automática Incluida
+                                    </div>
+                                    <div v-else class="flex items-center">
+                                        <input v-model="isOperadoraAutomaticaSelected" id="operadora_automatica_cb" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                                        <label for="operadora_automatica_cb" class="ml-2 block text-sm text-gray-900">
+                                            Añadir Operadora Automática (+{{ parseFloat(operadoraAutomaticaInfo.pivot.price).toFixed(2) }}€)
+                                        </label>
                                     </div>
                                 </div>
 
-                                <p class="text-sm font-medium text-gray-700">Añadir Extensiones Adicionales:</p>
-                                <div v-for="extension in centralitaExtensions" :key="extension.id" class="flex items-center justify-between">
-                                    <label :for="`ext_add_${extension.id}`" class="text-gray-800">{{ extension.name }} (+{{ parseFloat(extension.price).toFixed(2) }}€)</label>
-                                    <input
-                                        :id="`ext_add_${extension.id}`"
-                                        type="number"
-                                        min="0"
-                                        v-model.number="centralitaExtensionQuantities[extension.id]"
-                                        class="w-20 rounded-md border-gray-300 shadow-sm text-center focus:border-indigo-500 focus:ring-indigo-500"
-                                        placeholder="0"
-                                    >
+                                <div class="pt-2">
+                                    <div v-if="includedCentralitaExtensions.length > 0" class="mb-4 space-y-2">
+                                        <p class="text-sm font-medium text-gray-700">Extensiones Incluidas por Paquete:</p>
+                                        <div v-for="ext in includedCentralitaExtensions" :key="`inc_${ext.id}`" class="p-2 bg-gray-100 rounded-md text-sm text-gray-800">
+                                            ✅ {{ ext.pivot.included_quantity }}x {{ ext.name }}
+                                        </div>
+                                    </div>
+                                    <p class="text-sm font-medium text-gray-700">Añadir Extensiones Adicionales:</p>
+                                    <div v-for="extension in centralitaExtensions" :key="extension.id" class="flex items-center justify-between mt-2">
+                                        <label :for="`ext_add_${extension.id}`" class="text-gray-800">{{ extension.name }} (+{{ parseFloat(extension.price).toFixed(2) }}€)</label>
+                                        <input
+                                            :id="`ext_add_${extension.id}`"
+                                            type="number" min="0"
+                                            v-model.number="centralitaExtensionQuantities[extension.id]"
+                                            class="w-20 rounded-md border-gray-300 shadow-sm text-center focus:border-indigo-500 focus:ring-indigo-500"
+                                            placeholder="0"
+                                        >
+                                    </div>
                                 </div>
                             </div>
                         </div>

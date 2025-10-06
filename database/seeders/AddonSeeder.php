@@ -73,5 +73,15 @@ class AddonSeeder extends Seeder
             ['name' => 'Extensión Avanzada'],
             ['type' => 'centralita_extension', 'price' => 12.00, 'commission' => 45.00]
         );
+         // --- NUEVO ADDON: OPERADORA AUTOMÁTICA ---
+        Addon::updateOrCreate(
+            ['name' => 'Operadora Automática'],
+            [
+                'type' => 'centralita_feature',
+                'price' => 10.00, // Precio por defecto para el caso opcional
+                'commission' => 10.00, // Comisión por defecto para el caso opcional
+                'description' => 'Servicio de operadora automática para la centralita.'
+            ]
+        );
     }
 }
