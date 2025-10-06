@@ -136,6 +136,13 @@ const addLine = () => {
     });
 };
 
+// MODIFICACIÓN: Función para borrar una línea móvil adicional
+const removeLine = (index) => {
+    if (lines.value[index] && lines.value[index].is_extra) {
+        lines.value.splice(index, 1);
+    }
+};
+
 const addInternetLine = () => {
     additionalInternetLines.value.push({
         id: Date.now(),
@@ -326,6 +333,18 @@ const calculationSummary = computed(() => {
                 totalCommission += props.portabilityCommission;
             }
 
+            if (line.terminal_pivot && line.selected_duration) {
+                const terminalTotalPrice = (parseFloat(line.initial_cost) || 0) + (parseFloat(line.monthly_cost || 0) * parseInt(line.selected_duration, 10));
+                
+                if (terminalTotalPrice < 40) {
+                    totalCommission += 15;
+                } else if (terminalTotalPrice >= 40 && terminalTotalPrice < 350) {
+                    totalCommission += 45;
+                } else if (terminalTotalPrice >= 350) {
+                    totalCommission += 75;
+                }
+            }
+
             if (line.o2o_discount_id) {
                 const o2o = availableO2oDiscounts.value.find(d => d.id === line.o2o_discount_id);
                 if (o2o) {
@@ -333,7 +352,6 @@ const calculationSummary = computed(() => {
                     price -= monthlyValue;
                     appliedO2oList.push({ line: index === 0 ? 'Línea Principal' : `Línea ${index + 1}`, name: o2o.name, value: monthlyValue.toFixed(2) });
                     
-                    // MODIFICACIÓN: Restar el dho_payment de la comisión total
                     if (o2o.pivot && o2o.pivot.dho_payment) {
                         totalCommission -= parseFloat(o2o.pivot.dho_payment);
                     }
@@ -479,8 +497,13 @@ const calculationSummary = computed(() => {
                             <div v-for="(line, index) in lines" :key="line.id" class="p-6 border rounded-lg max-w-4xl mx-auto" :class="{'bg-gray-50 border-gray-200': !line.is_extra, 'bg-green-50 border-green-200': line.is_extra}">
 
                                 <div class="grid grid-cols-12 gap-4 items-center mb-4">
-                                    <div class="col-span-12 md:col-span-3">
+                                    <div class="col-span-12 md:col-span-3 flex justify-between items-center">
                                         <span class="font-medium text-gray-700">{{ index === 0 ? 'Línea Principal' : `Línea ${index + 1}` }}</span>
+                                        <!-- MODIFICACIÓN: Botón de borrar línea -->
+                                        <button v-if="line.is_extra" @click="removeLine(index)" class="text-red-500 hover:text-red-700 p-1 rounded-full hover:bg-red-100">
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 -2.6 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                            
+                                        </button>
                                     </div>
                                     <div class="col-span-12 md:col-span-5">
                                         <label class="block text-xs font-medium text-gray-500">Nº Teléfono</label>
@@ -589,3 +612,4 @@ const calculationSummary = computed(() => {
         </div>
     </div>
 </template>
+
