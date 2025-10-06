@@ -332,6 +332,11 @@ const calculationSummary = computed(() => {
                     const monthlyValue = parseFloat(o2o.total_discount_amount) / parseFloat(o2o.duration_months);
                     price -= monthlyValue;
                     appliedO2oList.push({ line: index === 0 ? 'Línea Principal' : `Línea ${index + 1}`, name: o2o.name, value: monthlyValue.toFixed(2) });
+                    
+                    // MODIFICACIÓN: Restar el dho_payment de la comisión total
+                    if (o2o.pivot && o2o.pivot.dho_payment) {
+                        totalCommission -= parseFloat(o2o.pivot.dho_payment);
+                    }
                 }
             }
         });
