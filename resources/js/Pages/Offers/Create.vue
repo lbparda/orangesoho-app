@@ -14,14 +14,18 @@ const props = defineProps({
         default: 0,
     },
     additionalInternetAddons: Array,
+    // NUEVO: Prop para recibir los tipos de extensiones de centralita
+    centralitaExtensions: Array,
 });
 
 const selectedPackageId = ref(null);
 const lines = ref([]);
 const selectedInternetAddonId = ref(null);
 const additionalInternetLines = ref([]);
-// NUEVO: Estado para controlar si se añade la centralita opcional
 const addOptionalCentralita = ref(false);
+// NUEVO: Estado para guardar la cantidad de cada tipo de extensión
+const centralitaExtensionQuantities = ref({});
+
 
 // --- Computeds ---
 const selectedPackage = computed(() => {
@@ -43,11 +47,25 @@ const selectedInternetAddonInfo = computed(() => {
     return internetAddonOptions.value.find(a => a.id === selectedInternetAddonId.value);
 });
 
-// NUEVO: Computed para encontrar la información de la centralita en el paquete actual
 const centralitaAddonInfo = computed(() => {
     if (!selectedPackage.value?.addons) return null;
     return selectedPackage.value.addons.find(a => a.type === 'centralita');
 });
+
+const isCentralitaActive = computed(() => {
+    if (!centralitaAddonInfo.value) return false;
+    return centralitaAddonInfo.value.pivot.is_included || addOptionalCentralita.value;
+});
+
+// NUEVO: Computed para encontrar las extensiones YA INCLUIDAS en el paquete
+const includedCentralitaExtensions = computed(() => {
+    if (!isCentralitaActive.value || !selectedPackage.value?.addons) return [];
+    // Filtra los addons del paquete que son de tipo 'centralita_extension' y están marcados como incluidos
+    return selectedPackage.value.addons.filter(addon => 
+        addon.type === 'centralita_extension' && addon.pivot.is_included
+    );
+});
+
 
 const canAddLine = computed(() => !!selectedPackage.value);
 
@@ -146,7 +164,8 @@ watch(selectedPackageId, (newPackageId) => {
     lines.value = [];
     selectedInternetAddonId.value = null;
     additionalInternetLines.value = [];
-    addOptionalCentralita.value = false; // Resetea la centralita
+    addOptionalCentralita.value = false;
+    centralitaExtensionQuantities.value = {};
 
     if (!newPackageId) return;
 
@@ -173,17 +192,29 @@ watch(selectedPackageId, (newPackageId) => {
 });
 
 const appliedDiscount = computed(() => {
-    if (lines.value.length === 0 || !lines.value[0].source_operator) return null;
+    if (lines.value.length === 0 || !lines.value[0].is_portability || !selectedPackage.value) {
+        return null;
+    }
     const principalLine = lines.value[0];
+    const packageName = selectedPackage.value.name;
     return props.discounts.find(d => {
         const conditions = d.conditions;
-        if (conditions.requires_vap !== principalLine.has_vap) return false;
-        const isMovistar = principalLine.source_operator === 'Movistar';
-        if (conditions.excluded_operators?.includes('Movistar') && isMovistar) return false;
-        if (conditions.source_operators?.includes('Movistar') && !isMovistar) return false;
+        if (conditions.package_names && !conditions.package_names.includes(packageName)) {
+            return false;
+        }
+        if (conditions.requires_vap !== principalLine.has_vap) {
+            return false;
+        }
+        if (conditions.excluded_operators?.includes(principalLine.source_operator)) {
+            return false;
+        }
+        if (conditions.source_operators && !conditions.source_operators.includes(principalLine.source_operator)) {
+            return false;
+        }
         return true;
     });
 });
+
 
 watch(() => lines.value.map(line => line.has_vap), (newVapStates, oldVapStates) => {
     newVapStates.forEach((isVap, index) => {
@@ -234,6 +265,29 @@ const calculationSummary = computed(() => {
         }
     }
     
+    // 4. Sumar Extensiones de Centralita
+    if (isCentralitaActive.value) {
+        // Sumar comisiones de extensiones INCLUIDAS (precio es 0)
+        includedCentralitaExtensions.value.forEach(ext => {
+            const commissionPerUnit = parseFloat(ext.pivot.included_line_commission) || 0;
+            const quantity = ext.pivot.included_quantity || 0;
+            totalCommission += quantity * commissionPerUnit;
+        });
+        
+        // Sumar precio y comisión de extensiones ADICIONALES
+        for (const addonId in centralitaExtensionQuantities.value) {
+            const quantity = centralitaExtensionQuantities.value[addonId];
+            if (quantity > 0) {
+                const addonInfo = props.centralitaExtensions.find(ext => ext.id == addonId);
+                if (addonInfo) {
+                    price += quantity * (parseFloat(addonInfo.price) || 0);
+                    totalCommission += quantity * (parseFloat(addonInfo.commission) || 0);
+                }
+            }
+        }
+    }
+
+    // 5. Aplicar descuento porcentual (tu lógica original)
     if (appliedDiscount.value) {
         price -= (price * (parseFloat(appliedDiscount.value.percentage) / 100));
     }
@@ -244,7 +298,7 @@ const calculationSummary = computed(() => {
     let extraLinesCost = 0;
     let extraLinesCounter = 0;
 
-    // 4. Sumar Líneas Móviles
+    // 6. Sumar y restar de Líneas Móviles
     if (mobileAddonInfo.value) {
         const promoLimit = mobileAddonInfo.value.pivot.line_limit;
         const promoPrice = 8.22;
@@ -317,7 +371,8 @@ const calculationSummary = computed(() => {
                     </div>
 
                     <div v-if="selectedPackage" class="space-y-8">
-                        <div v-if="internetAddonOptions.length > 0" class="mb-8 max-w-lg mx-auto">
+                        
+                        <div v-if="internetAddonOptions.length > 0" class="max-w-lg mx-auto">
                             <label class="block text-sm font-medium text-gray-700 mb-2">2. Elige la velocidad de la Fibra Principal</label>
                             <div class="flex space-x-4 mt-1">
                                 <label v-for="addon in internetAddonOptions" :key="addon.id"
@@ -329,8 +384,9 @@ const calculationSummary = computed(() => {
                             </div>
                         </div>
 
-                        <div v-if="centralitaAddonInfo" class="max-w-lg mx-auto">
+                        <div v-if="centralitaAddonInfo" class="max-w-lg mx-auto space-y-4">
                             <h3 class="text-lg font-semibold text-gray-800 mb-2">Centralita Virtual</h3>
+                            
                             <div v-if="centralitaAddonInfo.pivot.is_included" class="p-4 bg-green-100 border border-green-300 rounded-md text-center">
                                 <p class="font-semibold text-green-800">✅ Centralita Virtual Incluida</p>
                             </div>
@@ -340,6 +396,29 @@ const calculationSummary = computed(() => {
                                     <span class="font-medium text-gray-900">Añadir Centralita Virtual</span>
                                     <span class="text-sm text-gray-500">+{{ centralitaAddonInfo.pivot.price }}€/mes</span>
                                 </label>
+                            </div>
+
+                            <div v-if="isCentralitaActive" class="space-y-3 pt-4 border-t border-dashed">
+                                <!-- NUEVO: Mostrar extensiones ya incluidas -->
+                                <div v-if="includedCentralitaExtensions.length > 0" class="mb-4 space-y-2">
+                                    <p class="text-sm font-medium text-gray-700">Extensiones Incluidas:</p>
+                                    <div v-for="ext in includedCentralitaExtensions" :key="`inc_${ext.id}`" class="p-2 bg-gray-100 rounded-md text-sm text-gray-800">
+                                        ✅ {{ ext.pivot.included_quantity }}x {{ ext.name }}
+                                    </div>
+                                </div>
+                                
+                                <p class="text-sm font-medium text-gray-700">Añadir Extensiones Adicionales:</p>
+                                <div v-for="extension in centralitaExtensions" :key="extension.id" class="flex items-center justify-between">
+                                    <label :for="`ext_${extension.id}`" class="text-gray-800">{{ extension.name }} (+{{ extension.price }}€)</label>
+                                    <input 
+                                        :id="`ext_${extension.id}`"
+                                        type="number"
+                                        min="0"
+                                        v-model.number="centralitaExtensionQuantities[extension.id]"
+                                        class="w-20 rounded-md border-gray-300 shadow-sm text-center"
+                                        placeholder="0"
+                                    >
+                                </div>
                             </div>
                         </div>
 
@@ -403,7 +482,7 @@ const calculationSummary = computed(() => {
                                         <div>
                                             <label class="block text-sm font-medium text-gray-700">Descuento O2O</label>
                                             <select v-model="line.o2o_discount_id" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm">
-                                                <option :value="null">-- Sin descuento --</option>
+                                                <option :value="null">-- Sin subvención --</option>
                                                 <option v-for="o2o in getO2oDiscountsForLine(line, index)" :key="o2o.id" :value="o2o.id">{{ o2o.name }}</option>
                                             </select>
                                         </div>
@@ -467,3 +546,4 @@ const calculationSummary = computed(() => {
         </div>
     </div>
 </template>
+

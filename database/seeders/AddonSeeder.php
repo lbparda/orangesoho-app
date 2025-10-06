@@ -49,5 +49,26 @@ class AddonSeeder extends Seeder
             'type' => 'centralita',
             'description' => 'Servicio de centralita virtual para empresas.'
         ]);
+        // NUEVO: Añadimos las extensiones de la centralita
+        Addon::create([
+            'name' => 'Extensión Básica',
+            'type' => 'centralita_extension',
+            'price' => 10.00,
+            'commission' => 5.00, // Comisión de ejemplo, ajústala a tu valor real
+        ]);
+
+        Addon::create([
+            'name' => 'Extensión Avanzada',
+            'type' => 'centralita_extension',
+            'price' => 17.00,
+            'commission' => 8.00, // Comisión de ejemplo, ajústala a tu valor real
+        ]);
+
+        Addon::create([
+            'name' => 'Extensión Inalámbrica',
+            'type' => 'centralita_extension',
+            'price' => 12.00,
+            'commission' => 6.00, // Comisión de ejemplo, ajústala a tu valor real
+        ]);
     }
 }

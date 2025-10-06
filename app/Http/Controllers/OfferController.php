@@ -36,6 +36,8 @@ class OfferController extends Controller
         $terminals = Terminal::all();
         $portabilityCommission = config('commissions.portability_extra');
         $additionalInternetAddons = Addon::where('type', 'internet_additional')->get();
+        // NUEVO: Buscamos los addons de las extensiones de centralita
+        $centralitaExtensions = Addon::where('type', 'centralita_extension')->get();
         // Devolvemos la vista de Vue y le pasamos todos los datos como props
         return Inertia::render('Offers/Create', [
             'packages' => $packages,
@@ -44,6 +46,7 @@ class OfferController extends Controller
             'terminals' => $terminals,
             'portabilityCommission' => $portabilityCommission,
             'additionalInternetAddons' => $additionalInternetAddons,
+            'centralitaExtensions' => $centralitaExtensions, // <-- Pasamos la nueva prop
         ]);
     }
 

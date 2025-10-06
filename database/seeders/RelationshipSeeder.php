@@ -23,6 +23,7 @@ class RelationshipSeeder extends Seeder
         $internetAddon10Gb = Addon::where('name', 'Fibra 10Gb')->first();
         // NUEVO: Buscamos el addon de Centralita
         $centralitaAddon = Addon::where('type', 'centralita')->first();
+        $advancedExtension = Addon::where('name', 'Extensión Avanzada')->first();
         // 1. Creamos las relaciones de Addons (Líneas)
         if ($mobileAddon && $packages->isNotEmpty()) {
             $packages['Base Plus']->addons()->attach($mobileAddon->id, ['price' => 15.00, 'is_included' => true, 'included_quantity' => 1, 'line_limit' => 4,'included_line_commission' => 50.00, 'additional_line_commission' => 50.00]);
@@ -127,6 +128,27 @@ class RelationshipSeeder extends Seeder
                         'included_line_commission' => 35.00, // Comisión por defecto al ir incluida
                     ]);
                 }
+            }
+        }
+         // NUEVO: 5. Relaciones para Extensiones INCLUIDAS
+        if ($advancedExtension && $packages->isNotEmpty()) {
+            // NEGOCIO Extra 10 incluye 1 extensión avanzada
+            if (isset($packages['NEGOCIO Extra 10'])) {
+                $packages['NEGOCIO Extra 10']->addons()->attach($advancedExtension->id, [
+                    'price' => 0.00, // Es gratis
+                    'is_included' => true,
+                    'included_quantity' => 1,
+                    'included_line_commission' => 8.00, // Su comisión correspondiente
+                ]);
+            }
+            // NEGOCIO Extra 20 incluye 2 extensiones avanzadas
+            if (isset($packages['NEGOCIO Extra 20'])) {
+                $packages['NEGOCIO Extra 20']->addons()->attach($advancedExtension->id, [
+                    'price' => 0.00, // Es gratis
+                    'is_included' => true,
+                    'included_quantity' => 2,
+                    'included_line_commission' => 8.00, // La comisión por unidad
+                ]);
             }
         }
     }
