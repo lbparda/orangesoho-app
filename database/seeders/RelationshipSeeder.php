@@ -76,11 +76,10 @@ class RelationshipSeeder extends Seeder
         }
 
         // 3. Creamos las relaciones de Terminales
-        if ($s24 && $packages->isNotEmpty()) {
+        if ($packages->isNotEmpty()) {
               $group1_ids = Package::whereIn('name', ['NEGOCIO Extra 1', 'NEGOCIO Extra 3', 'NEGOCIO Extra 5'])->pluck('id');
-            // La línea attach estaba incompleta, la restauro como ejemplo
-              $s24->packages()->attach($group1_ids, ['initial_cost' => 24.00, 'monthly_cost' => 25.00]);
-        }
+               
+            }
         
         // 4. Creamos las relaciones de Addons de Internet
         if ($internetAddon1Gb && $internetAddon10Gb && $packages->isNotEmpty()) {
@@ -111,7 +110,7 @@ class RelationshipSeeder extends Seeder
             foreach ($paquetesOpcionales as $nombrePaquete) {
                 if (isset($packages[$nombrePaquete])) {
                     $packages[$nombrePaquete]->addons()->attach($centralitaAddon->id, [
-                        'price' => 12.00, // Precio si se contrata como extra
+                        'price' => 5.00, // Precio si se contrata como extra
                         'is_included' => false,
                         'included_line_commission' => 25.00, // Comisión si se vende como extra
                     ]);

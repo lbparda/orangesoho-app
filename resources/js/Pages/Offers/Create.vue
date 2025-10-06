@@ -403,7 +403,7 @@ const calculationSummary = computed(() => {
                                         <div>
                                             <label class="block text-sm font-medium text-gray-700">Descuento O2O</label>
                                             <select v-model="line.o2o_discount_id" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm">
-                                                <option :value="null">-- Sin subvención --</option>
+                                                <option :value="null">-- Sin descuento --</option>
                                                 <option v-for="o2o in getO2oDiscountsForLine(line, index)" :key="o2o.id" :value="o2o.id">{{ o2o.name }}</option>
                                             </select>
                                         </div>
