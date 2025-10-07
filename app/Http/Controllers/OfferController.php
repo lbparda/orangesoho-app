@@ -6,8 +6,9 @@ use App\Models\Addon;
 use App\Models\Discount;
 use App\Models\Offer;
 use App\Models\Package;
-use Illuminate\Http\Request;
+use Illuminate\Http\Request; // <-- Importado y necesario para la nueva función index
 use Illuminate\Support\Facades\DB;
+use App\Models\User;
 use Inertia\Inertia;
 
 class OfferController extends Controller
@@ -15,14 +16,27 @@ class OfferController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index()
+    public function index(Request $request) // <-- MÉTODO MODIFICADO
     {
-        $offers = Offer::with('package') // Carga la relación con el paquete para mostrar el nombre
-            ->latest() // Ordena por las más recientes primero
-            ->paginate(15); // Pagina los resultados
+        $user = $request->user();
+        // Se mantiene la carga de la relación 'package' y se añade 'user'
+        $query = Offer::with(['package', 'user'])->latest();
+
+        // Si el usuario pertenece a un equipo
+        if ($user->team_id) {
+            // Obtenemos los IDs de todos los miembros del equipo
+            $teamMemberIds = User::where('team_id', $user->team_id)->pluck('id');
+            
+            // Filtramos las ofertas para que solo muestre las de los miembros del equipo
+            $query->whereIn('user_id', $teamMemberIds);
+        } else {
+            // Si no está en un equipo, solo ve sus propias ofertas
+            $query->where('user_id', $user->id);
+        }
 
         return Inertia::render('Offers/Index', [
-            'offers' => $offers,
+            // Se cambia el paginate a 10 como en tu ejemplo y se usa la query modificada
+            'offers' => $query->paginate(10) 
         ]);
     }
 
@@ -68,7 +82,7 @@ class OfferController extends Controller
             $offer = Offer::create([
                 'package_id' => $validated['package_id'],
                 'summary' => $validated['summary'],
-                // 'user_id' => auth()->id(), // Descomenta si tienes un sistema de usuarios
+                'user_id' => auth()->id(), // Asegúrate de que esta línea esté activa
             ]);
 
             foreach ($validated['lines'] as $lineData) {
@@ -101,7 +115,7 @@ class OfferController extends Controller
                 $addonsToSync[$centralitaData['id']] = ['quantity' => 1];
             }
             if ($centralitaData['operadora_automatica_selected'] && $centralitaData['operadora_automatica_id']) {
-                 $addonsToSync[$centralitaData['operadora_automatica_id']] = ['quantity' => 1];
+                $addonsToSync[$centralitaData['operadora_automatica_id']] = ['quantity' => 1];
             }
             foreach ($centralitaData['extensions'] as $ext) {
                 if (isset($addonsToSync[$ext['addon_id']])) {
@@ -141,4 +155,3 @@ class OfferController extends Controller
         ]);
     }
 }
-

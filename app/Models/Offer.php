@@ -12,7 +12,7 @@ class Offer extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['package_id', 'summary'];
+    protected $fillable = ['user_id','package_id', 'summary'];
 
     protected $casts = [
         'summary' => 'array',
@@ -21,6 +21,11 @@ class Offer extends Model
     public function package(): BelongsTo
     {
         return $this->belongsTo(Package::class);
+    }
+     // 👇 AÑADIMOS ESTA FUNCIÓN PARA LA RELACIÓN 👇
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
     }
 
     public function lines(): HasMany

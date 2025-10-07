@@ -32,6 +32,9 @@ const showingNavigationDropdown = ref(false);
                                  <NavLink :href="route('offers.create')" :active="route().current('offers.create')">
                                     Crear Oferta
                                 </NavLink>
+                                <NavLink :href="route('offers.index')" :active="route().current('offers.index')">
+                                    Consultar Ofertas
+                                </NavLink>
                             </div>
                         </div>
 

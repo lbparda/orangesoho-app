@@ -26,6 +26,7 @@ defineProps({
                             <tr>
                                 <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID Oferta</th>
                                 <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Paquete</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Creado Por</th>
                                 <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Precio Final</th>
                                 <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha Creación</th>
                                 <th scope="col" class="relative px-6 py-3">
@@ -37,6 +38,7 @@ defineProps({
                             <tr v-for="offer in offers.data" :key="offer.id">
                                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">#{{ offer.id }}</td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ offer.package.name }}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ offer.user?.name || 'N/A' }}</td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ offer.summary.finalPrice }}€/mes</td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ new Date(offer.created_at).toLocaleDateString() }}</td>
                                 <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
@@ -44,7 +46,7 @@ defineProps({
                                 </td>
                             </tr>
                             <tr v-if="offers.data.length === 0">
-                                <td colspan="5" class="px-6 py-4 text-center text-sm text-gray-500">No hay ofertas guardadas todavía.</td>
+                                <td colspan="6" class="px-6 py-4 text-center text-sm text-gray-500">No hay ofertas guardadas todavía.</td>
                             </tr>
                         </tbody>
                     </table>
