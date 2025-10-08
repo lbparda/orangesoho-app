@@ -135,7 +135,7 @@ class OfferController extends Controller
      */
     public function show(Offer $offer)
     {
-        $offer->load(['package', 'lines', 'addons']);
+         $offer->load(['package.addons', 'user', 'lines', 'addons']);
 
         $offer->lines->each(function ($line) {
             if ($line->package_terminal_id) {
