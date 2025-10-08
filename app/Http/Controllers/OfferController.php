@@ -6,9 +6,9 @@ use App\Models\Addon;
 use App\Models\Discount;
 use App\Models\Offer;
 use App\Models\Package;
-use Illuminate\Http\Request; // <-- Importado y necesario para la nueva función index
-use Illuminate\Support\Facades\DB;
 use App\Models\User;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 
 class OfferController extends Controller
@@ -16,27 +16,22 @@ class OfferController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index(Request $request) // <-- MÉTODO MODIFICADO
+    public function index(Request $request)
     {
         $user = $request->user();
-        // Se mantiene la carga de la relación 'package' y se añade 'user'
+
+        // La ruta ya está protegida por middleware, por lo que $user siempre existirá aquí.
         $query = Offer::with(['package', 'user'])->latest();
 
-        // Si el usuario pertenece a un equipo
         if ($user->team_id) {
-            // Obtenemos los IDs de todos los miembros del equipo
             $teamMemberIds = User::where('team_id', $user->team_id)->pluck('id');
-            
-            // Filtramos las ofertas para que solo muestre las de los miembros del equipo
             $query->whereIn('user_id', $teamMemberIds);
         } else {
-            // Si no está en un equipo, solo ve sus propias ofertas
             $query->where('user_id', $user->id);
         }
 
         return Inertia::render('Offers/Index', [
-            // Se cambia el paginate a 10 como en tu ejemplo y se usa la query modificada
-            'offers' => $query->paginate(10) 
+            'offers' => $query->paginate(10)
         ]);
     }
 
@@ -45,12 +40,10 @@ class OfferController extends Controller
      */
     public function create()
     {
-        // Cargamos los paquetes con TODAS sus relaciones (addons, descuentos, etc.)
         $packages = Package::with(['addons', 'o2oDiscounts', 'terminals'])->get();
-        
         $discounts = Discount::all();
         $operators = ['Movistar', 'Vodafone', 'Orange', 'MasMovil', 'Otros'];
-        $portabilityCommission = config('commissions.portability_extra', 5.00); 
+        $portabilityCommission = config('commissions.portability_extra', 5.00);
         $additionalInternetAddons = Addon::where('type', 'internet_additional')->get();
         $centralitaExtensions = Addon::where('type', 'centralita_extension')->get();
 
@@ -78,11 +71,11 @@ class OfferController extends Controller
             'centralita' => 'present|array',
         ]);
 
-        DB::transaction(function () use ($validated) {
+        DB::transaction(function () use ($validated, $request) {
             $offer = Offer::create([
                 'package_id' => $validated['package_id'],
                 'summary' => $validated['summary'],
-                'user_id' => auth()->id(), // Asegúrate de que esta línea esté activa
+                'user_id' => $request->user()->id,
             ]);
 
             foreach ($validated['lines'] as $lineData) {
@@ -135,7 +128,7 @@ class OfferController extends Controller
      */
     public function show(Offer $offer)
     {
-         $offer->load(['package.addons', 'user', 'lines', 'addons']);
+        $offer->load(['package.addons', 'user', 'lines', 'addons']);
 
         $offer->lines->each(function ($line) {
             if ($line->package_terminal_id) {

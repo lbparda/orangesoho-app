@@ -14,9 +14,11 @@ const showingNavigationDropdown = ref(false);
     <div>
         <div class="min-h-screen bg-gray-100">
             <nav class="bg-white border-b border-gray-100">
+                <!-- Primary Navigation Menu -->
                 <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
                     <div class="flex h-16 justify-between">
                         <div class="flex">
+                            <!-- Logo -->
                             <div class="flex shrink-0 items-center">
                                 <Link :href="route('dashboard')">
                                     <ApplicationLogo
@@ -25,6 +27,7 @@ const showingNavigationDropdown = ref(false);
                                 </Link>
                             </div>
 
+                            <!-- Navigation Links -->
                             <div class="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">
                                 <NavLink :href="route('dashboard')" :active="route().current('dashboard')">
                                     Dashboard
@@ -35,10 +38,31 @@ const showingNavigationDropdown = ref(false);
                                 <NavLink :href="route('offers.index')" :active="route().current('offers.index')">
                                     Consultar Ofertas
                                 </NavLink>
+                                
+                                <!-- 👇 SECCIÓN DE ADMINISTRACIÓN MODIFICADA 👇 -->
+                                <div v-if="$page.props.auth.user && $page.props.auth.user.is_admin" class="hidden sm:flex sm:items-center sm:ms-6">
+                                     <div class="ms-3 relative">
+                                        <Dropdown align="right" width="48">
+                                            <template #trigger>
+                                                <span class="inline-flex rounded-md">
+                                                    <button type="button" class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-gray-500 bg-white hover:text-gray-700 focus:outline-none transition ease-in-out duration-150">
+                                                        Administración
+                                                        <svg class="ms-2 -me-0.5 h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" /></svg>
+                                                    </button>
+                                                </span>
+                                            </template>
+                                            <template #content>
+                                                <DropdownLink :href="route('admin.users.index')"> Gestionar Usuarios </DropdownLink>
+                                                <DropdownLink :href="route('admin.teams.index')"> Gestionar Equipos </DropdownLink>
+                                            </template>
+                                        </Dropdown>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
                         <div class="hidden sm:ms-6 sm:flex sm:items-center">
+                            <!-- Settings Dropdown -->
                             <div v-if="$page.props.auth.user" class="relative ms-3">
                                 <Dropdown align="right" width="48">
                                     <template #trigger>
@@ -81,6 +105,7 @@ const showingNavigationDropdown = ref(false);
                             </div>
                         </div>
 
+                        <!-- Hamburger -->
                         <div class="-me-2 flex items-center sm:hidden">
                             <button
                                 @click="showingNavigationDropdown = !showingNavigationDropdown"
@@ -113,6 +138,7 @@ const showingNavigationDropdown = ref(false);
                     </div>
                 </div>
 
+                <!-- Responsive Navigation Menu -->
                 <div :class="{ block: showingNavigationDropdown, hidden: !showingNavigationDropdown }" class="sm:hidden">
                     <div class="space-y-1 pb-3 pt-2">
                         <ResponsiveNavLink :href="route('dashboard')" :active="route().current('dashboard')">
@@ -121,8 +147,23 @@ const showingNavigationDropdown = ref(false);
                         <ResponsiveNavLink :href="route('offers.create')" :active="route().current('offers.create')">
                             Crear Oferta
                         </ResponsiveNavLink>
+                         <ResponsiveNavLink :href="route('offers.index')" :active="route().current('offers.index')">
+                            Consultar Ofertas
+                        </ResponsiveNavLink>
+                        
+                        <!-- 👇 SECCIÓN RESPONSIVE PARA ADMIN 👇 -->
+                        <div v-if="$page.props.auth.user && $page.props.auth.user.is_admin" class="border-t border-gray-200 pt-2 mt-2">
+                             <div class="px-4 font-medium text-base text-gray-800">Administración</div>
+                             <ResponsiveNavLink :href="route('admin.users.index')" :active="route().current().startsWith('admin.users')">
+                                Gestionar Usuarios
+                            </ResponsiveNavLink>
+                             <ResponsiveNavLink :href="route('admin.teams.index')" :active="route().current().startsWith('admin.teams')">
+                                Gestionar Equipos
+                            </ResponsiveNavLink>
+                        </div>
                     </div>
 
+                    <!-- Responsive Settings Options -->
                     <div v-if="$page.props.auth.user" class="border-t border-gray-200 pb-1 pt-4">
                         <div class="px-4">
                             <div class="text-base font-medium text-gray-800">
@@ -149,12 +190,14 @@ const showingNavigationDropdown = ref(false);
                 </div>
             </nav>
 
+            <!-- Page Heading -->
             <header class="bg-white shadow" v-if="$slots.header">
                 <div class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
                     <slot name="header" />
                 </div>
             </header>
 
+            <!-- Page Content -->
             <main>
                 <slot />
             </main>

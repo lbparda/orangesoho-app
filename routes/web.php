@@ -1,42 +1,55 @@
 <?php
 
-use App\Http\Controllers\ImportController;
-use App\Http\Controllers\OfferController;
-use App\Http\Controllers\ProfileController;
-
-use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
+use App\Http\Controllers\Auth\AuthenticatedSessionController;
+use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\OfferController;
+use App\Http\Controllers\ImportController;
+use App\Http\Controllers\Admin\UserController;
+use App\Http\Controllers\Admin\TeamController;
 
+/*
+|--------------------------------------------------------------------------
+| Web Routes
+|--------------------------------------------------------------------------
+*/
 
-Route::get('/', function () {
-    return Inertia::render('Inicio', [
-        'canLogin' => Route::has('login'),
-        'canRegister' => Route::has('register'),
-        'laravelVersion' => Application::VERSION,
-        'phpVersion' => PHP_VERSION,
-    ]);
-});
+// --- RUTA PRINCIPAL ---
+// Si el usuario es un invitado (no ha iniciado sesión), muestra la página de login.
+Route::get('/', [AuthenticatedSessionController::class, 'create'])
+    ->middleware('guest');
 
-Route::get('/dashboard', function () {
-    return Inertia::render('Dashboard');
-})->middleware(['auth', 'verified'])->name('dashboard');
+// --- RUTAS PARA USUARIOS AUTENTICADOS ---
+Route::middleware(['auth', 'verified'])->group(function () {
+    
+    // Dashboard (página de inicio para usuarios logueados)
+    Route::get('/dashboard', function () {
+        return Inertia::render('Dashboard');
+    })->name('dashboard');
 
-Route::middleware('auth')->group(function () {
+    // Perfil de Usuario
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
-});
 
-Route::get('/ofertas/crear', [OfferController::class, 'create'])->name('Crear Oferta');
+    // Gestión de Ofertas
+    Route::resource('offers', OfferController::class);
 
-Route::get('/ofertas', [OfferController::class, 'index'])
-    ->name('Consultar Ofertas');
-Route::get('/terminals/import', [ImportController::class, 'create'])->name('terminals.import.create');
+    // Importación de Terminales
+    Route::get('/terminals/import', [ImportController::class, 'create'])->name('terminals.import.create');
     Route::post('/terminals/import', [ImportController::class, 'store'])->name('terminals.import.store');
 
-Route::get('/offers/create', [OfferController::class, 'create'])->name('offers.create');
-Route::post('/offers', [OfferController::class, 'store'])->name('offers.store');
-Route::resource('offers', OfferController::class);
+});
 
+// --- GRUPO DE RUTAS DE ADMINISTRACIÓN ---
+Route::prefix('admin')
+    ->middleware(['auth', 'is_admin'])
+    ->name('admin.')
+    ->group(function () {
+        Route::resource('users', UserController::class);
+        Route::resource('teams', TeamController::class);
+});
+
+// Carga las rutas de autenticación (login, logout, etc.)
 require __DIR__.'/auth.php';

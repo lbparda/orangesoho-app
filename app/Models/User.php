@@ -10,24 +10,26 @@ use App\Models\Team;
 
 class User extends Authenticatable
 {
-    /** @use HasFactory<\Database\Factories\UserFactory> */
     use HasFactory, Notifiable;
 
     /**
      * The attributes that are mass assignable.
      *
-     * @var list<string>
+     * @var array<int, string>
      */
     protected $fillable = [
         'name',
         'email',
         'password',
+        'team_id',
+        'is_admin',
+        'commission_percentage',
     ];
 
     /**
      * The attributes that should be hidden for serialization.
      *
-     * @var list<string>
+     * @var array<int, string>
      */
     protected $hidden = [
         'password',
@@ -44,10 +46,24 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'is_admin' => 'boolean', // Es buena práctica definir el tipo
         ];
     }
+
+    /**
+     * Get the team that the user belongs to.
+     */
     public function team()
     {
+        // Asumimos que tendrás un modelo 'Team' en App\Models\Team
         return $this->belongsTo(Team::class);
+    }
+
+    /**
+     * Get the offers for the user.
+     */
+    public function offers()
+    {
+        return $this->hasMany(Offer::class);
     }
 }
