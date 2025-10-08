@@ -60,18 +60,18 @@ class AddonSeeder extends Seeder
 
         // 2. LAS EXTENSIONES (Puestos adicionales)
         // Se pueden añadir después de elegir una centralita.
-        // **NOTA: He asumido estos precios. ¡Ajústalos si es necesario!**
+        
         Addon::updateOrCreate(
             ['name' => 'Extensión Básica'],
-            ['type' => 'centralita_extension', 'price' => 4.00, 'commission' => 20.00]
+            ['type' => 'centralita_extension', 'price' => 10.00, 'commission' => 25.00]
         );
         Addon::updateOrCreate(
             ['name' => 'Extensión Inalámbrica'],
-            ['type' => 'centralita_extension', 'price' => 6.00, 'commission' => 25.00]
+            ['type' => 'centralita_extension', 'price' => 12.00, 'commission' => 25.00]
         );
         Addon::updateOrCreate(
             ['name' => 'Extensión Avanzada'],
-            ['type' => 'centralita_extension', 'price' => 12.00, 'commission' => 45.00]
+            ['type' => 'centralita_extension', 'price' => 17.00, 'commission' => 45.00]
         );
          // --- NUEVO ADDON: OPERADORA AUTOMÁTICA ---
         Addon::updateOrCreate(

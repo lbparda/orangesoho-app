@@ -429,9 +429,9 @@ const calculationSummary = computed(() => {
                 <div class="p-8 bg-white border-b border-gray-200">
                     <div class="flex justify-between items-center mb-6">
                         <h1 class="text-2xl font-bold">Crear Nueva Oferta</h1>
-                        <Link :href="route('terminals.import.create')">
-                            <SecondaryButton>Importar Terminales</SecondaryButton>
-                        </Link>
+                            <Link :href="route('dashboard')">
+                                <SecondaryButton>Atrás</SecondaryButton>
+                            </Link>
                     </div>
 
                     <div class="mb-8 max-w-lg mx-auto">
