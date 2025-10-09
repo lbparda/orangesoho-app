@@ -1,6 +1,7 @@
 <script setup>
 import { computed, ref } from 'vue';
-import { Head, Link } from '@inertiajs/vue3';
+// 1. Importamos 'usePage' para acceder a los datos del usuario de forma limpia
+import { Head, Link, usePage } from '@inertiajs/vue3';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 
@@ -8,7 +9,16 @@ const props = defineProps({
     offer: Object,
 });
 
+// 2. Creamos una propiedad computada para la visibilidad
+const page = usePage();
+const canViewCommissions = computed(() => {
+    const role = page.props.auth.user?.role;
+    // La sección será visible si el rol es 'admin' O 'team_lead'
+    return role === 'admin' || role === 'team_lead';
+});
+
 const centralitaInfo = computed(() => {
+    // ... (resto de tu script sin cambios)
     if (!props.offer.addons) return null;
     
     const centralita = props.offer.addons.find(a => a.type === 'centralita');
@@ -68,7 +78,9 @@ const packageIncludedExtensions = computed(() => {
                         </div>
 
                         <div class="border-t pt-6">
-                            <details v-if="$page.props.auth.user.role !== 'user'" class="group">
+                            <!-- =================== CAMBIO REALIZADO AQUÍ =================== -->
+                            <!-- 3. La condición ahora es 'v-if="canViewCommissions"' -->
+                            <details v-if="canViewCommissions" class="group">
                                 <summary class="flex justify-between items-center font-medium cursor-pointer list-none">
                                     <h3 class="text-lg font-semibold text-gray-700">💰 Desglose de Comisiones</h3>
                                     <span class="transition group-open:rotate-180">
@@ -76,24 +88,25 @@ const packageIncludedExtensions = computed(() => {
                                     </span>
                                 </summary>
                                 <div class="mt-4 space-y-4">
-                                     <div v-for="(commissions, category) in offer.summary.commissionDetails" :key="category" class="text-sm">
-                                        <h4 class="font-semibold text-gray-600 mb-2">{{ category }}</h4>
-                                        <div class="space-y-1 border-l-2 pl-4 ml-2">
-                                            <div v-for="(commission, index) in commissions" :key="index" class="flex justify-between">
-                                                <span class="text-gray-500">{{ commission.description }}</span>
-                                                <span class="font-medium text-gray-800">{{ commission.amount.toFixed(2) }}€</span>
+                                        <div v-for="(commissions, category) in offer.summary.commissionDetails" :key="category" class="text-sm">
+                                            <h4 class="font-semibold text-gray-600 mb-2">{{ category }}</h4>
+                                            <div class="space-y-1 border-l-2 pl-4 ml-2">
+                                                <div v-for="(commission, index) in commissions" :key="index" class="flex justify-between">
+                                                    <span class="text-gray-500">{{ commission.description }}</span>
+                                                    <span class="font-medium text-gray-800">{{ commission.amount.toFixed(2) }}€</span>
+                                                </div>
                                             </div>
                                         </div>
-                                     </div>
                                 </div>
                             </details>
                             
                             <div class="border-t pt-4 mt-4 space-y-2">
-                                <div v-if="$page.props.auth.user.role !== 'user'" class="flex justify-between text-md font-medium text-gray-500">
+                                <!-- 3. Y aquí también se aplica la condición 'canViewCommissions' -->
+                                <div v-if="canViewCommissions" class="flex justify-between text-md font-medium text-gray-500">
                                     <span>Comisión Bruta (100%):</span>
                                     <span>{{ offer.summary.totalCommission }}€</span>
                                 </div>
-                                <div v-if="$page.props.auth.user.role !== 'user' && offer.user.role !== 'admin'" class="flex justify-between text-lg font-medium text-gray-600">
+                                <div v-if="canViewCommissions && offer.user.role !== 'admin'" class="flex justify-between text-lg font-medium text-gray-600">
                                     <span>Comisión de Equipo:</span>
                                     <span>{{ offer.summary.teamCommission }}€</span>
                                 </div>
@@ -105,6 +118,7 @@ const packageIncludedExtensions = computed(() => {
                         </div>
 
 
+                        <!-- El resto de tu plantilla permanece exactamente igual -->
                         <div v-if="centralitaInfo || packageIncludedExtensions.length > 0" class="border-t pt-6">
                             <h3 class="text-lg font-semibold text-gray-700 mb-3">✅ Centralita Virtual y Extensiones</h3>
                             <div class="space-y-4 text-sm">

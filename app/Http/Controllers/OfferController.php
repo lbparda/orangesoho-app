@@ -20,9 +20,13 @@ class OfferController extends Controller
     {
         $user = $request->user();
         
+        // 1. La consulta se inicia sin filtros de usuario
         $query = Offer::with(['package', 'user.team'])->latest();
 
+        // 2. Se evalúa el rol del usuario
         switch ($user->role) {
+            // 3. Si el usuario es 'admin', no se aplica ningún filtro.
+            // El `break` salta al final del switch, por lo que el admin ve TODAS las ofertas.
             case 'admin':
                 // El admin no tiene filtros, ve todas las ofertas.
                 break;
@@ -46,6 +50,7 @@ class OfferController extends Controller
                 break;
         }
 
+        // 4. La consulta se ejecuta con los filtros correspondientes (o sin ellos para el admin)
         return Inertia::render('Offers/Index', [
             'offers' => $query->paginate(10)
         ]);
