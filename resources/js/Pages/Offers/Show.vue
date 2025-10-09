@@ -31,7 +31,6 @@ const packageIncludedExtensions = computed(() => {
     );
 });
 
-// Ref para controlar la visibilidad del desplegable de comisiones
 const showCommissionDetails = ref(false);
 </script>
 
@@ -91,10 +90,14 @@ const showCommissionDetails = ref(false);
                                 </div>
                             </details>
                             
-                             <div class="border-t pt-4 mt-4">
-                                <div class="flex justify-between text-xl font-bold text-emerald-600">
-                                    <span>Comisión Total:</span>
+                             <div class="border-t pt-4 mt-4 space-y-2">
+                                <div class="flex justify-between text-md font-medium text-gray-600">
+                                    <span>Comisión Bruta (100%):</span>
                                     <span>{{ offer.summary.totalCommission }}€</span>
+                                </div>
+                                <div class="flex justify-between text-xl font-bold text-emerald-600">
+                                    <span>Comisión del Usuario:</span>
+                                    <span>{{ offer.summary.userCommission }}€</span>
                                 </div>
                             </div>
                         </div>

@@ -43,7 +43,7 @@ class OfferController extends Controller
         $packages = Package::with(['addons', 'o2oDiscounts', 'terminals'])->get();
         $discounts = Discount::all();
         $operators = ['Movistar', 'Vodafone', 'Orange', 'MasMovil', 'Otros'];
-        $portabilityCommission = config('commissions.portability_extra', 5.00);
+        $portabilityCommission = config('commissions.portability_extra', 5.00); 
         $additionalInternetAddons = Addon::where('type', 'internet_additional')->get();
         $centralitaExtensions = Addon::where('type', 'centralita_extension')->get();
 
@@ -54,6 +54,8 @@ class OfferController extends Controller
             'portabilityCommission' => $portabilityCommission,
             'additionalInternetAddons' => $additionalInternetAddons,
             'centralitaExtensions' => $centralitaExtensions,
+            // 👇 LÍNEA AÑADIDA: Enviamos el usuario y su equipo a la vista 👇
+            'auth' => ['user' => auth()->user()->load('team')],
         ]);
     }
 

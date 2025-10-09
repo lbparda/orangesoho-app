@@ -8,6 +8,7 @@ use App\Http\Controllers\OfferController;
 use App\Http\Controllers\ImportController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\TeamController;
+use App\Http\Controllers\Auth\RegisteredUserController;
 
 /*
 |--------------------------------------------------------------------------
@@ -50,6 +51,13 @@ Route::prefix('admin')
         Route::resource('users', UserController::class);
         Route::resource('teams', TeamController::class);
 });
+
+ Route::get('register', [RegisteredUserController::class, 'create'])
+                 ->middleware('guest')
+                 ->name('register');
+
+ Route::post('register', [RegisteredUserController::class, 'store'])
+                 ->middleware('guest');
 
 // Carga las rutas de autenticación (login, logout, etc.)
 require __DIR__.'/auth.php';

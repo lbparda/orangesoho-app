@@ -15,6 +15,7 @@ const props = defineProps({
     },
     additionalInternetAddons: Array,
     centralitaExtensions: Array,
+    auth: Object, // Prop para recibir los datos del usuario autenticado y su equipo
 });
 
 const selectedPackageId = ref(null);
@@ -293,10 +294,9 @@ watch(() => lines.value.map(line => line.has_vap), (newVapStates, oldVapStates) 
     });
 }, { deep: true });
 
-// 👇 --- SECCIÓN MODIFICADA --- 👇
 const calculationSummary = computed(() => {
     if (!selectedPackage.value) {
-        return { basePrice: 0, finalPrice: 0, appliedO2oList: [], totalTerminalFee: 0, totalInitialPayment: 0, extraLinesCost: 0, totalCommission: 0, commissionDetails: {} };
+        return { basePrice: 0, finalPrice: 0, appliedO2oList: [], totalTerminalFee: 0, totalInitialPayment: 0, extraLinesCost: 0, totalCommission: 0, userCommission: 0, commissionDetails: {} };
     }
 
     let price = parseFloat(selectedPackage.value.base_price) || 0;
@@ -446,7 +446,6 @@ const calculationSummary = computed(() => {
         price -= (price * (parseFloat(appliedDiscount.value.percentage) / 100));
     }
     
-    // Limpiar categorías vacías
     Object.keys(commissionDetails).forEach(key => {
         if (commissionDetails[key].length === 0) {
             delete commissionDetails[key];
@@ -454,6 +453,9 @@ const calculationSummary = computed(() => {
     });
 
     const totalCommission = Object.values(commissionDetails).flat().reduce((acc, item) => acc + item.amount, 0);
+    
+    const teamPercentage = props.auth?.user?.team?.commission_percentage || 0;
+    const userCommission = totalCommission * (parseFloat(teamPercentage) / 100);
 
     return {
         basePrice: basePrice.toFixed(2),
@@ -463,12 +465,11 @@ const calculationSummary = computed(() => {
         totalInitialPayment: totalInitialPayment.toFixed(2),
         extraLinesCost: extraLinesCost.toFixed(2),
         totalCommission: totalCommission.toFixed(2),
-        commissionDetails, // Guardamos el desglose agrupado
+        userCommission: userCommission.toFixed(2),
+        commissionDetails,
     };
 });
 </script>
-
-
 
 <template>
     <Head title="Crear Oferta" />
@@ -695,8 +696,11 @@ const calculationSummary = computed(() => {
                                 </div>
                             </div>
                             <div class="border-t pt-4 mt-4">
-                                <p class="text-xl font-bold text-emerald-600 text-center">
-                                    Comisión Total: {{ calculationSummary.totalCommission }}€
+                                <p class="text-lg text-gray-600 text-center">
+                                    Comisión Bruta (100%): {{ calculationSummary.totalCommission }}€
+                                </p>
+                                <p class="text-xl font-bold text-emerald-600 text-center mt-2">
+                                    Tu Comisión ({{ auth.user?.team?.commission_percentage || 0 }}%): {{ calculationSummary.userCommission }}€
                                 </p>
                             </div>
                         </div>
