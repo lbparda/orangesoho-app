@@ -8,7 +8,7 @@ use App\Http\Controllers\OfferController;
 use App\Http\Controllers\ImportController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\TeamController;
-use App\Http\Controllers\Auth\RegisteredUserController;
+use App\Http\Controllers\TeamLead\ManagementController; // <-- Importación añadida
 
 /*
 |--------------------------------------------------------------------------
@@ -17,7 +17,7 @@ use App\Http\Controllers\Auth\RegisteredUserController;
 */
 
 // --- RUTA PRINCIPAL ---
-// Si el usuario es un invitado (no ha iniciado sesión), muestra la página de login.
+// Si el usuario no ha iniciado sesión, se muestra la página de login.
 Route::get('/', [AuthenticatedSessionController::class, 'create'])
     ->middleware('guest');
 
@@ -52,12 +52,17 @@ Route::prefix('admin')
         Route::resource('teams', TeamController::class);
 });
 
- Route::get('register', [RegisteredUserController::class, 'create'])
-                 ->middleware('guest')
-                 ->name('register');
+// --- GRUPO DE RUTAS DE JEFE DE EQUIPO ---
+Route::prefix('team-lead')
+    ->middleware(['auth']) // Más adelante podemos añadir un middleware 'is_team_lead'
+    ->name('team-lead.')
+    ->group(function () {
+        Route::get('users', [ManagementController::class, 'index'])->name('users.index');
+        // Corregido: Route::get en lugar de Route.get
+        Route::get('users/{user}/edit', [ManagementController::class, 'edit'])->name('users.edit');
+        // Corregido: Route::put en lugar de Route.put
+        Route::put('users/{user}', [ManagementController::class, 'update'])->name('users.update');
+});
 
- Route::post('register', [RegisteredUserController::class, 'store'])
-                 ->middleware('guest');
-
-// Carga las rutas de autenticación (login, logout, etc.)
+// Carga las rutas de autenticación (login, logout, register, etc.)
 require __DIR__.'/auth.php';

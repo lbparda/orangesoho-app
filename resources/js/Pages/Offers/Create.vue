@@ -15,7 +15,7 @@ const props = defineProps({
     },
     additionalInternetAddons: Array,
     centralitaExtensions: Array,
-    auth: Object, // Prop para recibir los datos del usuario autenticado y su equipo
+    auth: Object, // <-- Prop añadida para recibir los datos del usuario
 });
 
 const selectedPackageId = ref(null);
@@ -36,7 +36,7 @@ const form = useForm({
 });
 
 
-// --- Computeds ---
+
 const selectedPackage = computed(() => {
     return props.packages.find(p => p.id === selectedPackageId.value) || null;
 });
@@ -296,7 +296,7 @@ watch(() => lines.value.map(line => line.has_vap), (newVapStates, oldVapStates) 
 
 const calculationSummary = computed(() => {
     if (!selectedPackage.value) {
-        return { basePrice: 0, finalPrice: 0, appliedO2oList: [], totalTerminalFee: 0, totalInitialPayment: 0, extraLinesCost: 0, totalCommission: 0, userCommission: 0, commissionDetails: {} };
+        return { basePrice: 0, finalPrice: 0, appliedO2oList: [], totalTerminalFee: 0, totalInitialPayment: 0, extraLinesCost: 0, totalCommission: 0, teamCommission: 0, userCommission: 0, commissionDetails: {} };
     }
 
     let price = parseFloat(selectedPackage.value.base_price) || 0;
@@ -309,6 +309,7 @@ const calculationSummary = computed(() => {
         Ajustes: [],
     };
 
+    // --- CÁLCULO DE PRECIO Y DESGLOSE DE COMISIONES ---
     // Fibra
     if (selectedInternetAddonInfo.value) {
         price += parseFloat(selectedInternetAddonInfo.value.pivot.price) || 0;
@@ -452,23 +453,50 @@ const calculationSummary = computed(() => {
         }
     });
 
+    // --- LÓGICA DE CÁLCULO DE COMISIONES POR ROL (CORREGIDA) ---
     const totalCommission = Object.values(commissionDetails).flat().reduce((acc, item) => acc + item.amount, 0);
-    
-    const teamPercentage = props.auth?.user?.team?.commission_percentage || 0;
-    const userCommission = totalCommission * (parseFloat(teamPercentage) / 100);
+    const currentUser = props.auth.user;
+    let teamCommission = 0;
+    let userCommission = 0;
+
+    // CORRECCIÓN: El admin siempre cobra el 100% del bruto
+    if (currentUser.role === 'admin') {
+        userCommission = totalCommission;
+        teamCommission = totalCommission; // Para mostrar en el resumen si es necesario
+    } 
+    // CORRECCIÓN: Para usuarios con equipo (team_lead o user con team)
+    else if (currentUser.team) {
+        const teamPercentage = currentUser.team.commission_percentage || 0;
+        teamCommission = totalCommission * (parseFloat(teamPercentage) / 100);
+
+        if (currentUser.role === 'user') {
+            const userPercentage = currentUser.commission_percentage || 0;
+            userCommission = teamCommission * (parseFloat(userPercentage) / 100);
+        } else { // team_lead
+            userCommission = teamCommission;
+        }
+    }
+    // CORRECCIÓN: Para usuarios sin equipo (user sin team)
+    else {
+        const userPercentage = currentUser.commission_percentage || 0;
+        userCommission = totalCommission * (parseFloat(userPercentage) / 100);
+        teamCommission = 0;
+    }
 
     return {
         basePrice: basePrice.toFixed(2),
         finalPrice: Math.max(0, price).toFixed(2),
-        appliedO2oList,
+        appliedO2oList: appliedO2oList,
         totalTerminalFee: totalTerminalFee.toFixed(2),
         totalInitialPayment: totalInitialPayment.toFixed(2),
         extraLinesCost: extraLinesCost.toFixed(2),
         totalCommission: totalCommission.toFixed(2),
+        teamCommission: teamCommission.toFixed(2),
         userCommission: userCommission.toFixed(2),
         commissionDetails,
     };
 });
+
 </script>
 
 <template>
@@ -494,6 +522,23 @@ const calculationSummary = computed(() => {
                     </div>
 
                     <div v-if="selectedPackage" class="space-y-10">
+
+                        <!-- Sección de Comisiones - AÑADIDA -->
+                        <div class="mt-10 p-6 bg-gray-100 rounded-lg space-y-3 max-w-2xl mx-auto sticky top-10">
+                            <h2 class="text-xl font-semibold text-gray-800 text-center">{{ selectedPackage.name }}</h2>
+                            
+                            <div class="border-t pt-4 mt-4 space-y-2">
+                                <p v-if="$page.props.auth.user.role === 'admin' || $page.props.auth.user.role === 'team_lead'" class="text-md text-gray-500 text-center">
+                                    Comisión Bruta (100%): {{ calculationSummary.totalCommission }}€
+                                </p>
+                                <p v-if="$page.props.auth.user.role === 'team_lead'" class="text-lg text-gray-600 text-center">
+                                    Comisión Equipo ({{ auth.user?.team?.commission_percentage || 0 }}%): {{ calculationSummary.teamCommission }}€
+                                </p>
+                                <p class="text-xl font-bold text-emerald-600 text-center mt-2">
+                                    Tu Comisión: {{ calculationSummary.userCommission }}€
+                                </p>
+                            </div>
+                        </div>
 
                         <div v-if="internetAddonOptions.length > 0" class="max-w-lg mx-auto">
                             <label class="block text-sm font-medium text-gray-700 mb-2">2. Elige la velocidad de la Fibra Principal</label>
@@ -695,12 +740,15 @@ const calculationSummary = computed(() => {
                                     <span>{{ calculationSummary.finalPrice }}<span class="text-lg font-medium text-gray-600">€/mes</span></span>
                                 </div>
                             </div>
-                            <div class="border-t pt-4 mt-4">
-                                <p class="text-lg text-gray-600 text-center">
+                            <div class="border-t pt-4 mt-4 space-y-2">
+                                <p v-if="$page.props.auth.user.role === 'admin' || $page.props.auth.user.role === 'team_lead'" class="text-md text-gray-500 text-center">
                                     Comisión Bruta (100%): {{ calculationSummary.totalCommission }}€
                                 </p>
+                                <p v-if="$page.props.auth.user.role === 'team_lead'" class="text-lg text-gray-600 text-center">
+                                    Comisión Equipo ({{ auth.user?.team?.commission_percentage || 0 }}%): {{ calculationSummary.teamCommission }}€
+                                </p>
                                 <p class="text-xl font-bold text-emerald-600 text-center mt-2">
-                                    Tu Comisión ({{ auth.user?.team?.commission_percentage || 0 }}%): {{ calculationSummary.userCommission }}€
+                                    Tu Comisión: {{ calculationSummary.userCommission }}€
                                 </p>
                             </div>
                         </div>

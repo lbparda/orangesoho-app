@@ -30,8 +30,6 @@ const packageIncludedExtensions = computed(() => {
         a.type === 'centralita_extension' && a.pivot.is_included && a.pivot.included_quantity > 0
     );
 });
-
-const showCommissionDetails = ref(false);
 </script>
 
 <template>
@@ -70,7 +68,7 @@ const showCommissionDetails = ref(false);
                         </div>
 
                         <div class="border-t pt-6">
-                            <details class="group">
+                            <details v-if="$page.props.auth.user.role !== 'user'" class="group">
                                 <summary class="flex justify-between items-center font-medium cursor-pointer list-none">
                                     <h3 class="text-lg font-semibold text-gray-700">💰 Desglose de Comisiones</h3>
                                     <span class="transition group-open:rotate-180">
@@ -90,13 +88,17 @@ const showCommissionDetails = ref(false);
                                 </div>
                             </details>
                             
-                             <div class="border-t pt-4 mt-4 space-y-2">
-                                <div class="flex justify-between text-md font-medium text-gray-600">
+                            <div class="border-t pt-4 mt-4 space-y-2">
+                                <div v-if="$page.props.auth.user.role !== 'user'" class="flex justify-between text-md font-medium text-gray-500">
                                     <span>Comisión Bruta (100%):</span>
                                     <span>{{ offer.summary.totalCommission }}€</span>
                                 </div>
+                                <div v-if="$page.props.auth.user.role !== 'user' && offer.user.role !== 'admin'" class="flex justify-between text-lg font-medium text-gray-600">
+                                    <span>Comisión de Equipo:</span>
+                                    <span>{{ offer.summary.teamCommission }}€</span>
+                                </div>
                                 <div class="flex justify-between text-xl font-bold text-emerald-600">
-                                    <span>Comisión del Usuario:</span>
+                                    <span>Comisión Final del Vendedor:</span>
                                     <span>{{ offer.summary.userCommission }}€</span>
                                 </div>
                             </div>

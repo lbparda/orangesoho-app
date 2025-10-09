@@ -39,7 +39,7 @@ const showingNavigationDropdown = ref(false);
                                     Consultar Ofertas
                                 </NavLink>
                                 
-                                <!-- 👇 SECCIÓN DE ADMINISTRACIÓN MODIFICADA 👇 -->
+                                <!-- Menú Desplegable de Administración (SOLO PARA ADMINS) -->
                                 <div v-if="$page.props.auth.user && $page.props.auth.user.is_admin" class="hidden sm:flex sm:items-center sm:ms-6">
                                      <div class="ms-3 relative">
                                         <Dropdown align="right" width="48">
@@ -58,6 +58,11 @@ const showingNavigationDropdown = ref(false);
                                         </Dropdown>
                                     </div>
                                 </div>
+                                
+                                <!-- Enlace para Jefes de Equipo -->
+                                <NavLink v-if="$page.props.auth.user && $page.props.auth.user.role === 'team_lead'" :href="route('team-lead.users.index')" :active="route().current().startsWith('team-lead')">
+                                    Gestionar Equipo
+                                </NavLink>
                             </div>
                         </div>
 
@@ -72,34 +77,13 @@ const showingNavigationDropdown = ref(false);
                                                 class="inline-flex items-center rounded-md border border-transparent bg-white px-3 py-2 text-sm font-medium leading-4 text-gray-500 transition duration-150 ease-in-out hover:text-gray-700 focus:outline-none"
                                             >
                                                 {{ $page.props.auth.user.name }}
-
-                                                <svg
-                                                    class="-me-0.5 ms-2 h-4 w-4"
-                                                    xmlns="http://www.w3.org/2000/svg"
-                                                    viewBox="0 0 20 20"
-                                                    fill="currentColor"
-                                                >
-                                                    <path
-                                                        fill-rule="evenodd"
-                                                        d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
-                                                        clip-rule="evenodd"
-                                                    />
-                                                </svg>
+                                                <svg class="-me-0.5 ms-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" /></svg>
                                             </button>
                                         </span>
                                     </template>
-
                                     <template #content>
-                                        <DropdownLink :href="route('profile.edit')">
-                                            Profile
-                                        </DropdownLink>
-                                        <DropdownLink
-                                            :href="route('logout')"
-                                            method="post"
-                                            as="button"
-                                        >
-                                            Log Out
-                                        </DropdownLink>
+                                        <DropdownLink :href="route('profile.edit')"> Perfil </DropdownLink>
+                                        <DropdownLink :href="route('logout')" method="post" as="button"> Cerrar Sesión </DropdownLink>
                                     </template>
                                 </Dropdown>
                             </div>
@@ -107,32 +91,8 @@ const showingNavigationDropdown = ref(false);
 
                         <!-- Hamburger -->
                         <div class="-me-2 flex items-center sm:hidden">
-                            <button
-                                @click="showingNavigationDropdown = !showingNavigationDropdown"
-                                class="inline-flex items-center justify-center rounded-md p-2 text-gray-400 transition duration-150 ease-in-out hover:bg-gray-100 hover:text-gray-500 focus:bg-gray-100 focus:text-gray-500 focus:outline-none"
-                            >
-                                <svg class="h-6 w-6" stroke="currentColor" fill="none" viewBox="0 0 24 24">
-                                    <path
-                                        :class="{
-                                            hidden: showingNavigationDropdown,
-                                            'inline-flex': !showingNavigationDropdown,
-                                        }"
-                                        stroke-linecap="round"
-                                        stroke-linejoin="round"
-                                        stroke-width="2"
-                                        d="M4 6h16M4 12h16M4 18h16"
-                                    />
-                                    <path
-                                        :class="{
-                                            hidden: !showingNavigationDropdown,
-                                            'inline-flex': showingNavigationDropdown,
-                                        }"
-                                        stroke-linecap="round"
-                                        stroke-linejoin="round"
-                                        stroke-width="2"
-                                        d="M6 18L18 6M6 6l12 12"
-                                    />
-                                </svg>
+                            <button @click="showingNavigationDropdown = !showingNavigationDropdown" class="inline-flex items-center justify-center rounded-md p-2 text-gray-400 transition">
+                                <svg class="h-6 w-6" stroke="currentColor" fill="none" viewBox="0 0 24 24"><path :class="{'hidden': showingNavigationDropdown, 'inline-flex': !showingNavigationDropdown }" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" /><path :class="{'hidden': !showingNavigationDropdown, 'inline-flex': showingNavigationDropdown }" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
                             </button>
                         </div>
                     </div>
@@ -141,50 +101,37 @@ const showingNavigationDropdown = ref(false);
                 <!-- Responsive Navigation Menu -->
                 <div :class="{ block: showingNavigationDropdown, hidden: !showingNavigationDropdown }" class="sm:hidden">
                     <div class="space-y-1 pb-3 pt-2">
-                        <ResponsiveNavLink :href="route('dashboard')" :active="route().current('dashboard')">
-                            Dashboard
-                        </ResponsiveNavLink>
-                        <ResponsiveNavLink :href="route('offers.create')" :active="route().current('offers.create')">
-                            Crear Oferta
-                        </ResponsiveNavLink>
-                         <ResponsiveNavLink :href="route('offers.index')" :active="route().current('offers.index')">
-                            Consultar Ofertas
-                        </ResponsiveNavLink>
-                        
-                        <!-- 👇 SECCIÓN RESPONSIVE PARA ADMIN 👇 -->
-                        <div v-if="$page.props.auth.user && $page.props.auth.user.is_admin" class="border-t border-gray-200 pt-2 mt-2">
-                             <div class="px-4 font-medium text-base text-gray-800">Administración</div>
-                             <ResponsiveNavLink :href="route('admin.users.index')" :active="route().current().startsWith('admin.users')">
-                                Gestionar Usuarios
-                            </ResponsiveNavLink>
-                             <ResponsiveNavLink :href="route('admin.teams.index')" :active="route().current().startsWith('admin.teams')">
-                                Gestionar Equipos
-                            </ResponsiveNavLink>
+                        <ResponsiveNavLink :href="route('dashboard')" :active="route().current('dashboard')"> Dashboard </ResponsiveNavLink>
+                        <ResponsiveNavLink :href="route('offers.create')" :active="route().current('offers.create')"> Crear Oferta </ResponsiveNavLink>
+                        <ResponsiveNavLink :href="route('offers.index')" :active="route().current('offers.index')"> Consultar Ofertas </ResponsiveNavLink>
+                    </div>
+
+                    <!-- Responsive Admin Options -->
+                     <div v-if="$page.props.auth.user && $page.props.auth.user.is_admin" class="border-t border-gray-200 pt-4 pb-1">
+                        <div class="px-4"><div class="font-medium text-base text-gray-800">Administración</div></div>
+                        <div class="mt-3 space-y-1">
+                            <ResponsiveNavLink :href="route('admin.users.index')"> Gestionar Usuarios </ResponsiveNavLink>
+                            <ResponsiveNavLink :href="route('admin.teams.index')"> Gestionar Equipos </ResponsiveNavLink>
+                        </div>
+                    </div>
+
+                    <!-- Responsive Team Lead Options -->
+                     <div v-if="$page.props.auth.user && $page.props.auth.user.role === 'team_lead'" class="border-t border-gray-200 pt-4 pb-1">
+                        <div class="px-4"><div class="font-medium text-base text-gray-800">Jefe de Equipo</div></div>
+                        <div class="mt-3 space-y-1">
+                            <ResponsiveNavLink :href="route('team-lead.users.index')"> Gestionar Mi Equipo </ResponsiveNavLink>
                         </div>
                     </div>
 
                     <!-- Responsive Settings Options -->
                     <div v-if="$page.props.auth.user" class="border-t border-gray-200 pb-1 pt-4">
                         <div class="px-4">
-                            <div class="text-base font-medium text-gray-800">
-                                {{ $page.props.auth.user.name }}
-                            </div>
-                            <div class="text-sm font-medium text-gray-500">
-                                {{ $page.props.auth.user.email }}
-                            </div>
+                            <div class="text-base font-medium text-gray-800">{{ $page.props.auth.user.name }}</div>
+                            <div class="text-sm font-medium text-gray-500">{{ $page.props.auth.user.email }}</div>
                         </div>
-
                         <div class="mt-3 space-y-1">
-                            <ResponsiveNavLink :href="route('profile.edit')">
-                                Profile
-                            </ResponsiveNavLink>
-                            <ResponsiveNavLink
-                                :href="route('logout')"
-                                method="post"
-                                as="button"
-                            >
-                                Log Out
-                            </ResponsiveNavLink>
+                            <ResponsiveNavLink :href="route('profile.edit')"> Perfil </ResponsiveNavLink>
+                            <ResponsiveNavLink :href="route('logout')" method="post" as="button"> Cerrar Sesión </ResponsiveNavLink>
                         </div>
                     </div>
                 </div>

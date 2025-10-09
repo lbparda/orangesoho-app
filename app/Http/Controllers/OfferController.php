@@ -14,20 +14,36 @@ use Inertia\Inertia;
 class OfferController extends Controller
 {
     /**
-     * Display a listing of the resource.
+     * Display a listing of the resource based on user role.
      */
     public function index(Request $request)
     {
         $user = $request->user();
+        
+        $query = Offer::with(['package', 'user.team'])->latest();
 
-        // La ruta ya está protegida por middleware, por lo que $user siempre existirá aquí.
-        $query = Offer::with(['package', 'user'])->latest();
+        switch ($user->role) {
+            case 'admin':
+                // El admin no tiene filtros, ve todas las ofertas.
+                break;
 
-        if ($user->team_id) {
-            $teamMemberIds = User::where('team_id', $user->team_id)->pluck('id');
-            $query->whereIn('user_id', $teamMemberIds);
-        } else {
-            $query->where('user_id', $user->id);
+            case 'team_lead':
+                if ($user->team_id) {
+                    // Obtiene los IDs de todos los miembros de su equipo.
+                    $teamMemberIds = User::where('team_id', $user->team_id)->pluck('id');
+                    
+                    // Muestra las ofertas de los miembros de su equipo.
+                    $query->whereIn('user_id', $teamMemberIds);
+                } else {
+                    // Si un jefe de equipo no tiene equipo, solo ve sus propias ofertas.
+                    $query->where('user_id', $user->id);
+                }
+                break;
+
+            default: // 'user' role
+                // Un usuario normal solo ve sus propias ofertas.
+                $query->where('user_id', $user->id);
+                break;
         }
 
         return Inertia::render('Offers/Index', [
@@ -54,7 +70,6 @@ class OfferController extends Controller
             'portabilityCommission' => $portabilityCommission,
             'additionalInternetAddons' => $additionalInternetAddons,
             'centralitaExtensions' => $centralitaExtensions,
-            // 👇 LÍNEA AÑADIDA: Enviamos el usuario y su equipo a la vista 👇
             'auth' => ['user' => auth()->user()->load('team')],
         ]);
     }
@@ -80,6 +95,7 @@ class OfferController extends Controller
                 'user_id' => $request->user()->id,
             ]);
 
+            // ... (resto de la lógica de store sin cambios)
             foreach ($validated['lines'] as $lineData) {
                 $offer->lines()->create([
                     'is_extra' => $lineData['is_extra'],
@@ -130,7 +146,7 @@ class OfferController extends Controller
      */
     public function show(Offer $offer)
     {
-        $offer->load(['package.addons', 'user', 'lines', 'addons']);
+        $offer->load(['package.addons', 'user.team', 'lines', 'addons']);
 
         $offer->lines->each(function ($line) {
             if ($line->package_terminal_id) {

@@ -23,7 +23,8 @@ class User extends Authenticatable
         'password',
         'team_id',
         'is_admin',
-        'commission_percentage',
+        'role', // <-- Añadido
+        'commission_percentage', // <-- Añadido
     ];
 
     /**
