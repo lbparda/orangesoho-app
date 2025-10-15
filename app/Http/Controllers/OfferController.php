@@ -6,6 +6,7 @@ use App\Models\Addon;
 use App\Models\Discount;
 use App\Models\Offer;
 use App\Models\Package;
+use App\Models\Terminal; // <-- Importante tener este 'use'
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -13,52 +14,33 @@ use Inertia\Inertia;
 
 class OfferController extends Controller
 {
-    /**
-     * Display a listing of the resource based on user role.
-     */
     public function index(Request $request)
     {
         $user = $request->user();
         
-        // 1. La consulta se inicia sin filtros de usuario
         $query = Offer::with(['package', 'user.team'])->latest();
 
-        // 2. Se evalúa el rol del usuario
         switch ($user->role) {
-            // 3. Si el usuario es 'admin', no se aplica ningún filtro.
-            // El `break` salta al final del switch, por lo que el admin ve TODAS las ofertas.
             case 'admin':
-                // El admin no tiene filtros, ve todas las ofertas.
                 break;
-
             case 'team_lead':
                 if ($user->team_id) {
-                    // Obtiene los IDs de todos los miembros de su equipo.
                     $teamMemberIds = User::where('team_id', $user->team_id)->pluck('id');
-                    
-                    // Muestra las ofertas de los miembros de su equipo.
                     $query->whereIn('user_id', $teamMemberIds);
                 } else {
-                    // Si un jefe de equipo no tiene equipo, solo ve sus propias ofertas.
                     $query->where('user_id', $user->id);
                 }
                 break;
-
             default: // 'user' role
-                // Un usuario normal solo ve sus propias ofertas.
                 $query->where('user_id', $user->id);
                 break;
         }
 
-        // 4. La consulta se ejecuta con los filtros correspondientes (o sin ellos para el admin)
         return Inertia::render('Offers/Index', [
             'offers' => $query->paginate(10)
         ]);
     }
 
-    /**
-     * Show the form for creating a new resource.
-     */
     public function create()
     {
         $packages = Package::with(['addons', 'o2oDiscounts', 'terminals'])->get();
@@ -79,9 +61,6 @@ class OfferController extends Controller
         ]);
     }
 
-    /**
-     * Store a newly created resource in storage.
-     */
     public function store(Request $request)
     {
         $validated = $request->validate([
@@ -91,8 +70,8 @@ class OfferController extends Controller
             'internet_addon_id' => 'nullable|exists:addons,id',
             'additional_internet_lines' => 'present|array',
             'centralita' => 'present|array',
-            'tv_addons' => 'nullable|array', // <-- NUEVA VALIDACIÓN
-            'tv_addons.*' => 'exists:addons,id' // <-- NUEVA VALIDACIÓN
+            'tv_addons' => 'nullable|array',
+            'tv_addons.*' => 'exists:addons,id'
         ]);
 
         DB::transaction(function () use ($validated, $request) {
@@ -102,7 +81,6 @@ class OfferController extends Controller
                 'user_id' => $request->user()->id,
             ]);
 
-            // ... (resto de la lógica de store sin cambios)
             foreach ($validated['lines'] as $lineData) {
                 $offer->lines()->create([
                     'is_extra' => $lineData['is_extra'],
@@ -129,37 +107,151 @@ class OfferController extends Controller
                  }
             }
             $centralitaData = $validated['centralita'];
-            if ($centralitaData['id']) {
+            if (!empty($centralitaData['id'])) {
                 $addonsToSync[$centralitaData['id']] = ['quantity' => 1];
             }
-            if ($centralitaData['operadora_automatica_selected'] && $centralitaData['operadora_automatica_id']) {
+            if (!empty($centralitaData['operadora_automatica_selected']) && !empty($centralitaData['operadora_automatica_id'])) {
                 $addonsToSync[$centralitaData['operadora_automatica_id']] = ['quantity' => 1];
             }
-            foreach ($centralitaData['extensions'] as $ext) {
-                if (isset($addonsToSync[$ext['addon_id']])) {
-                    $addonsToSync[$ext['addon_id']]['quantity'] += $ext['quantity'];
-                } else {
-                    $addonsToSync[$ext['addon_id']] = ['quantity' => $ext['quantity']];
+            if (!empty($centralitaData['extensions'])) {
+                foreach ($centralitaData['extensions'] as $ext) {
+                    if (isset($addonsToSync[$ext['addon_id']])) {
+                        $addonsToSync[$ext['addon_id']]['quantity'] += $ext['quantity'];
+                    } else {
+                        $addonsToSync[$ext['addon_id']] = ['quantity' => $ext['quantity']];
+                    }
                 }
             }
-
-            // --- NUEVA LÓGICA PARA GUARDAR ADDONS DE TV ---
             if (!empty($validated['tv_addons'])) {
                 foreach ($validated['tv_addons'] as $tvAddonId) {
                     $addonsToSync[$tvAddonId] = ['quantity' => 1];
                 }
             }
-            // ---------------------------------------------
-
+            
             $offer->addons()->sync($addonsToSync);
         });
 
         return redirect()->route('offers.index')->with('success', 'Oferta guardada correctamente.');
     }
 
-    /**
-     * Display the specified resource.
-     */
+    // --- MÉTODO 'edit' CORREGIDO ---
+    public function edit(Offer $offer)
+    {
+        $packages = Package::with([
+            'addons', 
+            'o2oDiscounts', 
+            'terminals' => fn($query) => $query->select('terminals.*', 'package_terminal.id as pivot_id', 'package_terminal.duration_months', 'package_terminal.initial_cost', 'package_terminal.monthly_cost')
+        ])->get();
+        $discounts = Discount::all();
+        $operators = ['Movistar', 'Vodafone', 'Orange', 'MasMovil', 'Otros'];
+        $portabilityCommission = config('commissions.portability_extra', 5.00); 
+        $additionalInternetAddons = Addon::where('type', 'internet_additional')->get();
+        $centralitaExtensions = Addon::where('type', 'centralita_extension')->get();
+        
+        // 1. Cargamos las relaciones que sí existen en los modelos
+        $offer->load(['lines', 'addons']);
+
+        // 2. Para cada línea, cargamos manualmente la información del terminal (igual que en el método 'show')
+        $offer->lines->each(function ($line) {
+            if ($line->package_terminal_id) {
+                // Buscamos la fila completa en la tabla pivote
+                $pivotData = DB::table('package_terminal')->find($line->package_terminal_id);
+                if ($pivotData) {
+                    // Buscamos el modelo del terminal asociado
+                    $pivotData->terminal = Terminal::find($pivotData->terminal_id);
+                    // Adjuntamos esta información a la línea, llamándola 'terminal_pivot' para que Vue la entienda
+                    $line->terminal_pivot = $pivotData;
+                }
+            } else {
+                $line->terminal_pivot = null;
+            }
+        });
+
+        return Inertia::render('Offers/Edit', [
+            'offer' => $offer,
+            'packages' => $packages,
+            'discounts' => $discounts,
+            'operators' => $operators,
+            'portabilityCommission' => $portabilityCommission,
+            'additionalInternetAddons' => $additionalInternetAddons,
+            'centralitaExtensions' => $centralitaExtensions,
+            'auth' => ['user' => auth()->user()->load('team')],
+        ]);
+    }
+
+    public function update(Request $request, Offer $offer)
+    {
+        $validated = $request->validate([
+            'package_id' => 'required|exists:packages,id',
+            'summary' => 'required|array',
+            'lines' => 'present|array',
+            'internet_addon_id' => 'nullable|exists:addons,id',
+            'additional_internet_lines' => 'present|array',
+            'centralita' => 'present|array',
+            'tv_addons' => 'nullable|array',
+            'tv_addons.*' => 'exists:addons,id'
+        ]);
+
+        DB::transaction(function () use ($validated, $offer) {
+            $offer->update([
+                'package_id' => $validated['package_id'],
+                'summary' => $validated['summary'],
+            ]);
+
+            $offer->lines()->delete();
+            foreach ($validated['lines'] as $lineData) {
+                $offer->lines()->create([
+                    'is_extra' => $lineData['is_extra'],
+                    'is_portability' => $lineData['is_portability'],
+                    'phone_number' => $lineData['phone_number'],
+                    'source_operator' => $lineData['source_operator'],
+                    'has_vap' => $lineData['has_vap'],
+                    'o2o_discount_id' => $lineData['o2o_discount_id'],
+                    'package_terminal_id' => $lineData['terminal_pivot_id'] ?? null,
+                    'initial_cost' => $lineData['initial_cost'],
+                    'monthly_cost' => $lineData['monthly_cost'],
+                ]);
+            }
+
+            $addonsToSync = [];
+            if ($validated['internet_addon_id']) {
+                $addonsToSync[$validated['internet_addon_id']] = ['quantity' => 1];
+            }
+            foreach($validated['additional_internet_lines'] as $internetLine) {
+                 if (isset($addonsToSync[$internetLine['addon_id']])) {
+                     $addonsToSync[$internetLine['addon_id']]['quantity']++;
+                 } else {
+                     $addonsToSync[$internetLine['addon_id']] = ['quantity' => 1];
+                 }
+            }
+            $centralitaData = $validated['centralita'];
+            if (!empty($centralitaData['id'])) {
+                $addonsToSync[$centralitaData['id']] = ['quantity' => 1];
+            }
+            if (!empty($centralitaData['operadora_automatica_selected']) && !empty($centralitaData['operadora_automatica_id'])) {
+                $addonsToSync[$centralitaData['operadora_automatica_id']] = ['quantity' => 1];
+            }
+             if (!empty($centralitaData['extensions'])) {
+                foreach ($centralitaData['extensions'] as $ext) {
+                    if (isset($addonsToSync[$ext['addon_id']])) {
+                        $addonsToSync[$ext['addon_id']]['quantity'] += $ext['quantity'];
+                    } else {
+                        $addonsToSync[$ext['addon_id']] = ['quantity' => $ext['quantity']];
+                    }
+                }
+            }
+            if (!empty($validated['tv_addons'])) {
+                foreach ($validated['tv_addons'] as $tvAddonId) {
+                    $addonsToSync[$tvAddonId] = ['quantity' => 1];
+                }
+            }
+            
+            $offer->addons()->sync($addonsToSync);
+        });
+
+        return redirect()->route('offers.index')->with('success', '¡Oferta actualizada correctamente!');
+    }
+
     public function show(Offer $offer)
     {
         $offer->load(['package.addons', 'user.team', 'lines', 'addons']);

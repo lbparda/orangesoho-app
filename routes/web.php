@@ -63,6 +63,9 @@ Route::prefix('team-lead')
         // Corregido: Route::put en lugar de Route.put
         Route::put('users/{user}', [ManagementController::class, 'update'])->name('users.update');
 });
+// --- GRUPO DE RUTAAS DE EDICION DE OFERTA ---
+Route::get('/offers/{offer}/edit', [OfferController::class, 'edit'])->name('offers.edit');
+Route::put('/offers/{offer}', [OfferController::class, 'update'])->name('offers.update');
 
 // Carga las rutas de autenticación (login, logout, register, etc.)
 require __DIR__.'/auth.php';
