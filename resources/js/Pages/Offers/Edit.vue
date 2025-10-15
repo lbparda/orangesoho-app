@@ -36,7 +36,6 @@ const centralitaExtensionQuantities = ref({});
 const isOperadoraAutomaticaSelected = ref(false);
 const selectedTvAddonIds = ref([]);
 
-// --- LÓGICA DE INICIALIZACIÓN COMPLETA ---
 onMounted(() => {
     lines.value = props.offer.lines.map(line => {
         const terminalInfo = line.terminal_pivot?.terminal;
@@ -102,7 +101,6 @@ const saveOffer = () => {
     form.put(route('offers.update', props.offer.id));
 };
 
-// --- EL RESTO DEL SCRIPT ES IDÉNTICO A TU CREATE.VUE ---
 const selectedPackage = computed(() => props.packages.find(p => p.id === selectedPackageId.value) || null);
 const mobileAddonInfo = computed(() => selectedPackage.value?.addons.find(a => a.type === 'mobile_line'));
 const internetAddonOptions = computed(() => selectedPackage.value?.addons.filter(a => a.type === 'internet'));
@@ -151,6 +149,8 @@ const appliedDiscount = computed(() => {
         (!d.conditions.source_operators || d.conditions.source_operators.includes(line.source_operator))
     );
 });
+
+// --- LÓGICA DE CÁLCULO COMPLETA (RESTAURADA DE CREATE.VUE) ---
 const calculationSummary = computed(() => {
     if (!selectedPackage.value) {
         return { basePrice: 0, finalPrice: 0, appliedO2oList: [], totalTerminalFee: 0, totalInitialPayment: 0, extraLinesCost: 0, totalCommission: 0, teamCommission: 0, userCommission: 0, commissionDetails: {} };
@@ -166,8 +166,144 @@ const calculationSummary = computed(() => {
         Ajustes: [],
     };
 
-    // Aquí va toda tu lógica de cálculo de `Create.vue`...
+    if (selectedInternetAddonInfo.value) {
+        price += parseFloat(selectedInternetAddonInfo.value.pivot.price) || 0;
+        commissionDetails.Fibra.push({
+            description: `Fibra Principal (${selectedInternetAddonInfo.value.name})`,
+            amount: parseFloat(selectedInternetAddonInfo.value.pivot.included_line_commission) || 0
+        });
+    }
+    additionalInternetLines.value.forEach((line, index) => {
+        if (line.addon_id) {
+            const addonInfo = props.additionalInternetAddons.find(a => a.id === line.addon_id);
+            if (addonInfo) {
+                price += parseFloat(addonInfo.price) || 0;
+                commissionDetails.Fibra.push({
+                    description: `Internet Adicional ${index + 1} (${addonInfo.name})`,
+                    amount: parseFloat(addonInfo.commission) || 0
+                });
+            }
+        }
+    });
+
+    if (includedCentralita.value) {
+        commissionDetails.Centralita.push({
+            description: `Centralita Incluida (${includedCentralita.value.name})`,
+            amount: parseFloat(includedCentralita.value.pivot.included_line_commission) || 0
+        });
+    } else if (selectedCentralitaId.value) {
+        const selectedCentralita = centralitaAddonOptions.value.find(c => c.id === selectedCentralitaId.value);
+        if (selectedCentralita) {
+            price += parseFloat(selectedCentralita.pivot.price) || 0;
+            commissionDetails.Centralita.push({
+                description: `Centralita Contratada (${selectedCentralita.name})`,
+                amount: parseFloat(selectedCentralita.commission) || 0
+            });
+        }
+    }
+
+    if (isCentralitaActive.value && operadoraAutomaticaInfo.value) {
+        const commission = parseFloat(operadoraAutomaticaInfo.value.pivot.included_line_commission) || 0;
+        if (operadoraAutomaticaInfo.value.pivot.is_included) {
+             commissionDetails.Centralita.push({ description: 'Operadora Automática (Incluida)', amount: commission });
+        } else if (isOperadoraAutomaticaSelected.value) {
+            price += parseFloat(operadoraAutomaticaInfo.value.pivot.price) || 0;
+            commissionDetails.Centralita.push({ description: 'Operadora Automática (Contratada)', amount: commission });
+        }
+    }
+
+    if (isCentralitaActive.value) {
+        includedCentralitaExtensions.value.forEach(ext => {
+            const commissionPerUnit = parseFloat(ext.pivot.included_line_commission) || 0;
+            const quantity = ext.pivot.included_quantity || 0;
+            if (quantity > 0) {
+                commissionDetails.Centralita.push({ description: `${quantity}x ${ext.name} (Incluidas)`, amount: quantity * commissionPerUnit });
+            }
+        });
+        
+        if (autoIncludedExtension.value) {
+             commissionDetails.Centralita.push({ description: `1x ${autoIncludedExtension.value.name} (Por Centralita)`, amount: 0 });
+        }
+
+        for (const addonId in centralitaExtensionQuantities.value) {
+            const quantity = centralitaExtensionQuantities.value[addonId];
+            if (quantity > 0) {
+                const addonInfo = props.centralitaExtensions.find(ext => ext.id == addonId);
+                if (addonInfo) {
+                    price += quantity * (parseFloat(addonInfo.price) || 0);
+                    commissionDetails.Centralita.push({ description: `${quantity}x ${addonInfo.name} (Adicional)`, amount: quantity * (parseFloat(addonInfo.commission) || 0) });
+                }
+            }
+        }
+    }
+
+    const appliedO2oList = [];
+    let totalTerminalFee = 0;
+    let totalInitialPayment = 0;
+    let extraLinesCost = 0;
+    let extraLinesCounter = 0;
+
+    if (mobileAddonInfo.value) {
+        const promoLimit = mobileAddonInfo.value.pivot.line_limit;
+        const promoPrice = 8.22;
+        const standardPrice = mobileAddonInfo.value.pivot.price;
+        const includedCommission = parseFloat(mobileAddonInfo.value.pivot.included_line_commission) || 0;
+        const additionalCommission = parseFloat(mobileAddonInfo.value.pivot.additional_line_commission) || 0;
+
+        lines.value.forEach((line, index) => {
+            const lineName = index === 0 ? 'Línea Principal' : `Línea Adicional ${index+1}`;
+            totalTerminalFee += parseFloat(line.monthly_cost || 0);
+            totalInitialPayment += parseFloat(line.initial_cost || 0);
+
+            if (line.is_extra) {
+                extraLinesCounter++;
+                commissionDetails["Líneas Móviles"].push({ description: `Comisión ${lineName}`, amount: additionalCommission });
+                extraLinesCost += (extraLinesCounter <= promoLimit) ? promoPrice : parseFloat(standardPrice);
+            } else {
+                commissionDetails["Líneas Móviles"].push({ description: `Comisión ${lineName}`, amount: includedCommission });
+            }
+
+            if (line.is_portability) {
+                commissionDetails["Líneas Móviles"].push({ description: `Portabilidad ${lineName}`, amount: props.portabilityCommission });
+            }
+
+            if (line.terminal_pivot && line.selected_duration) {
+                const terminalTotalPrice = (parseFloat(line.initial_cost) || 0) + (parseFloat(line.monthly_cost || 0) * parseInt(line.selected_duration, 10));
+                let terminalCommission = 0;
+                if (terminalTotalPrice < 40) terminalCommission = 15;
+                else if (terminalTotalPrice >= 40 && terminalTotalPrice < 350) terminalCommission = 45;
+                else if (terminalTotalPrice >= 350) terminalCommission = 75;
+                commissionDetails.Terminales.push({ description: `Terminal ${lineName}`, amount: terminalCommission });
+            }
+
+            if (line.o2o_discount_id) {
+                const o2o = availableO2oDiscounts.value.find(d => d.id === line.o2o_discount_id);
+                if (o2o) {
+                    const monthlyValue = parseFloat(o2o.total_discount_amount) / parseFloat(o2o.duration_months);
+                    price -= monthlyValue;
+                    appliedO2oList.push({ line: index === 0 ? 'Línea Principal' : `Línea ${index + 1}`, name: o2o.name, value: monthlyValue.toFixed(2) });
+                    
+                    if (o2o.pivot && o2o.pivot.dho_payment) {
+                        commissionDetails.Ajustes.push({ description: `Ajuste DHO ${lineName}`, amount: -parseFloat(o2o.pivot.dho_payment) });
+                    }
+                }
+            }
+        });
+    }
+
+    price += totalTerminalFee;
+    price += extraLinesCost;
+
+    if (appliedDiscount.value) {
+        price -= (price * (parseFloat(appliedDiscount.value.percentage) / 100));
+    }
     
+    Object.keys(commissionDetails).forEach(key => {
+        if (commissionDetails[key].length === 0) {
+            delete commissionDetails[key];
+        }
+    });
+
     const totalCommission = Object.values(commissionDetails).flat().reduce((acc, item) => acc + item.amount, 0);
     const currentUser = props.auth.user;
     let teamCommission = 0;
@@ -197,13 +333,16 @@ const calculationSummary = computed(() => {
     return {
         basePrice: basePrice.toFixed(2),
         finalPrice: Math.max(0, price).toFixed(2),
+        appliedO2oList,
+        totalTerminalFee: totalTerminalFee.toFixed(2),
+        totalInitialPayment: totalInitialPayment.toFixed(2),
+        extraLinesCost: extraLinesCost.toFixed(2),
         totalCommission: totalCommission.toFixed(2),
         teamCommission: teamCommission.toFixed(2),
         userCommission: userCommission.toFixed(2),
-        // ...resto de propiedades
+        commissionDetails,
     };
 });
-
 </script>
 
 <template>
@@ -246,8 +385,7 @@ const calculationSummary = computed(() => {
                             <div v-if="internetAddonOptions.length > 0" class="max-w-lg mx-auto">
                                 <label class="block text-sm font-medium text-gray-700 mb-2">Elige la velocidad de la Fibra Principal</label>
                                 <div class="flex space-x-4 mt-1">
-                                    <label v-for="addon in internetAddonOptions" :key="addon.id"
-                                        :class="['flex-1 text-center px-4 py-3 rounded-md border cursor-pointer transition', { 'bg-indigo-600 text-white border-indigo-600 shadow-lg': selectedInternetAddonId === addon.id, 'bg-white border-gray-300 hover:bg-gray-50': selectedInternetAddonId !== addon.id }]">
+                                    <label v-for="addon in internetAddonOptions" :key="addon.id" :class="['flex-1 text-center px-4 py-3 rounded-md border cursor-pointer transition', { 'bg-indigo-600 text-white border-indigo-600 shadow-lg': selectedInternetAddonId === addon.id, 'bg-white border-gray-300 hover:bg-gray-50': selectedInternetAddonId !== addon.id }]">
                                         <input type="radio" :value="addon.id" v-model="selectedInternetAddonId" class="sr-only">
                                         <span class="block font-semibold">{{ addon.name }}</span>
                                         <span class="block text-xs mt-1" v-if="parseFloat(addon.pivot.price) > 0">+{{ parseFloat(addon.pivot.price).toFixed(2) }}€/mes</span>
