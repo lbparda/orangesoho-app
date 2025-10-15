@@ -21,14 +21,13 @@ class RelationshipSeeder extends Seeder
         $internet1Gb = Addon::where('name', 'Fibra 1Gb')->first();
         $internet10Gb = Addon::where('name', 'Fibra 10Gb')->first();
         $o2o_discounts = O2oDiscount::all()->keyBy('total_discount_amount');
-
-        // Buscamos los addons de centralita
         $centralitaBasica = Addon::where('name', 'Centralita Básica')->first();
         $centralitaInalambrica = Addon::where('name', 'Centralita Inalámbrica')->first();
         $centralitaAvanzada = Addon::where('name', 'Centralita Avanzada')->first();
         $centralitaAvanzadaIncluida = Addon::where('name', 'Centralita Avanzada Incluida')->first();
         $extensionAvanzada = Addon::where('name', 'Extensión Avanzada')->first();
         $operadoraAutomatica = Addon::where('name', 'Operadora Automática')->first();
+        $tvAddons = Addon::where('type', 'tv')->get(); // <--- CORRECTO
 
         // --- 2. RELACIONES DE LÍNEAS MÓVILES ---
         if ($mobileAddon) {
@@ -49,7 +48,6 @@ class RelationshipSeeder extends Seeder
         }
 
         // --- 4. RELACIONES DE CENTRALITA (CORREGIDO) ---
-        // PAQUETES 1, 3, 5 (se asocian las 3 centralitas como opcionales)
         $paquetesOpcionales = ['NEGOCIO Extra 1', 'NEGOCIO Extra 3', 'NEGOCIO Extra 5'];
         $centralitasOpcionales = [$centralitaBasica, $centralitaInalambrica, $centralitaAvanzada];
 
@@ -59,30 +57,26 @@ class RelationshipSeeder extends Seeder
                     if ($centralita) {
                         $packages[$nombrePaquete]->addons()->attach($centralita->id, [
                             'is_included' => false,
-                            'price' => $centralita->price // El precio de la relación es el precio del addon
+                            'price' => $centralita->price
                         ]);
                     }
                 }
-                // Asocia la Operadora Automática como opcional
                 if ($operadoraAutomatica) {
                     $packages[$nombrePaquete]->addons()->attach($operadoraAutomatica->id, [
                         'is_included' => false,
-                        'price' => 10.00, // Precio específico para la relación
-                        'included_line_commission' => 10.00 // Usamos este campo aunque no esté incluida
+                        'price' => 10.00,
+                        'included_line_commission' => 10.00
                     ]);
                 }
             }
         }
 
-        // PAQUETES 10, 20
         $paquetesGrandes = ['NEGOCIO Extra 10', 'NEGOCIO Extra 20'];
         foreach($paquetesGrandes as $nombrePaquete) {
             if (isset($packages[$nombrePaquete])) {
-                // Incluir Centralita Avanzada
                 if ($centralitaAvanzadaIncluida) {
-                     $packages[$nombrePaquete]->addons()->attach($centralitaAvanzadaIncluida->id, ['is_included' => true, 'price' => 0, 'included_line_commission' => 120]);
+                       $packages[$nombrePaquete]->addons()->attach($centralitaAvanzadaIncluida->id, ['is_included' => true, 'price' => 0, 'included_line_commission' => 120]);
                 }
-                // Incluir Operadora Automática
                 if ($operadoraAutomatica) {
                     $packages[$nombrePaquete]->addons()->attach($operadoraAutomatica->id, [
                         'is_included' => true,
@@ -90,14 +84,15 @@ class RelationshipSeeder extends Seeder
                         'included_line_commission' => 10.00
                     ]);
                 }
-                // Incluir Extensiones Gratis
                 if ($extensionAvanzada) {
                     $qty = ($nombrePaquete === 'NEGOCIO Extra 10') ? 1 : 2;
                     $packages[$nombrePaquete]->addons()->attach($extensionAvanzada->id, ['is_included' => true, 'included_quantity' => $qty, 'price' => 0, 'included_line_commission' => 45]);
                 }
             }
         }
+        
         // --- 5. RELACIONES DE O2O DISCOUNTS ---
+        // ... (Tu código de O2O sin cambios)
         if ($o2o_discounts->isNotEmpty()) {
             if (isset($o2o_discounts['24.00'])) {
                 $o2o_id = $o2o_discounts['24.00']->id;
@@ -135,6 +130,22 @@ class RelationshipSeeder extends Seeder
                 $o2o_id = $o2o_discounts['192.00']->id;
                 $packages['NEGOCIO Extra 10']->o2oDiscounts()->attach($o2o_id, ['subsidy_percentage' => 70, 'dho_payment' => 36, 'osp_payment' => 84]);
                 $packages['NEGOCIO Extra 20']->o2oDiscounts()->attach($o2o_id, ['subsidy_percentage' => 70, 'dho_payment' => 36, 'osp_payment' => 84]);
+            }
+        }
+        
+        // --- 6. VINCULAR ADDONS DE TV A TODOS LOS PAQUETES (CÓDIGO AÑADIDO Y CORREGIDO) ---
+        if ($tvAddons->isNotEmpty()) {
+            foreach ($packages as $package) {
+                foreach ($tvAddons as $tvAddon) {
+                    $package->addons()->attach($tvAddon->id, [
+                        'price' => $tvAddon->price,
+                        'included_line_commission' => $tvAddon->commission,
+                        'is_included' => false, // No están incluidos por defecto
+                        'included_quantity' => 0,
+                        'line_limit' => 0,
+                        'additional_line_commission' => 0
+                    ]);
+                }
             }
         }
     }

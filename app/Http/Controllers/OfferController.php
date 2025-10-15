@@ -91,6 +91,8 @@ class OfferController extends Controller
             'internet_addon_id' => 'nullable|exists:addons,id',
             'additional_internet_lines' => 'present|array',
             'centralita' => 'present|array',
+            'tv_addons' => 'nullable|array', // <-- NUEVA VALIDACIÓN
+            'tv_addons.*' => 'exists:addons,id' // <-- NUEVA VALIDACIÓN
         ]);
 
         DB::transaction(function () use ($validated, $request) {
@@ -121,10 +123,10 @@ class OfferController extends Controller
             }
             foreach($validated['additional_internet_lines'] as $internetLine) {
                  if (isset($addonsToSync[$internetLine['addon_id']])) {
-                    $addonsToSync[$internetLine['addon_id']]['quantity']++;
-                } else {
-                    $addonsToSync[$internetLine['addon_id']] = ['quantity' => 1];
-                }
+                     $addonsToSync[$internetLine['addon_id']]['quantity']++;
+                 } else {
+                     $addonsToSync[$internetLine['addon_id']] = ['quantity' => 1];
+                 }
             }
             $centralitaData = $validated['centralita'];
             if ($centralitaData['id']) {
@@ -140,6 +142,15 @@ class OfferController extends Controller
                     $addonsToSync[$ext['addon_id']] = ['quantity' => $ext['quantity']];
                 }
             }
+
+            // --- NUEVA LÓGICA PARA GUARDAR ADDONS DE TV ---
+            if (!empty($validated['tv_addons'])) {
+                foreach ($validated['tv_addons'] as $tvAddonId) {
+                    $addonsToSync[$tvAddonId] = ['quantity' => 1];
+                }
+            }
+            // ---------------------------------------------
+
             $offer->addons()->sync($addonsToSync);
         });
 

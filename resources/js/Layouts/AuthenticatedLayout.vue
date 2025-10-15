@@ -14,11 +14,9 @@ const showingNavigationDropdown = ref(false);
     <div>
         <div class="min-h-screen bg-gray-100">
             <nav class="bg-white border-b border-gray-100">
-                <!-- Primary Navigation Menu -->
                 <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
                     <div class="flex h-16 justify-between">
                         <div class="flex">
-                            <!-- Logo -->
                             <div class="flex shrink-0 items-center">
                                 <Link :href="route('dashboard')">
                                     <ApplicationLogo
@@ -27,7 +25,6 @@ const showingNavigationDropdown = ref(false);
                                 </Link>
                             </div>
 
-                            <!-- Navigation Links -->
                             <div class="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">
                                 <NavLink :href="route('dashboard')" :active="route().current('dashboard')">
                                     Dashboard
@@ -39,7 +36,6 @@ const showingNavigationDropdown = ref(false);
                                     Consultar Ofertas
                                 </NavLink>
                                 
-                                <!-- Menú Desplegable de Administración (SOLO PARA ADMINS) -->
                                 <div v-if="$page.props.auth.user && $page.props.auth.user.is_admin" class="hidden sm:flex sm:items-center sm:ms-6">
                                      <div class="ms-3 relative">
                                         <Dropdown align="right" width="48">
@@ -54,12 +50,12 @@ const showingNavigationDropdown = ref(false);
                                             <template #content>
                                                 <DropdownLink :href="route('admin.users.index')"> Gestionar Usuarios </DropdownLink>
                                                 <DropdownLink :href="route('admin.teams.index')"> Gestionar Equipos </DropdownLink>
+                                                <DropdownLink :href="route('terminals.import.create')"> Importar Terminales </DropdownLink>
                                             </template>
                                         </Dropdown>
                                     </div>
                                 </div>
                                 
-                                <!-- Enlace para Jefes de Equipo -->
                                 <NavLink v-if="$page.props.auth.user && $page.props.auth.user.role === 'team_lead'" :href="route('team-lead.users.index')" :active="route().current().startsWith('team-lead')">
                                     Gestionar Equipo
                                 </NavLink>
@@ -67,7 +63,6 @@ const showingNavigationDropdown = ref(false);
                         </div>
 
                         <div class="hidden sm:ms-6 sm:flex sm:items-center">
-                            <!-- Settings Dropdown -->
                             <div v-if="$page.props.auth.user" class="relative ms-3">
                                 <Dropdown align="right" width="48">
                                     <template #trigger>
@@ -89,7 +84,6 @@ const showingNavigationDropdown = ref(false);
                             </div>
                         </div>
 
-                        <!-- Hamburger -->
                         <div class="-me-2 flex items-center sm:hidden">
                             <button @click="showingNavigationDropdown = !showingNavigationDropdown" class="inline-flex items-center justify-center rounded-md p-2 text-gray-400 transition">
                                 <svg class="h-6 w-6" stroke="currentColor" fill="none" viewBox="0 0 24 24"><path :class="{'hidden': showingNavigationDropdown, 'inline-flex': !showingNavigationDropdown }" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" /><path :class="{'hidden': !showingNavigationDropdown, 'inline-flex': showingNavigationDropdown }" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
@@ -98,7 +92,6 @@ const showingNavigationDropdown = ref(false);
                     </div>
                 </div>
 
-                <!-- Responsive Navigation Menu -->
                 <div :class="{ block: showingNavigationDropdown, hidden: !showingNavigationDropdown }" class="sm:hidden">
                     <div class="space-y-1 pb-3 pt-2">
                         <ResponsiveNavLink :href="route('dashboard')" :active="route().current('dashboard')"> Dashboard </ResponsiveNavLink>
@@ -106,24 +99,22 @@ const showingNavigationDropdown = ref(false);
                         <ResponsiveNavLink :href="route('offers.index')" :active="route().current('offers.index')"> Consultar Ofertas </ResponsiveNavLink>
                     </div>
 
-                    <!-- Responsive Admin Options -->
-                     <div v-if="$page.props.auth.user && $page.props.auth.user.is_admin" class="border-t border-gray-200 pt-4 pb-1">
+                    <div v-if="$page.props.auth.user && $page.props.auth.user.is_admin" class="border-t border-gray-200 pt-4 pb-1">
                         <div class="px-4"><div class="font-medium text-base text-gray-800">Administración</div></div>
                         <div class="mt-3 space-y-1">
                             <ResponsiveNavLink :href="route('admin.users.index')"> Gestionar Usuarios </ResponsiveNavLink>
                             <ResponsiveNavLink :href="route('admin.teams.index')"> Gestionar Equipos </ResponsiveNavLink>
+                            <ResponsiveNavLink :href="route('terminals.import.create')"> Importar Terminales </ResponsiveNavLink>
                         </div>
                     </div>
 
-                    <!-- Responsive Team Lead Options -->
-                     <div v-if="$page.props.auth.user && $page.props.auth.user.role === 'team_lead'" class="border-t border-gray-200 pt-4 pb-1">
+                    <div v-if="$page.props.auth.user && $page.props.auth.user.role === 'team_lead'" class="border-t border-gray-200 pt-4 pb-1">
                         <div class="px-4"><div class="font-medium text-base text-gray-800">Jefe de Equipo</div></div>
                         <div class="mt-3 space-y-1">
                             <ResponsiveNavLink :href="route('team-lead.users.index')"> Gestionar Mi Equipo </ResponsiveNavLink>
                         </div>
                     </div>
 
-                    <!-- Responsive Settings Options -->
                     <div v-if="$page.props.auth.user" class="border-t border-gray-200 pb-1 pt-4">
                         <div class="px-4">
                             <div class="text-base font-medium text-gray-800">{{ $page.props.auth.user.name }}</div>
@@ -137,14 +128,12 @@ const showingNavigationDropdown = ref(false);
                 </div>
             </nav>
 
-            <!-- Page Heading -->
             <header class="bg-white shadow" v-if="$slots.header">
                 <div class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
                     <slot name="header" />
                 </div>
             </header>
 
-            <!-- Page Content -->
             <main>
                 <slot />
             </main>

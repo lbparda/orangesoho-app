@@ -83,5 +83,14 @@ class AddonSeeder extends Seeder
                 'description' => 'Servicio de operadora automática para la centralita.'
             ]
         );
+          // --- TV FUTBOL ---
+        Addon::updateOrCreate(
+            ['name' => 'Futbol'],
+            ['type' => 'tv', 'price' => 29.00, 'commission' => 50.00, 'description' => 'Todo el fútbol.']
+        );
+        Addon::updateOrCreate(
+            ['name' => 'Futbol y más deportes'],
+            ['type' => 'tv', 'price' => 33.00, 'commission' => 55.00, 'description' => 'Fútbol y una selección de otros deportes.']
+        );
     }
 }

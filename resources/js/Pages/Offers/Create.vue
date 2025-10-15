@@ -18,6 +18,7 @@ const props = defineProps({
     auth: Object, // <-- Prop añadida para recibir los datos del usuario
 });
 
+// --- VARIABLES DE ESTADO ---
 const selectedPackageId = ref(null);
 const lines = ref([]);
 const selectedInternetAddonId = ref(null);
@@ -25,20 +26,29 @@ const additionalInternetLines = ref([]);
 const selectedCentralitaId = ref(null);
 const centralitaExtensionQuantities = ref({});
 const isOperadoraAutomaticaSelected = ref(false);
+const selectedTvAddonIds = ref([]); // <--- NUEVO: Para guardar IDs de TV seleccionados
 
+// --- FORMULARIO ---
 const form = useForm({
     package_id: null,
     lines: [],
     internet_addon_id: null,
     additional_internet_lines: [],
     centralita: null,
+    tv_addons: [], // <--- NUEVO: Para enviar al backend
     summary: null,
 });
 
-
+// --- COMPUTED PROPERTIES ---
 
 const selectedPackage = computed(() => {
     return props.packages.find(p => p.id === selectedPackageId.value) || null;
+});
+
+// --- NUEVO: Computed property para filtrar y mostrar addons de TV ---
+const tvAddonOptions = computed(() => {
+    if (!selectedPackage.value?.addons) return [];
+    return selectedPackage.value.addons.filter(a => a.type === 'tv');
 });
 
 const mobileAddonInfo = computed(() => {
@@ -106,6 +116,8 @@ const availableO2oDiscounts = computed(() => {
 const brandsForSelectedPackage = computed(() => {
     return [...new Set(availableTerminals.value.map(t => t.brand))];
 });
+
+// --- MÉTODOS ---
 
 const modelsByBrand = (brand) => {
     if (!brand) return [];
@@ -188,6 +200,7 @@ const getO2oDiscountsForLine = (line, index) => {
     return availableO2oDiscounts.value;
 };
 
+// --- MODIFICADO: Añadir tv_addons al formulario al guardar ---
 const saveOffer = () => {
     if (!selectedPackage.value) {
         alert("Por favor, selecciona un paquete antes de guardar.");
@@ -222,6 +235,7 @@ const saveOffer = () => {
             .filter(([, quantity]) => quantity > 0)
             .map(([addonId, quantity]) => ({ addon_id: addonId, quantity: quantity })),
     };
+    form.tv_addons = selectedTvAddonIds.value; // <--- AÑADIDO
     form.summary = calculationSummary.value;
 
     form.post(route('offers.store'), {
@@ -235,7 +249,9 @@ const saveOffer = () => {
     });
 };
 
+// --- WATCHERS ---
 
+// --- MODIFICADO: Resetear tv_addons al cambiar de paquete ---
 watch(selectedPackageId, (newPackageId) => {
     lines.value = [];
     selectedInternetAddonId.value = null;
@@ -243,6 +259,7 @@ watch(selectedPackageId, (newPackageId) => {
     selectedCentralitaId.value = null;
     centralitaExtensionQuantities.value = {};
     isOperadoraAutomaticaSelected.value = false;
+    selectedTvAddonIds.value = []; // <--- AÑADIDO para resetear
 
     if (!newPackageId) return;
 
@@ -294,6 +311,7 @@ watch(() => lines.value.map(line => line.has_vap), (newVapStates, oldVapStates) 
     });
 }, { deep: true });
 
+// --- MODIFICADO: Añadir TV al cálculo y al desglose ---
 const calculationSummary = computed(() => {
     if (!selectedPackage.value) {
         return { basePrice: 0, finalPrice: 0, appliedO2oList: [], totalTerminalFee: 0, totalInitialPayment: 0, extraLinesCost: 0, totalCommission: 0, teamCommission: 0, userCommission: 0, commissionDetails: {} };
@@ -303,13 +321,13 @@ const calculationSummary = computed(() => {
     const basePrice = price;
     let commissionDetails = {
         Fibra: [],
+        Televisión: [], // <--- AÑADIDO
         Centralita: [],
         "Líneas Móviles": [],
         Terminales: [],
         Ajustes: [],
     };
 
-    // --- CÁLCULO DE PRECIO Y DESGLOSE DE COMISIONES ---
     // Fibra
     if (selectedInternetAddonInfo.value) {
         price += parseFloat(selectedInternetAddonInfo.value.pivot.price) || 0;
@@ -328,6 +346,18 @@ const calculationSummary = computed(() => {
                     amount: parseFloat(addonInfo.commission) || 0
                 });
             }
+        }
+    });
+
+    // --- NUEVO: Cálculo del precio y comisión de TV ---
+    selectedTvAddonIds.value.forEach(tvId => {
+        const addon = tvAddonOptions.value.find(a => a.id === tvId);
+        if (addon) {
+            price += parseFloat(addon.pivot.price) || 0;
+            commissionDetails.Televisión.push({
+                description: addon.name,
+                amount: parseFloat(addon.pivot.included_line_commission) || 0
+            });
         }
     });
 
@@ -453,18 +483,15 @@ const calculationSummary = computed(() => {
         }
     });
 
-    // --- LÓGICA DE CÁLCULO DE COMISIONES POR ROL (CORREGIDA) ---
     const totalCommission = Object.values(commissionDetails).flat().reduce((acc, item) => acc + item.amount, 0);
     const currentUser = props.auth.user;
     let teamCommission = 0;
     let userCommission = 0;
 
-    // CORRECCIÓN: El admin siempre cobra el 100% del bruto
     if (currentUser.role === 'admin') {
         userCommission = totalCommission;
-        teamCommission = totalCommission; // Para mostrar en el resumen si es necesario
+        teamCommission = totalCommission;
     } 
-    // CORRECCIÓN: Para usuarios con equipo (team_lead o user con team)
     else if (currentUser.team) {
         const teamPercentage = currentUser.team.commission_percentage || 0;
         teamCommission = totalCommission * (parseFloat(teamPercentage) / 100);
@@ -472,11 +499,10 @@ const calculationSummary = computed(() => {
         if (currentUser.role === 'user') {
             const userPercentage = currentUser.commission_percentage || 0;
             userCommission = teamCommission * (parseFloat(userPercentage) / 100);
-        } else { // team_lead
+        } else {
             userCommission = teamCommission;
         }
     }
-    // CORRECCIÓN: Para usuarios sin equipo (user sin team)
     else {
         const userPercentage = currentUser.commission_percentage || 0;
         userCommission = totalCommission * (parseFloat(userPercentage) / 100);
@@ -523,7 +549,6 @@ const calculationSummary = computed(() => {
 
                     <div v-if="selectedPackage" class="space-y-10">
 
-                        <!-- Sección de Comisiones - AÑADIDA -->
                         <div class="mt-10 p-6 bg-gray-100 rounded-lg space-y-3 max-w-2xl mx-auto sticky top-10">
                             <h2 class="text-xl font-semibold text-gray-800 text-center">{{ selectedPackage.name }}</h2>
                             
@@ -552,13 +577,32 @@ const calculationSummary = computed(() => {
                             </div>
                         </div>
 
+                        <div v-if="tvAddonOptions.length > 0" class="max-w-3xl mx-auto space-y-4 p-6 bg-slate-50 rounded-lg">
+                            <h3 class="text-lg font-semibold text-gray-800">Televisión y Deportes</h3>
+                            <div class="space-y-2">
+                                <div v-for="addon in tvAddonOptions" :key="addon.id" class="flex items-center">
+                                    <input
+                                        :id="`tv_addon_${addon.id}`"
+                                        :value="addon.id"
+                                        v-model="selectedTvAddonIds"
+                                        type="checkbox"
+                                        class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                                    >
+                                    <label :for="`tv_addon_${addon.id}`" class="ml-3 block text-sm text-gray-900">
+                                        {{ addon.name }}
+                                        <span v-if="parseFloat(addon.pivot.price) > 0" class="text-gray-600">
+                                            (+{{ parseFloat(addon.pivot.price).toFixed(2) }}€)
+                                        </span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
                         <div v-if="centralitaAddonOptions.length > 0 || includedCentralita" class="max-w-3xl mx-auto space-y-4 p-6 bg-slate-50 rounded-lg">
                             <h3 class="text-lg font-semibold text-gray-800 mb-2">Centralita Virtual</h3>
-
                             <div v-if="includedCentralita" class="p-4 bg-green-100 border border-green-300 rounded-md text-center">
                                 <p class="font-semibold text-green-800">✅ {{ includedCentralita.name }} Incluida</p>
                             </div>
-
                             <div v-else-if="centralitaAddonOptions.length > 0">
                                 <label for="centralita_optional" class="block text-sm font-medium text-gray-700">Añadir Centralita</label>
                                 <select v-model="selectedCentralitaId" id="centralita_optional" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
@@ -568,7 +612,6 @@ const calculationSummary = computed(() => {
                                     </option>
                                 </select>
                             </div>
-
                             <div v-if="isCentralitaActive" class="space-y-4 pt-4 border-t border-dashed">
                                 <div v-if="operadoraAutomaticaInfo">
                                     <div v-if="operadoraAutomaticaInfo.pivot.is_included" class="p-2 bg-gray-100 rounded-md text-sm text-gray-800">
@@ -581,7 +624,6 @@ const calculationSummary = computed(() => {
                                         </label>
                                     </div>
                                 </div>
-
                                 <div class="pt-2">
                                     <div v-if="includedCentralitaExtensions.length > 0" class="mb-4 space-y-2">
                                         <p class="text-sm font-medium text-gray-700">Extensiones Incluidas por Paquete:</p>
@@ -589,14 +631,12 @@ const calculationSummary = computed(() => {
                                             ✅ {{ ext.pivot.included_quantity }}x {{ ext.name }}
                                         </div>
                                     </div>
-
                                     <div v-if="autoIncludedExtension" class="mb-4">
                                         <p class="text-sm font-medium text-gray-700">Extensión Incluida con Centralita:</p>
                                         <div class="p-2 bg-gray-100 rounded-md text-sm text-gray-800">
                                              ✅ 1x {{ autoIncludedExtension.name }}
                                         </div>
                                     </div>
-
                                     <p class="text-sm font-medium text-gray-700">Añadir Extensiones Adicionales:</p>
                                     <div v-for="extension in centralitaExtensions" :key="extension.id" class="flex items-center justify-between mt-2">
                                         <label :for="`ext_add_${extension.id}`" class="text-gray-800">{{ extension.name }} (+{{ parseFloat(extension.price).toFixed(2) }}€)</label>
@@ -611,7 +651,6 @@ const calculationSummary = computed(() => {
                                 </div>
                             </div>
                         </div>
-
 
                         <div class="max-w-3xl mx-auto space-y-4 p-6 bg-slate-50 rounded-lg">
                              <h3 class="text-lg font-semibold text-gray-800">Líneas de Internet Adicionales</h3>
@@ -632,11 +671,9 @@ const calculationSummary = computed(() => {
                             <PrimaryButton @click="addInternetLine">Añadir Internet Adicional</PrimaryButton>
                         </div>
 
-
                         <div class="space-y-6">
                             <h3 class="text-lg font-semibold text-gray-800 text-center">Líneas Móviles</h3>
                             <div v-for="(line, index) in lines" :key="line.id" class="p-6 border rounded-lg max-w-4xl mx-auto" :class="{'bg-gray-50 border-gray-200': !line.is_extra, 'bg-green-50 border-green-200': line.is_extra}">
-
                                 <div class="grid grid-cols-12 gap-4 items-center mb-4">
                                     <div class="col-span-12 md:col-span-3 flex justify-between items-center">
                                         <span class="font-medium text-gray-700">{{ index === 0 ? 'Línea Principal' : `Línea ${index + 1}` }}</span>
@@ -657,7 +694,6 @@ const calculationSummary = computed(() => {
                                         </div>
                                     </div>
                                 </div>
-
                                 <div v-if="line.is_portability" class="space-y-4 border-t pt-4 mt-4">
                                     <div class="grid grid-cols-12 gap-4 items-center">
                                         <div class="col-span-12 md:col-span-8">
@@ -674,7 +710,6 @@ const calculationSummary = computed(() => {
                                             </div>
                                         </div>
                                     </div>
-
                                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         <div>
                                             <label class="block text-sm font-medium text-gray-700">Descuento O2O</label>
@@ -684,7 +719,6 @@ const calculationSummary = computed(() => {
                                             </select>
                                         </div>
                                     </div>
-
                                     <div v-if="line.has_vap" class="space-y-4 pt-4 border-t border-dashed">
                                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                             <div class="grid grid-cols-3 gap-2">

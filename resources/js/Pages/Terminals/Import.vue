@@ -1,15 +1,18 @@
 <script setup>
-// 👇 CAMBIO IMPORTANTE: Importamos el nuevo Layout y quitamos el antiguo 👇
-import PublicLayout from '@/Layouts/PublicLayout.vue'; 
+import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
 import InputError from '@/Components/InputError.vue';
-import { Head, useForm, Link } from '@inertiajs/vue3';
+// 👇 CAMBIO IMPORTANTE: Importamos 'usePage' para acceder a los props compartidos 👇
+import { Head, useForm, Link, usePage } from '@inertiajs/vue3';
+import { computed } from 'vue'; // Importamos 'computed'
 
-defineProps({
-    success: String,
-    error: String,
-});
+// 👇 Accedemos a los props de la página 👇
+const page = usePage();
+
+// 👇 Usamos 'computed' para que los mensajes sean reactivos 👇
+const success = computed(() => page.props.flash.success);
+const error = computed(() => page.props.flash.error);
 
 const form = useForm({
     terminals_file: null,
@@ -25,9 +28,14 @@ const submit = () => {
 <template>
     <Head title="Importar Terminales" />
 
-    <PublicLayout> 
+    <AuthenticatedLayout> 
         <template #header>
-            <h2 class="font-semibold text-xl text-gray-800 leading-tight">Importar Terminales</h2>
+            <div class="flex justify-between items-center">
+                <h2 class="font-semibold text-xl text-gray-800 leading-tight">Importar Terminales</h2>
+                <Link :href="route('dashboard')">
+                    <SecondaryButton>Atrás</SecondaryButton>
+                </Link>
+            </div>
         </template>
 
         <div class="py-12">
@@ -37,7 +45,7 @@ const submit = () => {
                         
                         <div v-if="!success">
                             <div v-if="error" class="mb-4 p-4 text-sm text-red-700 bg-red-100 rounded-lg" role="alert">
-                               {{ error }}
+                                {{ error }}
                             </div>
 
                             <p class="mb-4">
@@ -68,7 +76,7 @@ const submit = () => {
                         
                         <div v-if="success" class="text-center">
                             <div class="mb-4 p-4 text-sm text-green-700 bg-green-100 rounded-lg" role="alert">
-                               {{ success }}
+                                {{ success }}
                             </div>
                             <h3 class="text-lg font-medium text-gray-900">¿Qué quieres hacer ahora?</h3>
                             
@@ -87,5 +95,5 @@ const submit = () => {
                 </div>
             </div>
         </div>
-    </PublicLayout>
+    </AuthenticatedLayout>
 </template>
