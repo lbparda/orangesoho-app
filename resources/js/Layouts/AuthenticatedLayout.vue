@@ -35,6 +35,9 @@ const showingNavigationDropdown = ref(false);
                                 <NavLink :href="route('offers.index')" :active="route().current('offers.index')">
                                     Consultar Ofertas
                                 </NavLink>
+                                <NavLink :href="route('clients.index')" :active="route().current('clients.index')">
+                                    Clientes
+                                </NavLink>
                                 
                                 <div v-if="$page.props.auth.user && $page.props.auth.user.is_admin" class="hidden sm:flex sm:items-center sm:ms-6">
                                      <div class="ms-3 relative">
@@ -97,6 +100,7 @@ const showingNavigationDropdown = ref(false);
                         <ResponsiveNavLink :href="route('dashboard')" :active="route().current('dashboard')"> Dashboard </ResponsiveNavLink>
                         <ResponsiveNavLink :href="route('offers.create')" :active="route().current('offers.create')"> Crear Oferta </ResponsiveNavLink>
                         <ResponsiveNavLink :href="route('offers.index')" :active="route().current('offers.index')"> Consultar Ofertas </ResponsiveNavLink>
+                        <ResponsiveNavLink :href="route('clients.index')" :active="route().current('clients.index')">Clientes </ResponsiveNavLink>
                     </div>
 
                     <div v-if="$page.props.auth.user && $page.props.auth.user.is_admin" class="border-t border-gray-200 pt-4 pb-1">

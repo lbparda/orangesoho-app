@@ -41,6 +41,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/terminals/import', [ImportController::class, 'create'])->name('terminals.import.create');
     Route::post('/terminals/import', [ImportController::class, 'store'])->name('terminals.import.store');
 
+    // routes/web.php
+
+    Route::resource('clients', App\Http\Controllers\ClientController::class);
+
 });
 
 // --- GRUPO DE RUTAS DE ADMINISTRACIÓN ---

@@ -12,7 +12,7 @@ class Offer extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['user_id','package_id', 'summary'];
+    protected $fillable = ['user_id','package_id', 'client_id','summary'];
 
     protected $casts = [
         'summary' => 'array',
@@ -36,5 +36,10 @@ class Offer extends Model
     public function addons(): BelongsToMany
     {
         return $this->belongsToMany(Addon::class)->withPivot('quantity');
+    }
+    // --- NUEVA FUNCIÓN AÑADIDA ---
+    public function client(): BelongsTo
+    {
+        return $this->belongsTo(Client::class);
     }
 }

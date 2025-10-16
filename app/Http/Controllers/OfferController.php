@@ -8,6 +8,7 @@ use App\Models\Offer;
 use App\Models\Package;
 use App\Models\Terminal; // <-- Importante tener este 'use'
 use App\Models\User;
+use App\Models\Client; // <-- ASEGÚRATE DE QUE ESTA LÍNEA ESTÉ CORRECTA
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
@@ -49,6 +50,7 @@ class OfferController extends Controller
         $portabilityCommission = config('commissions.portability_extra', 5.00); 
         $additionalInternetAddons = Addon::where('type', 'internet_additional')->get();
         $centralitaExtensions = Addon::where('type', 'centralita_extension')->get();
+        $clients = Client::orderBy('name')->get(); // <-- AÑADIDO
 
         return Inertia::render('Offers/Create', [
             'packages' => $packages,
@@ -58,12 +60,14 @@ class OfferController extends Controller
             'additionalInternetAddons' => $additionalInternetAddons,
             'centralitaExtensions' => $centralitaExtensions,
             'auth' => ['user' => auth()->user()->load('team')],
+            'clients' => $clients, // <-- AÑADIDO
         ]);
     }
 
     public function store(Request $request)
     {
         $validated = $request->validate([
+            'client_id' => 'required|exists:clients,id', // <-- AÑADIDO
             'package_id' => 'required|exists:packages,id',
             'summary' => 'required|array',
             'lines' => 'present|array',
@@ -77,6 +81,7 @@ class OfferController extends Controller
         DB::transaction(function () use ($validated, $request) {
             $offer = Offer::create([
                 'package_id' => $validated['package_id'],
+                'client_id' => $validated['client_id'], // <-- AÑADIDO
                 'summary' => $validated['summary'],
                 'user_id' => $request->user()->id,
             ]);
@@ -147,7 +152,7 @@ class OfferController extends Controller
         $portabilityCommission = config('commissions.portability_extra', 5.00); 
         $additionalInternetAddons = Addon::where('type', 'internet_additional')->get();
         $centralitaExtensions = Addon::where('type', 'centralita_extension')->get();
-        
+        $clients = Client::orderBy('name')->get(); // <-- AÑADIDO
         // 1. Cargamos las relaciones que sí existen en los modelos
         $offer->load(['lines', 'addons']);
 
@@ -176,12 +181,14 @@ class OfferController extends Controller
             'additionalInternetAddons' => $additionalInternetAddons,
             'centralitaExtensions' => $centralitaExtensions,
             'auth' => ['user' => auth()->user()->load('team')],
+            'clients' => $clients, // <-- AÑADIDO
         ]);
     }
 
     public function update(Request $request, Offer $offer)
     {
         $validated = $request->validate([
+            'client_id' => 'required|exists:clients,id', // <-- AÑADIDO
             'package_id' => 'required|exists:packages,id',
             'summary' => 'required|array',
             'lines' => 'present|array',
@@ -195,6 +202,7 @@ class OfferController extends Controller
         DB::transaction(function () use ($validated, $offer) {
             $offer->update([
                 'package_id' => $validated['package_id'],
+                'client_id' => $validated['client_id'], // <-- AÑADIDO
                 'summary' => $validated['summary'],
             ]);
 
@@ -254,7 +262,7 @@ class OfferController extends Controller
 
     public function show(Offer $offer)
     {
-        $offer->load(['package.addons', 'user.team', 'lines', 'addons']);
+        $offer->load(['package.addons', 'user.team', 'lines', 'addons', 'client']);
 
         $offer->lines->each(function ($line) {
             if ($line->package_terminal_id) {
