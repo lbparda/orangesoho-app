@@ -289,6 +289,8 @@ class OfferController extends Controller
     // --- MÉTODO NUEVO PARA GENERAR PDF ---
     public function generatePDF(Offer $offer)
     {
+        // AÑADE ESTA LÍNEA AL PRINCIPIO PARA EVITAR TIEMPOS DE ESPERA
+        set_time_limit(300); // 5 minutos de tiempo máximo de ejecución
         // Cargamos las mismas relaciones que en el método 'show' para tener todos los datos
         $offer->load(['package', 'user', 'lines', 'addons', 'client']);
 
@@ -306,10 +308,18 @@ class OfferController extends Controller
             }
         });
 
-        // Cargamos la vista de Blade y le pasamos la variable 'offer'
-        $pdf = PDF::loadView('pdfs.offer_pdf', compact('offer'));
+            // Cargamos la vista de Blade y le pasamos la variable 'offer'
+            $pdf = PDF::loadView('pdfs.offer_pdf', compact('offer'));
 
-        // Forzamos la descarga del archivo con un nombre dinámico
-        return $pdf->download('oferta-' . $offer->id . '-' . $offer->client->name . '.pdf');
+            // --- LÓGICA CORREGIDA PARA EL NOMBRE DEL ARCHIVO ---
+            // 1. Verificamos si existe un cliente antes de intentar usar su nombre.
+            // Usamos Str::slug para crear un nombre de archivo limpio sin espacios ni caracteres raros.
+            $clientName = $offer->client ? \Illuminate\Support\Str::slug($offer->client->name) : 'sin-cliente';
+
+            // 2. Construimos el nombre del archivo final.
+            $fileName = 'oferta-' . $offer->id . '-' . $clientName . '.pdf';
+
+            // 3. Forzamos la descarga del archivo con el nombre seguro.
+            return $pdf->download($fileName);
     }
 }

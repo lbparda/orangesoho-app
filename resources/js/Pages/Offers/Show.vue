@@ -14,21 +14,36 @@ const canViewCommissions = computed(() => {
     return role === 'admin' || role === 'team_lead';
 });
 
+// --- LÓGICA CORREGIDA Y MEJORADA ---
 const centralitaInfo = computed(() => {
-    if (!props.offer.addons) return null;
-    
-    const centralita = props.offer.addons.find(a => a.type === 'centralita');
-    if (!centralita) return null;
+    if (!props.offer) return null;
 
-    const operadora = props.offer.addons.find(a => a.type === 'centralita_feature');
-    const contractedExtensions = props.offer.addons.filter(a => a.type === 'centralita_extension');
+    // 1. Buscamos los addons que se guardaron explícitamente con la oferta
+    const savedCentralita = props.offer.addons?.find(a => a.type === 'centralita');
+    const savedOperadora = props.offer.addons?.find(a => a.type === 'centralita_feature');
+    const contractedExtensions = props.offer.addons?.filter(a => a.type === 'centralita_extension');
 
+    // 2. Buscamos los addons que vienen "incluidos por defecto" en el paquete
+    const includedCentralita = props.offer.package?.addons?.find(a => a.type === 'centralita' && a.pivot.is_included);
+    const includedOperadora = props.offer.package?.addons?.find(a => a.type === 'centralita_feature' && a.pivot.is_included);
+
+    // 3. El valor final es el que se guardó, o si no hay, el que venía incluido
+    const finalCentralita = savedCentralita || includedCentralita;
+    const finalOperadora = savedOperadora || includedOperadora;
+
+    // 4. Si no hay absolutamente nada relacionado con la centralita, devolvemos null
+    if (!finalCentralita && !finalOperadora && (!contractedExtensions || contractedExtensions.length === 0)) {
+        return null;
+    }
+
+    // 5. Devolvemos un objeto con toda la información encontrada
     return {
-        centralita,
-        operadora,
-        contractedExtensions
+        centralita: finalCentralita,
+        operadora: finalOperadora,
+        contractedExtensions: contractedExtensions || [],
     };
 });
+
 
 const packageIncludedExtensions = computed(() => {
     if (!props.offer.package?.addons) return [];
@@ -148,10 +163,12 @@ const packageIncludedExtensions = computed(() => {
                             <h3 class="text-lg font-semibold text-gray-700 mb-3">✅ Centralita Virtual y Extensiones</h3>
                             <div class="space-y-4 text-sm">
                                 <div v-if="centralitaInfo" class="space-y-2">
-                                    <div class="flex justify-between p-2 bg-slate-50 rounded">
+                                    
+                                    <div v-if="centralitaInfo.centralita" class="flex justify-between p-2 bg-slate-50 rounded">
                                         <span class="font-medium text-gray-800">{{ centralitaInfo.centralita.name }}</span>
                                         <span class="font-semibold">Contratada</span>
                                     </div>
+                                    
                                     <div v-if="centralitaInfo.operadora" class="flex justify-between p-2 bg-slate-50 rounded">
                                         <span class="font-medium text-gray-800">Operadora Automática</span>
                                         <span>Incluida</span>

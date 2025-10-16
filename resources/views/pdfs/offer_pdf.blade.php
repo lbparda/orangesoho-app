@@ -1,189 +1,236 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Oferta #{{ $offer->id }}</title>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+    <title>Contrato Oferta #{{ $offer->id }}</title>
     <style>
+        /* Estilos generales */
+        @page {
+            margin: 120px 50px;
+        }
+
         body {
             font-family: 'Helvetica', DejaVu Sans, sans-serif;
-            font-size: 12px;
+            font-size: 11px;
             color: #333;
+            line-height: 1.5;
         }
-        .container {
-            width: 100%;
-            margin: 0 auto;
+
+        /* Encabezado y Pie de página */
+        header {
+            position: fixed;
+            top: -100px;
+            left: 0px;
+            right: 0px;
+            height: 80px;
         }
-        .header h1 {
-            margin: 0;
-            font-size: 24px;
+        
+        .header-logo {
+            font-weight: bold;
+            font-size: 36px;
+            color: #FF7900;
+        }
+
+        footer {
+            position: fixed; 
+            bottom: -60px; 
+            left: 0px; 
+            right: 0px;
+            height: 50px; 
+            font-size: 9px;
+            color: #888;
+            text-align: right;
+            border-top: 1px solid #ccc;
+            padding-top: 5px;
+        }
+        .page-number:before {
+            content: "Pág.: " counter(page);
+        }
+
+        /* Utilidades y Títulos */
+        .page-break { page-break-after: always; }
+        h1 {
+            font-size: 20px;
             color: #000;
-        }
-        .header p {
-            margin: 5px 0;
-            color: #666;
-        }
-        .section {
+            border-bottom: 2px solid #FF7900;
+            padding-bottom: 5px;
             margin-bottom: 25px;
         }
-        .section-title {
-            font-size: 16px;
+        h2 {
+            font-size: 14px;
             font-weight: bold;
-            margin-bottom: 10px;
-            border-bottom: 2px solid #333;
+            color: #333;
+            border-bottom: 1px solid #ccc;
             padding-bottom: 5px;
-            color: #000;
+            margin-top: 30px;
+            margin-bottom: 15px;
         }
+        
+        /* Tablas */
         table {
             width: 100%;
             border-collapse: collapse;
+            font-size: 10px;
         }
         th, td {
-            border: 1px solid #ddd;
             padding: 8px;
             text-align: left;
+            vertical-align: middle;
+            border: 1px solid #ddd;
         }
         th {
             background-color: #f2f2f2;
             font-weight: bold;
         }
-        .summary-table td:nth-child(2) {
-            text-align: right;
-            font-weight: bold;
-        }
-        .total-row td {
-            font-size: 1.2em;
-            font-weight: bold;
-            background-color: #f2f2f2;
-        }
-        .text-right {
-            text-align: right;
-        }
-        .sub-item {
-            padding-left: 20px;
-            font-style: italic;
-            color: #555;
-        }
+        .no-border-table td, .no-border-table th { border: none; padding: 2px 0; }
+        .text-right { text-align: right; }
+        .font-bold { font-weight: bold; }
+        
+        .summary-total-value { font-size: 20px; font-weight: bold; color: #000; }
+        .description-text { font-size: 10px; color: #555; text-align: justify; margin-bottom: 15px; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <h1>Propuesta Comercial</h1>
-            <p>Oferta #{{ $offer->id }} &middot; Fecha: {{ $offer->created_at->format('d/m/Y') }}</p>
-        </div>
 
-        <div class="section">
-            <div class="section-title">Datos del Cliente</div>
-            <table>
-                <tr>
-                    <th>Nombre</th>
-                    <td>{{ $offer->client->name ?? 'N/A' }}</td>
-                </tr>
-                <tr>
-                    <th>CIF / NIF</th>
-                    <td>{{ $offer->client->cif_nif ?? 'N/A' }}</td>
-                </tr>
-            </table>
-        </div>
+    <header>
+        <table class="no-border-table">
+            <tr>
+                <td style="width: 50%;" class="header-logo">orange</td>
+                <td style="width: 50%; text-align: right; vertical-align: bottom;">
+                    <b style="font-size: 16px;">Contrato Pack NEGOCIO</b><br>
+                    Código de contrato: {{ $offer->id }}
+                </td>
+            </tr>
+        </table>
+    </header>
 
-        <div class="section">
-            <div class="section-title">Resumen Económico</div>
-            <table class="summary-table">
-                <tr>
-                    <td colspan="2"><strong>Detalle de la Cuota Mensual</strong></td>
-                </tr>
-                <tr>
-                    <td>Precio Base del Paquete ({{ $offer->package->name }})</td>
-                    <td>{{ number_format($offer->summary['basePrice'], 2, ',', '.') }} €</td>
-                </tr>
-                @if(isset($offer->summary['extraLinesCost']) && $offer->summary['extraLinesCost'] > 0)
-                <tr>
-                    <td>Coste de Líneas Móviles Adicionales</td>
-                    <td>+ {{ number_format($offer->summary['extraLinesCost'], 2, ',', '.') }} €</td>
-                </tr>
-                @endif
-                @if(isset($offer->summary['totalTerminalFee']) && $offer->summary['totalTerminalFee'] > 0)
-                <tr>
-                    <td>Cuotas mensuales de Terminales</td>
-                    <td>+ {{ number_format($offer->summary['totalTerminalFee'], 2, ',', '.') }} €</td>
-                </tr>
-                @endif
-                @if(isset($offer->summary['appliedO2oList']) && count($offer->summary['appliedO2oList']) > 0)
-                    @foreach($offer->summary['appliedO2oList'] as $discount)
-                    <tr>
-                        <td class="sub-item">Descuento O2O ({{ $discount['name'] }})</td>
-                        <td>- {{ number_format($discount['value'], 2, ',', '.') }} €</td>
-                    </tr>
-                    @endforeach
-                @endif
-                <tr class="total-row">
-                    <td>Total Mensual (IVA Incluido)</td>
-                    <td>{{ number_format($offer->summary['finalPrice'], 2, ',', '.') }} €</td>
-                </tr>
-                 <tr>
-                    <td colspan="2" style="padding-top: 15px;"><strong>Detalle de Pagos Iniciales</strong></td>
-                </tr>
-                <tr class="total-row">
-                    <td>Pago Inicial Total</td>
-                    <td>{{ number_format($offer->summary['totalInitialPayment'], 2, ',', '.') }} €</td>
-                </tr>
-            </table>
-        </div>
+    <footer>
+        <div class="page-number"></div>
+    </footer>
+
+    <main>
+        <h1>Propuesta Comercial</h1>
+        <h2>Datos del Cliente</h2>
+        <table>
+            <tr>
+                <th style="width: 25%;">Empresa</th>
+                <td>{{ $offer->client->name ?? 'No asignado' }}</td>
+            </tr>
+            <tr>
+                <th>CIF / NIF</th>
+                <td>{{ $offer->client->cif_nif ?? 'No asignado' }}</td>
+            </tr>
+        </table>
+
+        <h2>Resumen Económico</h2>
+        <table>
+            <tr>
+                <th style="font-size: 16px;">Cuota Neta Mensual</th>
+                <td class="text-right summary-total-value">{{ number_format($offer->summary['finalPrice'] ?? 0, 2, ',', '.') }} €</td>
+            </tr>
+            <tr>
+                <th>Pago Inicial Total (Equipamiento)</th>
+                <td class="text-right font-bold" style="font-size: 14px;">{{ number_format($offer->summary['totalInitialPayment'] ?? 0, 2, ',', '.') }} €</td>
+            </tr>
+        </table>
         
-        <div class="section">
-            <div class="section-title">Servicios Contratados</div>
-             <table>
-                @foreach ($offer->addons as $addon)
+    </main>
+
+    <div class="page-break"></div>
+
+    <h1>Detalle de Servicios Contratados</h1>
+
+    <h2>Líneas Móviles y Terminales</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Nº Línea</th>
+                <th>Nº Teléfono</th>
+                <th>Tipo</th>
+                <th>Terminal Asociado</th>
+                <th class="text-right">Pago Inicial (€)</th>
+                <th class="text-right">Cuota/Mes (€)</th>
+                <th class="text-right">Nº Cuotas</th>
+            </tr>
+        </thead>
+        <tbody>
+            @forelse ($offer->lines as $line)
+                <tr>
+                    <td>{{ $loop->iteration }}</td>
+                    <td>{{ $line->phone_number ?: 'Nuevo' }}</td>
+                    <td>{{ $line->is_portability ? 'Portabilidad' : 'Nuevo' }}</td>
+                    <td>{{ $line->terminal_details ? $line->terminal_details->brand . ' ' . $line->terminal_details->model : 'Sin terminal' }}</td>
+                    <td class="text-right">{{ number_format($line->initial_cost, 2, ',', '.') }}</td>
+                    <td class="text-right">{{ number_format($line->monthly_cost, 2, ',', '.') }}</td>
+                    <td class="text-right">{{ $line->terminal_details ? $line->terminal_details->duration_months : '-' }}</td>
+                </tr>
+            @empty
+                <tr><td colspan="7" style="text-align: center;">No hay líneas móviles configuradas.</td></tr>
+            @endforelse
+        </tbody>
+    </table>
+
+    {{-- ================================================================ --}}
+    {{-- LÓGICA DEFINITIVA PARA LA CENTRALITA Y SUS COMPONENTES --}}
+    {{-- ================================================================ --}}
+    @php
+        $centralitaServices = collect();
+
+        // 1. Añadimos los contratados explícitamente, que tienen prioridad
+        if ($offer->addons) {
+            foreach ($offer->addons->whereIn('type', ['centralita', 'centralita_feature', 'centralita_extension']) as $addon) {
+                $centralitaServices->put($addon->id, [
+                    'name' => $addon->name,
+                    'type' => $addon->type,
+                    'quantity' => $addon->pivot->quantity,
+                    'origin' => 'Contratado'
+                ]);
+            }
+        }
+
+        // 2. Añadimos los incluidos en el paquete que no estén ya en la lista
+        if ($offer->package && $offer->package->addons) {
+            foreach ($offer->package->addons->where('pivot.is_included', true)->whereIn('type', ['centralita', 'centralita_feature', 'centralita_extension']) as $includedAddon) {
+                if (!$centralitaServices->has($includedAddon->id)) {
+                    // *** ESTA ES LA CORRECCIÓN CLAVE ***
+                    // Si la cantidad es 0 o nula, la forzamos a 1 porque el servicio SÍ está incluido.
+                    $quantity = $includedAddon->pivot->included_quantity > 0 ? $includedAddon->pivot->included_quantity : 1;
+                    
+                     $centralitaServices->put($includedAddon->id, [
+                        'name' => $includedAddon->name,
+                        'type' => $includedAddon->type,
+                        'quantity' => $quantity,
+                        'origin' => 'Incluido en Paquete'
+                    ]);
+                }
+            }
+        }
+    @endphp
+
+    @if($centralitaServices->isNotEmpty())
+        <h2>Detalle del Servicio de Centralita</h2>
+        <p class="description-text">
+            Solución de centralita virtual para gestionar todas las llamadas de su negocio, integrando sus líneas fijas y móviles.
+        </p>
+        <table>
+            <thead>
+                <tr>
+                    <th>Componente</th>
+                    <th>Detalle</th>
+                    <th class="text-right">Cantidad</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach($centralitaServices as $service)
                     <tr>
-                        <td>{{ $addon->type === 'internet' ? 'Fibra Principal' : $addon->name }}</td>
-                        <td>{{ $addon->pivot->quantity > 1 ? $addon->pivot->quantity . ' unidades' : 'Incluido' }}</td>
+                        <td><b>{{ ucfirst(str_replace('_', ' ', $service['type'])) }}</b></td>
+                        <td>{{ $service['name'] }} ({{ $service['origin'] }})</td>
+                        <td class="text-right">{{ $service['quantity'] }}</td>
                     </tr>
                 @endforeach
-            </table>
-        </div>
-
-        <div class="section">
-            <div class="section-title">Líneas Móviles</div>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Línea</th>
-                        <th>Número</th>
-                        <th>Tipo</th>
-                        <th>Terminal Asociado</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @forelse ($offer->lines as $index => $line)
-                        <tr>
-                            <td>{{ $index + 1 }}</td>
-                            <td>{{ $line->phone_number ?: 'No especificado' }}</td>
-                            <td>
-                                @if($line->is_portability)
-                                    Portabilidad ({{ $line->source_operator }})
-                                @else
-                                    Número Nuevo
-                                @endif
-                            </td>
-                            <td>
-                                @if($line->terminal_details)
-                                    {{ $line->terminal_details->brand }} {{ $line->terminal_details->model }}
-                                @else
-                                    -
-                                @endif
-                            </td>
-                        </tr>
-                    @empty
-                        <tr>
-                            <td colspan="4" style="text-align: center;">No hay líneas móviles en esta oferta.</td>
-                        </tr>
-                    @endforelse
-                </tbody>
-            </table>
-        </div>
-
-    </div>
+            </tbody>
+        </table>
+    @endif
+    
 </body>
 </html>
