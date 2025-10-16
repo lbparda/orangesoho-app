@@ -56,11 +56,20 @@ const packageIncludedExtensions = computed(() => {
                                 <h1 class="text-2xl font-bold text-gray-800">Resumen de la Oferta #{{ offer.id }}</h1>
                                 <p class="text-sm text-gray-500">Creada el {{ new Date(offer.created_at).toLocaleString() }} por <span class="font-medium">{{ offer.user?.name || 'N/A' }}</span></p>
                             </div>
-                            <Link :href="route('offers.index')">
-                                <PrimaryButton>Volver al Listado</PrimaryButton>
-                            </Link>
-                        </div>
 
+                            <div class="flex items-center space-x-2">
+                                <a 
+                                    :href="route('offers.pdf', offer.id)"
+                                    class="inline-flex items-center px-4 py-2 bg-gray-800 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-gray-700 focus:bg-gray-700 active:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition ease-in-out duration-150"
+                                >
+                                    Imprimir PDF
+                                </a>
+                                
+                                <Link :href="route('offers.index')">
+                                    <PrimaryButton>Volver al Listado</PrimaryButton>
+                                </Link>
+                             </div>
+                        </div>
                         <div>
                             <h3 class="text-lg font-semibold text-gray-700 mb-3">👤 Datos del Cliente</h3>
                             <div v-if="offer.client" class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 text-sm p-4 bg-slate-50 rounded-lg">

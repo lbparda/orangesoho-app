@@ -8,6 +8,7 @@ use App\Models\Offer;
 use App\Models\Package;
 use App\Models\Terminal; // <-- Importante tener este 'use'
 use App\Models\User;
+use Barryvdh\DomPDF\Facade\Pdf; // <-- AÑADE ESTA LÍNEA
 use App\Models\Client; // <-- ASEGÚRATE DE QUE ESTA LÍNEA ESTÉ CORRECTA
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -284,5 +285,31 @@ class OfferController extends Controller
         return Inertia::render('Offers/Show', [
             'offer' => $offer,
         ]);
+    }
+    // --- MÉTODO NUEVO PARA GENERAR PDF ---
+    public function generatePDF(Offer $offer)
+    {
+        // Cargamos las mismas relaciones que en el método 'show' para tener todos los datos
+        $offer->load(['package', 'user', 'lines', 'addons', 'client']);
+
+        // Recreamos la lógica para obtener los detalles del terminal
+        $offer->lines->each(function ($line) {
+            if ($line->package_terminal_id) {
+                $terminalData = DB::table('package_terminal')
+                    ->join('terminals', 'package_terminal.terminal_id', '=', 'terminals.id')
+                    ->where('package_terminal.id', $line->package_terminal_id)
+                    ->select('terminals.brand', 'terminals.model', 'package_terminal.duration_months')
+                    ->first();
+                $line->terminal_details = $terminalData;
+            } else {
+                $line->terminal_details = null;
+            }
+        });
+
+        // Cargamos la vista de Blade y le pasamos la variable 'offer'
+        $pdf = PDF::loadView('pdfs.offer_pdf', compact('offer'));
+
+        // Forzamos la descarga del archivo con un nombre dinámico
+        return $pdf->download('oferta-' . $offer->id . '-' . $offer->client->name . '.pdf');
     }
 }

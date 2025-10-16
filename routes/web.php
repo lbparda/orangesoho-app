@@ -44,7 +44,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Gestión de Clientes
     Route::resource('clients', ClientController::class); // <-- CORREGIDO: Usamos el nombre corto
     Route::get('/clients/{client}/offers', [ClientController::class, 'showOffers'])->name('clients.offers'); // <-- ESTA LÍNEA AHORA FUNCIONARÁ
-
+    // RUTA NUEVA PARA EL PDF
+    Route::get('/offers/{offer}/pdf', [OfferController::class, 'generatePDF'])->name('offers.pdf');
 });
 
 // --- GRUPO DE RUTAS DE ADMINISTRACIÓN ---
