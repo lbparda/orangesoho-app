@@ -40,9 +40,12 @@ class ClientController extends Controller
             'address' => 'nullable|string',
         ]);
 
-        Client::create($validated);
+        $client = Client::create($validated);
 
-        return redirect()->route('clients.index')->with('success', 'Cliente creado correctamente.');
+        // CAMBIO CRÍTICO: Redirige a offers.create con el ID del nuevo cliente.
+        // Esto fuerza a Inertia a realizar una visita completa (full page visit),
+        // recargando las props de OfferController, incluyendo la lista de clientes.
+        return redirect()->route('offers.create', ['new_client_id' => $client->id])->with('success', 'Cliente creado y listo para usar en la oferta.');
     }
 
     /**
@@ -89,5 +92,20 @@ class ClientController extends Controller
     {
         $client->delete();
         return redirect()->route('clients.index')->with('success', 'Cliente eliminado correctamente.');
+    }
+    public function showOffers(Client $client)
+    {
+        // Cargamos las ofertas de este cliente, paginadas, y con las relaciones
+        // que usamos en la vista de listado de ofertas para mantener la consistencia.
+        $offers = $client->offers()
+                         ->with(['package', 'user.team'])
+                         ->latest()
+                         ->paginate(10);
+
+        // Renderizamos una nueva vista de Inertia
+        return Inertia::render('Clients/ShowOffers', [
+            'client' => $client,
+            'offers' => $offers,
+        ]);
     }
 }

@@ -8,7 +8,8 @@ use App\Http\Controllers\OfferController;
 use App\Http\Controllers\ImportController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\TeamController;
-use App\Http\Controllers\TeamLead\ManagementController; // <-- Importación añadida
+use App\Http\Controllers\TeamLead\ManagementController;
+use App\Http\Controllers\ClientController; // <-- SOLUCIÓN: IMPORTACIÓN AÑADIDA
 
 /*
 |--------------------------------------------------------------------------
@@ -17,14 +18,13 @@ use App\Http\Controllers\TeamLead\ManagementController; // <-- Importación aña
 */
 
 // --- RUTA PRINCIPAL ---
-// Si el usuario no ha iniciado sesión, se muestra la página de login.
 Route::get('/', [AuthenticatedSessionController::class, 'create'])
     ->middleware('guest');
 
 // --- RUTAS PARA USUARIOS AUTENTICADOS ---
 Route::middleware(['auth', 'verified'])->group(function () {
     
-    // Dashboard (página de inicio para usuarios logueados)
+    // Dashboard
     Route::get('/dashboard', function () {
         return Inertia::render('Dashboard');
     })->name('dashboard');
@@ -41,9 +41,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/terminals/import', [ImportController::class, 'create'])->name('terminals.import.create');
     Route::post('/terminals/import', [ImportController::class, 'store'])->name('terminals.import.store');
 
-    // routes/web.php
-
-    Route::resource('clients', App\Http\Controllers\ClientController::class);
+    // Gestión de Clientes
+    Route::resource('clients', ClientController::class); // <-- CORREGIDO: Usamos el nombre corto
+    Route::get('/clients/{client}/offers', [ClientController::class, 'showOffers'])->name('clients.offers'); // <-- ESTA LÍNEA AHORA FUNCIONARÁ
 
 });
 
@@ -58,18 +58,19 @@ Route::prefix('admin')
 
 // --- GRUPO DE RUTAS DE JEFE DE EQUIPO ---
 Route::prefix('team-lead')
-    ->middleware(['auth']) // Más adelante podemos añadir un middleware 'is_team_lead'
+    ->middleware(['auth'])
     ->name('team-lead.')
     ->group(function () {
         Route::get('users', [ManagementController::class, 'index'])->name('users.index');
-        // Corregido: Route::get en lugar de Route.get
         Route::get('users/{user}/edit', [ManagementController::class, 'edit'])->name('users.edit');
-        // Corregido: Route::put en lugar de Route.put
         Route::put('users/{user}', [ManagementController::class, 'update'])->name('users.update');
 });
-// --- GRUPO DE RUTAAS DE EDICION DE OFERTA ---
+
+// --- GRUPO DE RUTAS DE EDICION DE OFERTA ---
+// Estas rutas ya están cubiertas por Route::resource('offers', ...), puedes borrarlas si quieres.
+// Las dejo por si las necesitas para algo específico.
 Route::get('/offers/{offer}/edit', [OfferController::class, 'edit'])->name('offers.edit');
 Route::put('/offers/{offer}', [OfferController::class, 'update'])->name('offers.update');
 
-// Carga las rutas de autenticación (login, logout, register, etc.)
+// Carga las rutas de autenticación
 require __DIR__.'/auth.php';

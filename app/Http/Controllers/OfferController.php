@@ -19,7 +19,7 @@ class OfferController extends Controller
     {
         $user = $request->user();
         
-        $query = Offer::with(['package', 'user.team'])->latest();
+        $query = Offer::with(['package', 'user.team','client'])->latest();
 
         switch ($user->role) {
             case 'admin':
@@ -42,7 +42,7 @@ class OfferController extends Controller
         ]);
     }
 
-    public function create()
+    public function create(Request $request) 
     {
         $packages = Package::with(['addons', 'o2oDiscounts', 'terminals'])->get();
         $discounts = Discount::all();
@@ -51,7 +51,10 @@ class OfferController extends Controller
         $additionalInternetAddons = Addon::where('type', 'internet_additional')->get();
         $centralitaExtensions = Addon::where('type', 'centralita_extension')->get();
         $clients = Client::orderBy('name')->get(); // <-- AÑADIDO
-
+        
+        // El código ya no dará error porque $request está definido
+        $newClientId = $request->get('new_client_id'); 
+        
         return Inertia::render('Offers/Create', [
             'packages' => $packages,
             'discounts' => $discounts,
@@ -61,6 +64,7 @@ class OfferController extends Controller
             'centralitaExtensions' => $centralitaExtensions,
             'auth' => ['user' => auth()->user()->load('team')],
             'clients' => $clients, // <-- AÑADIDO
+            'initialClientId' => $newClientId, // <-- Corregido a camelCase 'initialClientId'
         ]);
     }
 

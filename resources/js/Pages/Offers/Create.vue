@@ -19,6 +19,7 @@ const props = defineProps({
     additionalInternetAddons: Array,
     centralitaExtensions: Array,
     auth: Object, // <-- Prop añadida para recibir los datos del usuario
+    initialClientId: [Number, String, null], // <-- AÑADIDO: La nueva prop con el ID a precargar
 });
 
 // --- VARIABLES DE ESTADO ---
@@ -33,7 +34,8 @@ const selectedTvAddonIds = ref([]);
 
 // --- FORMULARIO ---
 const form = useForm({
-    client_id: null, // <-- AÑADIDO: Nuevo campo para el ID del cliente
+    // MODIFICACIÓN CLAVE: Inicializa client_id con el valor de la prop, si existe.
+    client_id: props.initialClientId || null,
     package_id: null,
     lines: [],
     internet_addon_id: null,

@@ -50,7 +50,9 @@ const successMessage = usePage().props.flash.success;
                                     <td class="px-6 py-4 whitespace-nowrap">{{ client.phone }}</td>
                                     <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                         <Link :href="route('clients.edit', client.id)" class="text-indigo-600 hover:text-indigo-900">Editar</Link>
+                                        <Link :href="route('clients.offers', client.id)" class="ml-4 text-blue-600 hover:text-blue-900">Ver Ofertas</Link>
                                     </td>
+                                    
                                 </tr>
                                 <tr v-if="clients.data.length === 0">
                                     <td colspan="5" class="px-6 py-4 whitespace-nowrap text-center text-gray-500">No se encontraron clientes.</td>
