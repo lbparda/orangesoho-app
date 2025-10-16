@@ -12,8 +12,18 @@ class Offer extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['user_id','package_id', 'client_id','summary'];
-
+    /**
+     * ✨ AÑADE ESTE BLOQUE COMPLETO ✨
+     * The attributes that are mass assignable.
+     *
+     * @var array<int, string>
+     */
+    protected $fillable = [
+        'package_id',
+        'client_id',
+        'summary',
+        'user_id',
+    ];
     protected $casts = [
         'summary' => 'array',
     ];

@@ -320,85 +320,70 @@ watch(() => lines.value.map(line => line.has_vap), (newVapStates, oldVapStates) 
     });
 }, { deep: true });
 
-// --- CÁLCULO DEL RESUMEN (No se modifica, solo se incluye para que el código sea funcional) ---
+// ✨ --- CÁLCULO DEL RESUMEN Y COMISIONES ACTUALIZADO --- ✨
 const calculationSummary = computed(() => {
     if (!selectedPackage.value) {
-        return { basePrice: 0, finalPrice: 0, appliedO2oList: [], totalTerminalFee: 0, totalInitialPayment: 0, extraLinesCost: 0, totalCommission: 0, teamCommission: 0, userCommission: 0, commissionDetails: {} };
+        return { basePrice: 0, finalPrice: 0, summaryBreakdown: [], totalInitialPayment: 0, totalCommission: 0, teamCommission: 0, userCommission: 0, commissionDetails: {} };
     }
 
     let price = parseFloat(selectedPackage.value.base_price) || 0;
     const basePrice = price;
-    let commissionDetails = {
-        Fibra: [],
-        Televisión: [],
-        Centralita: [],
-        "Líneas Móviles": [],
-        Terminales: [],
-        Ajustes: [],
-    };
+    let summaryBreakdown = [{ description: `Paquete Base: ${selectedPackage.value.name}`, price: basePrice }];
+    let commissionDetails = { Fibra: [], Televisión: [], Centralita: [], "Líneas Móviles": [], Terminales: [], Ajustes: [] };
 
-    // Fibra
     if (selectedInternetAddonInfo.value) {
-        price += parseFloat(selectedInternetAddonInfo.value.pivot.price) || 0;
-        commissionDetails.Fibra.push({
-            description: `Fibra Principal (${selectedInternetAddonInfo.value.name})`,
-            amount: parseFloat(selectedInternetAddonInfo.value.pivot.included_line_commission) || 0
-        });
+        const itemPrice = parseFloat(selectedInternetAddonInfo.value.pivot.price) || 0;
+        price += itemPrice;
+        if (itemPrice > 0) summaryBreakdown.push({ description: `Mejora Fibra (${selectedInternetAddonInfo.value.name})`, price: itemPrice });
+        commissionDetails.Fibra.push({ description: `Fibra Principal (${selectedInternetAddonInfo.value.name})`, amount: parseFloat(selectedInternetAddonInfo.value.pivot.included_line_commission) || 0 });
     }
+
     additionalInternetLines.value.forEach((line, index) => {
         if (line.addon_id) {
             const addonInfo = props.additionalInternetAddons.find(a => a.id === line.addon_id);
             if (addonInfo) {
-                price += parseFloat(addonInfo.price) || 0;
-                commissionDetails.Fibra.push({
-                    description: `Internet Adicional ${index + 1} (${addonInfo.name})`,
-                    amount: parseFloat(addonInfo.commission) || 0
-                });
+                const itemPrice = parseFloat(addonInfo.price) || 0;
+                price += itemPrice;
+                summaryBreakdown.push({ description: `Internet Adicional ${index + 1} (${addonInfo.name})`, price: itemPrice });
+                commissionDetails.Fibra.push({ description: `Internet Adicional ${index + 1} (${addonInfo.name})`, amount: parseFloat(addonInfo.commission) || 0 });
             }
         }
     });
 
-    // Televisión
     selectedTvAddonIds.value.forEach(tvId => {
         const addon = tvAddonOptions.value.find(a => a.id === tvId);
         if (addon) {
-            price += parseFloat(addon.pivot.price) || 0;
-            commissionDetails.Televisión.push({
-                description: addon.name,
-                amount: parseFloat(addon.pivot.included_line_commission) || 0
-            });
+            const itemPrice = parseFloat(addon.pivot.price) || 0;
+            price += itemPrice;
+            if (itemPrice > 0) summaryBreakdown.push({ description: `TV: ${addon.name}`, price: itemPrice });
+            commissionDetails.Televisión.push({ description: addon.name, amount: parseFloat(addon.pivot.included_line_commission) || 0 });
         }
     });
 
-    // Centralita
     if (includedCentralita.value) {
-        commissionDetails.Centralita.push({
-            description: `Centralita Incluida (${includedCentralita.value.name})`,
-            amount: parseFloat(includedCentralita.value.pivot.included_line_commission) || 0
-        });
+        commissionDetails.Centralita.push({ description: `Centralita Incluida (${includedCentralita.value.name})`, amount: parseFloat(includedCentralita.value.pivot.included_line_commission) || 0 });
     } else if (selectedCentralitaId.value) {
         const selectedCentralita = centralitaAddonOptions.value.find(c => c.id === selectedCentralitaId.value);
         if (selectedCentralita) {
-            price += parseFloat(selectedCentralita.pivot.price) || 0;
-            commissionDetails.Centralita.push({
-                description: `Centralita Contratada (${selectedCentralita.name})`,
-                amount: parseFloat(selectedCentralita.commission) || 0
-            });
+            const itemPrice = parseFloat(selectedCentralita.pivot.price) || 0;
+            price += itemPrice;
+            summaryBreakdown.push({ description: `Centralita: ${selectedCentralita.name}`, price: itemPrice });
+            commissionDetails.Centralita.push({ description: `Centralita Contratada (${selectedCentralita.name})`, amount: parseFloat(selectedCentralita.commission) || 0 });
         }
     }
 
-    // Operadora Automática
     if (isCentralitaActive.value && operadoraAutomaticaInfo.value) {
         const commission = parseFloat(operadoraAutomaticaInfo.value.pivot.included_line_commission) || 0;
         if (operadoraAutomaticaInfo.value.pivot.is_included) {
             commissionDetails.Centralita.push({ description: 'Operadora Automática (Incluida)', amount: commission });
         } else if (isOperadoraAutomaticaSelected.value) {
-            price += parseFloat(operadoraAutomaticaInfo.value.pivot.price) || 0;
+            const itemPrice = parseFloat(operadoraAutomaticaInfo.value.pivot.price) || 0;
+            price += itemPrice;
+            summaryBreakdown.push({ description: 'Operadora Automática', price: itemPrice });
             commissionDetails.Centralita.push({ description: 'Operadora Automática (Contratada)', amount: commission });
         }
     }
 
-    // Extensiones
     if (isCentralitaActive.value) {
         includedCentralitaExtensions.value.forEach(ext => {
             const commissionPerUnit = parseFloat(ext.pivot.included_line_commission) || 0;
@@ -417,26 +402,27 @@ const calculationSummary = computed(() => {
             if (quantity > 0) {
                 const addonInfo = props.centralitaExtensions.find(ext => ext.id == addonId);
                 if (addonInfo) {
-                    price += quantity * (parseFloat(addonInfo.price) || 0);
+                    const itemPrice = quantity * (parseFloat(addonInfo.price) || 0);
+                    price += itemPrice;
+                    summaryBreakdown.push({ description: `${quantity}x ${addonInfo.name} (Adicional)`, price: itemPrice });
                     commissionDetails.Centralita.push({ description: `${quantity}x ${addonInfo.name} (Adicional)`, amount: quantity * (parseFloat(addonInfo.commission) || 0) });
                 }
             }
         }
     }
 
-    // Líneas Móviles y Terminales
     const appliedO2oList = [];
     let totalTerminalFee = 0;
     let totalInitialPayment = 0;
     let extraLinesCost = 0;
-    let extraLinesCounter = 0;
-
+    
     if (mobileAddonInfo.value) {
         const promoLimit = mobileAddonInfo.value.pivot.line_limit;
         const promoPrice = 8.22;
         const standardPrice = mobileAddonInfo.value.pivot.price;
         const includedCommission = parseFloat(mobileAddonInfo.value.pivot.included_line_commission) || 0;
         const additionalCommission = parseFloat(mobileAddonInfo.value.pivot.additional_line_commission) || 0;
+        let extraLinesCounter = 0;
 
         lines.value.forEach((line, index) => {
             const lineName = index === 0 ? 'Línea Principal' : `Línea Adicional ${index+1}`;
@@ -445,8 +431,10 @@ const calculationSummary = computed(() => {
 
             if (line.is_extra) {
                 extraLinesCounter++;
+                const itemPrice = (extraLinesCounter <= promoLimit) ? promoPrice : parseFloat(standardPrice);
+                extraLinesCost += itemPrice;
+                summaryBreakdown.push({ description: `Línea Móvil Adicional ${extraLinesCounter}`, price: itemPrice });
                 commissionDetails["Líneas Móviles"].push({ description: `Comisión ${lineName}`, amount: additionalCommission });
-                extraLinesCost += (extraLinesCounter <= promoLimit) ? promoPrice : parseFloat(standardPrice);
             } else {
                 commissionDetails["Líneas Móviles"].push({ description: `Comisión ${lineName}`, amount: includedCommission });
             }
@@ -470,7 +458,7 @@ const calculationSummary = computed(() => {
                     const monthlyValue = parseFloat(o2o.total_discount_amount) / parseFloat(o2o.duration_months);
                     price -= monthlyValue;
                     appliedO2oList.push({ line: index === 0 ? 'Línea Principal' : `Línea ${index + 1}`, name: o2o.name, value: monthlyValue.toFixed(2) });
-
+                    summaryBreakdown.push({ description: `Subvención O2O (${o2o.name})`, price: -monthlyValue });
                     if (o2o.pivot && o2o.pivot.dho_payment) {
                         commissionDetails.Ajustes.push({ description: `Ajuste DHO ${lineName}`, amount: -parseFloat(o2o.pivot.dho_payment) });
                     }
@@ -480,10 +468,15 @@ const calculationSummary = computed(() => {
     }
 
     price += totalTerminalFee;
+    if(totalTerminalFee > 0) {
+        summaryBreakdown.push({ description: 'Cuotas mensuales de Terminales', price: totalTerminalFee });
+    }
     price += extraLinesCost;
 
     if (appliedDiscount.value) {
-        price -= (price * (parseFloat(appliedDiscount.value.percentage) / 100));
+        const discountAmount = price * (parseFloat(appliedDiscount.value.percentage) / 100);
+        price -= discountAmount;
+        summaryBreakdown.push({ description: `Descuento Tarifa (${appliedDiscount.value.percentage}%)`, price: -discountAmount });
     }
 
     Object.keys(commissionDetails).forEach(key => {
@@ -529,9 +522,9 @@ const calculationSummary = computed(() => {
         teamCommission: teamCommission.toFixed(2),
         userCommission: userCommission.toFixed(2),
         commissionDetails,
+        summaryBreakdown,
     };
 });
-
 </script>
 
 <template>
@@ -539,7 +532,7 @@ const calculationSummary = computed(() => {
 
     <AuthenticatedLayout>
         <template #header>
-            </template>
+        </template>
 
         <div class="py-12">
             <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
@@ -593,9 +586,9 @@ const calculationSummary = computed(() => {
                                 <div class="flex space-x-4 mt-1">
                                     <label v-for="addon in internetAddonOptions" :key="addon.id"
                                         :class="['flex-1 text-center px-4 py-3 rounded-md border cursor-pointer transition', { 'bg-indigo-600 text-white border-indigo-600 shadow-lg': selectedInternetAddonId === addon.id, 'bg-white border-gray-300 hover:bg-gray-50': selectedInternetAddonId !== addon.id }]">
-                                            <input type="radio" :value="addon.id" v-model="selectedInternetAddonId" class="sr-only">
-                                            <span class="block font-semibold">{{ addon.name }}</span>
-                                            <span class="block text-xs mt-1" v-if="parseFloat(addon.pivot.price) > 0">+{{ parseFloat(addon.pivot.price).toFixed(2) }}€/mes</span>
+                                        <input type="radio" :value="addon.id" v-model="selectedInternetAddonId" class="sr-only">
+                                        <span class="block font-semibold">{{ addon.name }}</span>
+                                        <span class="block text-xs mt-1" v-if="parseFloat(addon.pivot.price) > 0">+{{ parseFloat(addon.pivot.price).toFixed(2) }}€/mes</span>
                                     </label>
                                 </div>
                             </div>
@@ -655,7 +648,7 @@ const calculationSummary = computed(() => {
                                         <div v-if="autoIncludedExtension" class="mb-4">
                                             <p class="text-sm font-medium text-gray-700">Extensión Incluida con Centralita:</p>
                                             <div class="p-2 bg-gray-100 rounded-md text-sm text-gray-800">
-                                                    ✅ 1x {{ autoIncludedExtension.name }}
+                                                  ✅ 1x {{ autoIncludedExtension.name }}
                                             </div>
                                         </div>
                                         <p class="text-sm font-medium text-gray-700">Añadir Extensiones Adicionales:</p>
@@ -759,36 +752,24 @@ const calculationSummary = computed(() => {
                             </div>
 
                             <div class="mt-10 p-6 bg-gray-100 rounded-lg space-y-3 max-w-2xl mx-auto sticky top-10">
-                                <h2 class="text-xl font-semibold text-gray-800 text-center">{{ selectedPackage.name }}</h2>
-                                <div class="space-y-2">
-                                    <div class="flex justify-between text-gray-600">
-                                        <span>Precio Base:</span>
-                                        <span class="font-medium">{{ calculationSummary.basePrice }}€</span>
-                                    </div>
-                                    <div v-if="appliedDiscount" class="flex justify-between text-green-600 font-semibold">
-                                        <span>Descuento Tarifa ({{ appliedDiscount.percentage }}%):</span>
-                                        <span>-{{ (calculationSummary.basePrice * (appliedDiscount.percentage / 100)).toFixed(2) }}€</span>
-                                    </div>
-                                    <div v-if="calculationSummary.appliedO2oList.length > 0" class="border-t pt-2 mt-2">
-                                        <h3 class="font-semibold text-blue-600">Subvenciones O2O:</h3>
-                                        <div v-for="summary in calculationSummary.appliedO2oList" :key="summary.line" class="flex justify-between text-sm text-blue-600"><span>{{ summary.line }} ({{ summary.name }})</span><span>-{{ summary.value }}€</span></div>
-                                    </div>
-                                    <div v-if="parseFloat(calculationSummary.extraLinesCost) > 0" class="flex justify-between text-cyan-600">
-                                        <span>Coste Líneas Adicionales:</span>
-                                        <span>+{{ calculationSummary.extraLinesCost }}€</span>
-                                    </div>
-                                    <div v-if="parseFloat(calculationSummary.totalTerminalFee) > 0" class="flex justify-between text-purple-600">
-                                        <span>Cuotas mensuales de Terminales:</span>
-                                        <span>+{{ calculationSummary.totalTerminalFee }}€</span>
+                                <h2 class="text-xl font-semibold text-gray-800 text-center">Resumen de la Oferta</h2>
+                                
+                                <div class="space-y-2 border-t pt-4 mt-4">
+                                    <div v-for="(item, index) in calculationSummary.summaryBreakdown" :key="index" class="flex justify-between text-sm" :class="{'text-gray-700': item.price >= 0, 'text-red-600': item.price < 0}">
+                                        <span>{{ item.description }}</span>
+                                        <span class="font-medium">
+                                            {{ item.price >= 0 ? '+' : '' }}{{ item.price.toFixed(2) }}€
+                                        </span>
                                     </div>
                                 </div>
+
                                 <div class="border-t pt-4 mt-4 space-y-3">
                                     <div class="flex justify-between text-lg font-bold text-gray-800">
                                         <span>Pago Inicial Total:</span>
                                         <span>{{ calculationSummary.totalInitialPayment }}€</span>
                                     </div>
                                     <div class="flex justify-between text-3xl font-extrabold text-gray-900 items-baseline">
-                                        <span>Precio Final:</span>
+                                        <span>Precio Final Mensual:</span>
                                         <span>{{ calculationSummary.finalPrice }}<span class="text-lg font-medium text-gray-600">€/mes</span></span>
                                     </div>
                                 </div>
@@ -804,6 +785,7 @@ const calculationSummary = computed(() => {
                                     </p>
                                 </div>
                             </div>
+
                             <div class="mt-10 flex justify-center">
                                 <PrimaryButton @click="saveOffer" :disabled="form.processing">
                                     Guardar Oferta

@@ -190,27 +190,31 @@ class OfferController extends Controller
         ]);
     }
 
-    public function update(Request $request, Offer $offer)
-    {
-        $validated = $request->validate([
-            'client_id' => 'required|exists:clients,id', // <-- AÑADIDO
-            'package_id' => 'required|exists:packages,id',
-            'summary' => 'required|array',
-            'lines' => 'present|array',
-            'internet_addon_id' => 'nullable|exists:addons,id',
-            'additional_internet_lines' => 'present|array',
-            'centralita' => 'present|array',
-            'tv_addons' => 'nullable|array',
-            'tv_addons.*' => 'exists:addons,id'
-        ]);
+ public function update(Request $request, Offer $offer)
+{
+    $validated = $request->validate([
+        'client_id' => 'required|exists:clients,id',
+        'package_id' => 'required|exists:packages,id',
+        'summary' => 'required|array',
+        'lines' => 'present|array',
+        'internet_addon_id' => 'nullable|exists:addons,id',
+        'additional_internet_lines' => 'present|array',
+        'centralita' => 'present|array',
+        'tv_addons' => 'nullable|array',
+        'tv_addons.*' => 'exists:addons,id'
+    ]);
 
+    // ✨ PASO 1: ENVOLVEMOS TODO EN UN TRY...CATCH ✨
+    try {
         DB::transaction(function () use ($validated, $offer) {
+            // Actualiza la oferta principal
             $offer->update([
                 'package_id' => $validated['package_id'],
-                'client_id' => $validated['client_id'], // <-- AÑADIDO
+                'client_id' => $validated['client_id'],
                 'summary' => $validated['summary'],
             ]);
 
+            // Borra y vuelve a crear las líneas para asegurar consistencia
             $offer->lines()->delete();
             foreach ($validated['lines'] as $lineData) {
                 $offer->lines()->create([
@@ -226,17 +230,21 @@ class OfferController extends Controller
                 ]);
             }
 
+            // --- Lógica para sincronizar los Addons ---
             $addonsToSync = [];
-            if ($validated['internet_addon_id']) {
+
+            if (!empty($validated['internet_addon_id'])) {
                 $addonsToSync[$validated['internet_addon_id']] = ['quantity' => 1];
             }
-            foreach($validated['additional_internet_lines'] as $internetLine) {
-                 if (isset($addonsToSync[$internetLine['addon_id']])) {
-                     $addonsToSync[$internetLine['addon_id']]['quantity']++;
-                 } else {
-                     $addonsToSync[$internetLine['addon_id']] = ['quantity' => 1];
-                 }
+
+            if (!empty($validated['additional_internet_lines'])) {
+                foreach ($validated['additional_internet_lines'] as $internetLine) {
+                    if (!empty($internetLine['addon_id'])) {
+                        $addonsToSync[$internetLine['addon_id']] = ['quantity' => ($addonsToSync[$internetLine['addon_id']]['quantity'] ?? 0) + 1];
+                    }
+                }
             }
+            
             $centralitaData = $validated['centralita'];
             if (!empty($centralitaData['id'])) {
                 $addonsToSync[$centralitaData['id']] = ['quantity' => 1];
@@ -244,15 +252,14 @@ class OfferController extends Controller
             if (!empty($centralitaData['operadora_automatica_selected']) && !empty($centralitaData['operadora_automatica_id'])) {
                 $addonsToSync[$centralitaData['operadora_automatica_id']] = ['quantity' => 1];
             }
-             if (!empty($centralitaData['extensions'])) {
+            if (!empty($centralitaData['extensions'])) {
                 foreach ($centralitaData['extensions'] as $ext) {
-                    if (isset($addonsToSync[$ext['addon_id']])) {
-                        $addonsToSync[$ext['addon_id']]['quantity'] += $ext['quantity'];
-                    } else {
-                        $addonsToSync[$ext['addon_id']] = ['quantity' => $ext['quantity']];
+                    if (!empty($ext['addon_id']) && !empty($ext['quantity']) && $ext['quantity'] > 0) {
+                         $addonsToSync[$ext['addon_id']] = ['quantity' => ($addonsToSync[$ext['addon_id']]['quantity'] ?? 0) + $ext['quantity']];
                     }
                 }
             }
+
             if (!empty($validated['tv_addons'])) {
                 foreach ($validated['tv_addons'] as $tvAddonId) {
                     $addonsToSync[$tvAddonId] = ['quantity' => 1];
@@ -262,8 +269,15 @@ class OfferController extends Controller
             $offer->addons()->sync($addonsToSync);
         });
 
+        // Si todo va bien, redirigimos con el mensaje de éxito
         return redirect()->route('offers.index')->with('success', '¡Oferta actualizada correctamente!');
+
+    } catch (\Exception $e) {
+        // ✨ PASO 2: SI ALGO FALLA, CAPTURAMOS EL ERROR ✨
+        // Redirigimos con un mensaje de error que ahora SÍ podremos ver.
+        return redirect()->route('offers.index')->with('error', 'Error al actualizar: ' . $e->getMessage());
     }
+}
 
     public function show(Offer $offer)
     {
