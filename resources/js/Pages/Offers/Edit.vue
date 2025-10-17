@@ -38,12 +38,8 @@ const centralitaExtensionQuantities = ref({});
 const isOperadoraAutomaticaSelected = ref(false);
 const selectedTvAddonIds = ref([]);
 
-// Este campo ahora representa SOLO las extensiones ADICIONALES para una centralita incluida.
 const additionalExtensionsQuantity = ref(0);
-
-// Nuevo estado para mostrar/ocultar el detalle de comisiones
 const showCommissionDetails = ref(false);
-
 
 onMounted(() => {
     lines.value = props.offer.lines.map(line => {
@@ -66,52 +62,61 @@ onMounted(() => {
     selectedInternetAddonId.value = getAddonId('internet');
     additionalInternetLines.value = getAddons('internet_additional').map(a => ({ id: a.id + Math.random(), addon_id: a.id }));
     selectedTvAddonIds.value = getAddons('tv').map(a => a.id);
-    
-    const centralita = props.offer.addons.find(a => a.type === 'centralita' && !a.pivot.is_included);
-    if(centralita) selectedCentralitaId.value = centralita.id;
-
     if(getAddonId('centralita_feature')) isOperadoraAutomaticaSelected.value = true;
     
-    // Rellenar las cantidades de las extensiones adicionales de centralitas OPCIONALES
-    const optionalExtensions = getAddons('centralita_extension').filter(a => !a.pivot.is_included);
-    optionalExtensions.forEach(ext => {
-        centralitaExtensionQuantities.value[ext.id] = ext.pivot.quantity;
-    });
+    // --- LÓGICA DE CARGA DE EXTENSIONES CORREGIDA ---
+    const optionalCentralita = props.offer.addons.find(a => a.type === 'centralita' && !a.pivot.is_included);
+    if(optionalCentralita) {
+        selectedCentralitaId.value = optionalCentralita.id;
+    }
 
-    // Rellenar la cantidad de extensiones ADICIONALES si hay centralita incluida
+    const savedExtensions = getAddons('centralita_extension');
+
     if (includedCentralita.value) {
-        const additionalQty = optionalExtensions.reduce((acc, ext) => acc + (ext.pivot.quantity || 0), 0);
-        additionalExtensionsQuantity.value = additionalQty;
+        if (additionalExtensionDefinition.value) {
+            const savedAddon = savedExtensions.find(a => a.id === additionalExtensionDefinition.value.id);
+            if (savedAddon) {
+                additionalExtensionsQuantity.value = savedAddon.pivot.quantity || 0;
+            }
+        }
+    } else {
+        savedExtensions.forEach(ext => {
+            let quantityToDisplay = ext.pivot.quantity || 0;
+            if (autoIncludedExtension.value && ext.id === autoIncludedExtension.value.id) {
+                quantityToDisplay = Math.max(0, quantityToDisplay - 1);
+            }
+            if (quantityToDisplay > 0) {
+                 centralitaExtensionQuantities.value[ext.id] = quantityToDisplay;
+            }
+        });
     }
 });
-
 
 const saveOffer = () => {
     try {
         let finalExtensions = [];
 
-        // Extensiones de centralitas opcionales
         for (const [id, qty] of Object.entries(centralitaExtensionQuantities.value)) {
             if (qty > 0) {
-                finalExtensions.push({ addon_id: id, quantity: qty });
-            }
-        }
-
-        // Guardar solo las extensiones ADICIONALES de la centralita incluida
-        if (includedCentralita.value) {
-             const additionalQty = additionalExtensionsQuantity.value || 0;
-            if (additionalExtensionDefinition.value && additionalQty > 0) {
-                finalExtensions.push({ addon_id: additionalExtensionDefinition.value.id, quantity: additionalQty });
+                finalExtensions.push({ addon_id: parseInt(id), quantity: qty });
             }
         }
         
-        // Extensión automática por centralita opcional (si aplica)
-        if (autoIncludedExtension.value) {
-             const existing = finalExtensions.find(e => e.addon_id == autoIncludedExtension.value.id);
-             if (existing) existing.quantity++;
-             else finalExtensions.push({ addon_id: autoIncludedExtension.value.id, quantity: 1 });
+        if (includedCentralita.value) {
+            finalExtensions = [];
+            const additionalQty = additionalExtensionsQuantity.value || 0;
+            if (additionalExtensionDefinition.value && additionalQty > 0) {
+                finalExtensions.push({ addon_id: additionalExtensionDefinition.value.id, quantity: additionalQty });
+            }
+        } 
+        else if (autoIncludedExtension.value) {
+            const existing = finalExtensions.find(e => e.addon_id == autoIncludedExtension.value.id);
+            if (existing) {
+                existing.quantity++;
+            } else {
+                finalExtensions.push({ addon_id: autoIncludedExtension.value.id, quantity: 1 });
+            }
         }
-
 
         form.lines = lines.value.map(line => ({
             is_extra: line.is_extra,
@@ -197,7 +202,6 @@ const appliedDiscount = computed(() => {
     );
 });
 
-// Prop computada para encontrar la definición de la extensión adicional del paquete
 const additionalExtensionDefinition = computed(() => {
     if (includedCentralita.value) {
         return selectedPackage.value.addons.find(a => 
@@ -207,16 +211,12 @@ const additionalExtensionDefinition = computed(() => {
     return null;
 });
 
-// Filtra las extensiones para no mostrar la que se incluye con la centralita opcional
+// Lógica para mostrar las extensiones adicionales disponibles
 const availableAdditionalExtensions = computed(() => {
-    if (autoIncludedExtension.value) {
-        return props.centralitaExtensions.filter(ext => ext.id !== autoIncludedExtension.value.id);
-    }
     return props.centralitaExtensions;
 });
 
 
-// ✨ --- CÁLCULO DEL RESUMEN Y COMISIONES CON DETALLE --- ✨
 const calculationSummary = computed(() => {
     if (!selectedPackage.value) {
         return { basePrice: 0, finalPrice: 0, summaryBreakdown: [], totalInitialPayment: 0, totalCommission: 0, teamCommission: 0, userCommission: 0, commissionDetails: {} };
@@ -253,8 +253,6 @@ const calculationSummary = computed(() => {
             price += itemPrice;
             if (itemPrice > 0) summaryBreakdown.push({ description: `TV: ${addonInfo.name}`, price: itemPrice });
             
-            // --- ✨ LÓGICA CORREGIDA Y SEGURA ✨ ---
-            // Intenta usar la comisión del paquete (pivot), y si no existe, usa la comisión general del addon.
             const commissionAmount = parseFloat(addonInfo.pivot.commission ?? addonInfo.commission) || 0;
             commissionDetails.TV.push({ description: `TV: ${addonInfo.name}`, amount: commissionAmount });
         }
@@ -271,11 +269,21 @@ const calculationSummary = computed(() => {
         });
 
         const additionalQty = additionalExtensionsQuantity.value || 0;
-        if (additionalExtensionDefinition.value && additionalQty > 0) {
-             const itemPrice = (parseFloat(additionalExtensionDefinition.value.price) || 0) * additionalQty;
-             price += itemPrice;
-             summaryBreakdown.push({ description: `${additionalQty}x Ext. ${additionalExtensionDefinition.value.name} (Adicionales)`, price: itemPrice });
-             commissionDetails.Centralita.push({ description: `${additionalQty}x ${additionalExtensionDefinition.value.name} (Adicionales)`, amount: additionalQty * (parseFloat(additionalExtensionDefinition.value.commission) || 0) });
+        if (additionalQty > 0) {
+            const referenceExtension = includedCentralitaExtensions.value[0]; 
+            if (referenceExtension) {
+                const baseAddonInfo = props.centralitaExtensions.find(ext => ext.id === referenceExtension.id);
+                if (baseAddonInfo) {
+                    const itemPrice = (parseFloat(baseAddonInfo.price) || 0) * additionalQty;
+                    price += itemPrice;
+                    summaryBreakdown.push({ description: `${additionalQty}x Ext. ${baseAddonInfo.name} (Adicionales)`, price: itemPrice });
+                }
+                const commissionPerUnit = parseFloat(referenceExtension.pivot.additional_line_commission) || 0;
+                commissionDetails.Centralita.push({ 
+                    description: `${additionalQty}x ${referenceExtension.name} (Adicionales)`, 
+                    amount: additionalQty * commissionPerUnit 
+                });
+            }
         }
 
     } else if (selectedCentralitaId.value) {
@@ -416,7 +424,7 @@ const calculationSummary = computed(() => {
         totalCommission: totalCommission.toFixed(2),
         teamCommission: teamCommission.toFixed(2),
         userCommission: userCommission.toFixed(2),
-        commissionDetails, // AÑADIDO: Devolver el objeto de detalles
+        commissionDetails,
     };
 });
 </script>
