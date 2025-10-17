@@ -77,7 +77,7 @@ const packageIncludedExtensions = computed(() => {
                                 <Link :href="route('offers.index')">
                                     <PrimaryButton>Volver al Listado</PrimaryButton>
                                 </Link>
-                             </div>
+                            </div>
                         </div>
                         <div>
                             <h3 class="text-lg font-semibold text-gray-700 mb-3">👤 Datos del Cliente</h3>
@@ -100,7 +100,7 @@ const packageIncludedExtensions = computed(() => {
                                 </div>
                             </div>
                              <div v-else>
-                                 <p class="text-gray-500 p-4 bg-slate-50 rounded-lg">No hay cliente asociado a esta oferta.</p>
+                                   <p class="text-gray-500 p-4 bg-slate-50 rounded-lg">No hay cliente asociado a esta oferta.</p>
                              </div>
                         </div>
 
@@ -114,7 +114,15 @@ const packageIncludedExtensions = computed(() => {
                                 <span>Pago Inicial Total:</span>
                                 <span>{{ offer.summary.totalInitialPayment }}€</span>
                             </div>
-                        </div>
+                            <div class="border-t pt-4 mt-4 space-y-2">
+                                <div v-for="(item, index) in offer.summary.summaryBreakdown" :key="index" class="flex justify-between text-sm" :class="{'text-gray-700': item.price >= 0, 'text-red-600': item.price < 0}">
+                                    <span>{{ item.description }}</span>
+                                    <span class="font-medium">
+                                        {{ item.price >= 0 ? '+' : '' }}{{ item.price.toFixed(2) }}€
+                                    </span>
+                                </div>
+                            </div>
+                            </div>
 
                         <div class="border-t pt-6">
                             <details v-if="canViewCommissions" class="group">
@@ -153,41 +161,8 @@ const packageIncludedExtensions = computed(() => {
                             </div>
                         </div>
 
-                        <div v-if="centralitaInfo || packageIncludedExtensions.length > 0" class="border-t pt-6">
-                            <h3 class="text-lg font-semibold text-gray-700 mb-3">✅ Centralita Virtual y Extensiones</h3>
-                            <div class="space-y-4 text-sm">
-                                <div v-if="centralitaInfo" class="space-y-2">
-
-                                    <div v-if="centralitaInfo.centralita" class="flex justify-between p-2 bg-slate-50 rounded">
-                                        <span class="font-medium text-gray-800">{{ centralitaInfo.centralita.name }}</span>
-                                        <span class="font-semibold">{{ centralitaInfo.centralita.pivot.is_included ? 'Incluida' : `Contratada (${centralitaInfo.centralita.pivot.price ?? centralitaInfo.centralita.price}€)` }}</span>
-                                    </div>
-
-                                    <div v-if="centralitaInfo.operadora" class="flex justify-between p-2 bg-slate-50 rounded">
-                                        <span class="font-medium text-gray-800">Operadora Automática</span>
-                                        <span>{{ centralitaInfo.operadora.pivot.is_included ? 'Incluida' : `Contratada (${centralitaInfo.operadora.pivot.price ?? centralitaInfo.operadora.price}€)` }}</span>
-                                    </div>
-                                </div>
-
-                                <div v-if="packageIncludedExtensions.length > 0">
-                                    <p class="font-medium text-gray-800 mt-3 mb-1">Extensiones Incluidas por Paquete:</p>
-                                    <ul class="list-disc list-inside pl-2 space-y-1">
-                                        <li v-for="ext in packageIncludedExtensions" :key="`pkg_${ext.id}`">
-                                            {{ ext.pivot.included_quantity }}x {{ ext.name }} (Incluidas)
-                                        </li>
-                                    </ul>
-                                </div>
-
-                                <div v-if="centralitaInfo && centralitaInfo.contractedExtensions.length > 0">
-                                    <p class="font-medium text-gray-800 mt-3 mb-1">Extensiones Contratadas Adicionalmente:</p>
-                                    <ul class="list-disc list-inside pl-2 space-y-1">
-                                        <li v-for="ext in centralitaInfo.contractedExtensions" :key="ext.id">
-                                            {{ ext.pivot.quantity }}x {{ ext.name }} ({{ ext.pivot.quantity }} x {{ ext.price }}€)
-                                        </li>
-                                    </ul>
-                                </div>
-                            </div>
-                        </div>
+                        
+                        
                         <div class="border-t pt-6">
                             <h3 class="text-lg font-semibold text-gray-700 mb-3">Líneas Móviles</h3>
                             <div class="space-y-4">
