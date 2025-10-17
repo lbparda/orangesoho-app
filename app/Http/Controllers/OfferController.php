@@ -47,7 +47,7 @@ class OfferController extends Controller
     {
         $packages = Package::with(['addons', 'o2oDiscounts', 'terminals'])->get();
         $discounts = Discount::all();
-        $operators = ['Movistar', 'Vodafone', 'Orange', 'MasMovil', 'Otros'];
+        $operators = ['Movistar', 'Vodafone', 'MasMovil', 'Otros'];
         $portabilityCommission = config('commissions.portability_extra', 5.00); 
         $additionalInternetAddons = Addon::where('type', 'internet_additional')->get();
         $centralitaExtensions = Addon::where('type', 'centralita_extension')->get();
@@ -153,7 +153,7 @@ class OfferController extends Controller
             'terminals' => fn($query) => $query->select('terminals.*', 'package_terminal.id as pivot_id', 'package_terminal.duration_months', 'package_terminal.initial_cost', 'package_terminal.monthly_cost')
         ])->get();
         $discounts = Discount::all();
-        $operators = ['Movistar', 'Vodafone', 'Orange', 'MasMovil', 'Otros'];
+        $operators = ['Movistar', 'Vodafone', 'MasMovil', 'Otros'];
         $portabilityCommission = config('commissions.portability_extra', 5.00); 
         $additionalInternetAddons = Addon::where('type', 'internet_additional')->get();
         $centralitaExtensions = Addon::where('type', 'centralita_extension')->get();
