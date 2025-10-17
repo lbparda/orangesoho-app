@@ -14,29 +14,23 @@ const canViewCommissions = computed(() => {
     return role === 'admin' || role === 'team_lead';
 });
 
-// --- LÓGICA CORREGIDA Y MEJORADA ---
 const centralitaInfo = computed(() => {
     if (!props.offer) return null;
 
-    // 1. Buscamos los addons que se guardaron explícitamente con la oferta
     const savedCentralita = props.offer.addons?.find(a => a.type === 'centralita');
     const savedOperadora = props.offer.addons?.find(a => a.type === 'centralita_feature');
     const contractedExtensions = props.offer.addons?.filter(a => a.type === 'centralita_extension');
 
-    // 2. Buscamos los addons que vienen "incluidos por defecto" en el paquete
     const includedCentralita = props.offer.package?.addons?.find(a => a.type === 'centralita' && a.pivot.is_included);
     const includedOperadora = props.offer.package?.addons?.find(a => a.type === 'centralita_feature' && a.pivot.is_included);
 
-    // 3. El valor final es el que se guardó, o si no hay, el que venía incluido
     const finalCentralita = savedCentralita || includedCentralita;
     const finalOperadora = savedOperadora || includedOperadora;
 
-    // 4. Si no hay absolutamente nada relacionado con la centralita, devolvemos null
     if (!finalCentralita && !finalOperadora && (!contractedExtensions || contractedExtensions.length === 0)) {
         return null;
     }
 
-    // 5. Devolvemos un objeto con toda la información encontrada
     return {
         centralita: finalCentralita,
         operadora: finalOperadora,
@@ -47,7 +41,7 @@ const centralitaInfo = computed(() => {
 
 const packageIncludedExtensions = computed(() => {
     if (!props.offer.package?.addons) return [];
-    return props.offer.package.addons.filter(a => 
+    return props.offer.package.addons.filter(a =>
         a.type === 'centralita_extension' && a.pivot.is_included && a.pivot.included_quantity > 0
     );
 });
@@ -65,7 +59,7 @@ const packageIncludedExtensions = computed(() => {
             <div class="max-w-4xl mx-auto sm:px-6 lg:px-8">
                 <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
                     <div class="p-8 bg-white border-b border-gray-200 space-y-8">
-                        
+
                         <div class="flex justify-between items-start">
                             <div>
                                 <h1 class="text-2xl font-bold text-gray-800">Resumen de la Oferta #{{ offer.id }}</h1>
@@ -73,13 +67,13 @@ const packageIncludedExtensions = computed(() => {
                             </div>
 
                             <div class="flex items-center space-x-2">
-                                <a 
+                                <a
                                     :href="route('offers.pdf', offer.id)"
                                     class="inline-flex items-center px-4 py-2 bg-gray-800 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-gray-700 focus:bg-gray-700 active:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition ease-in-out duration-150"
                                 >
                                     Imprimir PDF
                                 </a>
-                                
+
                                 <Link :href="route('offers.index')">
                                     <PrimaryButton>Volver al Listado</PrimaryButton>
                                 </Link>
@@ -142,7 +136,7 @@ const packageIncludedExtensions = computed(() => {
                                     </div>
                                 </div>
                             </details>
-                            
+
                             <div class="border-t pt-4 mt-4 space-y-2">
                                 <div v-if="canViewCommissions" class="flex justify-between text-md font-medium text-gray-500">
                                     <span>Comisión Bruta (100%):</span>
@@ -163,23 +157,23 @@ const packageIncludedExtensions = computed(() => {
                             <h3 class="text-lg font-semibold text-gray-700 mb-3">✅ Centralita Virtual y Extensiones</h3>
                             <div class="space-y-4 text-sm">
                                 <div v-if="centralitaInfo" class="space-y-2">
-                                    
+
                                     <div v-if="centralitaInfo.centralita" class="flex justify-between p-2 bg-slate-50 rounded">
                                         <span class="font-medium text-gray-800">{{ centralitaInfo.centralita.name }}</span>
-                                        <span class="font-semibold">Contratada</span>
+                                        <span class="font-semibold">{{ centralitaInfo.centralita.pivot.is_included ? 'Incluida' : `Contratada (${centralitaInfo.centralita.pivot.price ?? centralitaInfo.centralita.price}€)` }}</span>
                                     </div>
-                                    
+
                                     <div v-if="centralitaInfo.operadora" class="flex justify-between p-2 bg-slate-50 rounded">
                                         <span class="font-medium text-gray-800">Operadora Automática</span>
-                                        <span>Incluida</span>
+                                        <span>{{ centralitaInfo.operadora.pivot.is_included ? 'Incluida' : `Contratada (${centralitaInfo.operadora.pivot.price ?? centralitaInfo.operadora.price}€)` }}</span>
                                     </div>
                                 </div>
-                                
+
                                 <div v-if="packageIncludedExtensions.length > 0">
                                     <p class="font-medium text-gray-800 mt-3 mb-1">Extensiones Incluidas por Paquete:</p>
                                     <ul class="list-disc list-inside pl-2 space-y-1">
                                         <li v-for="ext in packageIncludedExtensions" :key="`pkg_${ext.id}`">
-                                            {{ ext.pivot.included_quantity }}x {{ ext.name }}
+                                            {{ ext.pivot.included_quantity }}x {{ ext.name }} (Incluidas)
                                         </li>
                                     </ul>
                                 </div>
@@ -188,13 +182,12 @@ const packageIncludedExtensions = computed(() => {
                                     <p class="font-medium text-gray-800 mt-3 mb-1">Extensiones Contratadas Adicionalmente:</p>
                                     <ul class="list-disc list-inside pl-2 space-y-1">
                                         <li v-for="ext in centralitaInfo.contractedExtensions" :key="ext.id">
-                                            {{ ext.pivot.quantity }}x {{ ext.name }}
+                                            {{ ext.pivot.quantity }}x {{ ext.name }} ({{ ext.pivot.quantity }} x {{ ext.price }}€)
                                         </li>
                                     </ul>
                                 </div>
                             </div>
                         </div>
-
                         <div class="border-t pt-6">
                             <h3 class="text-lg font-semibold text-gray-700 mb-3">Líneas Móviles</h3>
                             <div class="space-y-4">
