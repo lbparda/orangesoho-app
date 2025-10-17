@@ -38,7 +38,6 @@ const centralitaExtensionQuantities = ref({});
 const isOperadoraAutomaticaSelected = ref(false);
 const selectedTvAddonIds = ref([]);
 
-const additionalExtensionsQuantity = ref(0);
 const showCommissionDetails = ref(false);
 
 onMounted(() => {
@@ -64,52 +63,42 @@ onMounted(() => {
     selectedTvAddonIds.value = getAddons('tv').map(a => a.id);
     if(getAddonId('centralita_feature')) isOperadoraAutomaticaSelected.value = true;
     
-    // --- LÓGICA DE CARGA DE EXTENSIONES CORREGIDA ---
+    // --- LÓGICA DE CARGA UNIFICADA ---
     const optionalCentralita = props.offer.addons.find(a => a.type === 'centralita' && !a.pivot.is_included);
     if(optionalCentralita) {
         selectedCentralitaId.value = optionalCentralita.id;
     }
 
     const savedExtensions = getAddons('centralita_extension');
+    
+    // Se eliminan las extensiones incluidas del array para no procesarlas como adicionales
+    const includedExtensionIds = includedCentralitaExtensions.value.map(ext => ext.id);
+    const additionalSavedExtensions = savedExtensions.filter(ext => !includedExtensionIds.includes(ext.id));
 
-    if (includedCentralita.value) {
-        if (additionalExtensionDefinition.value) {
-            const savedAddon = savedExtensions.find(a => a.id === additionalExtensionDefinition.value.id);
-            if (savedAddon) {
-                additionalExtensionsQuantity.value = savedAddon.pivot.quantity || 0;
-            }
+    additionalSavedExtensions.forEach(ext => {
+        let quantityToDisplay = ext.pivot.quantity || 0;
+        if (autoIncludedExtension.value && ext.id === autoIncludedExtension.value.id) {
+            quantityToDisplay = Math.max(0, quantityToDisplay - 1);
         }
-    } else {
-        savedExtensions.forEach(ext => {
-            let quantityToDisplay = ext.pivot.quantity || 0;
-            if (autoIncludedExtension.value && ext.id === autoIncludedExtension.value.id) {
-                quantityToDisplay = Math.max(0, quantityToDisplay - 1);
-            }
-            if (quantityToDisplay > 0) {
-                 centralitaExtensionQuantities.value[ext.id] = quantityToDisplay;
-            }
-        });
-    }
+        if (quantityToDisplay > 0) {
+             centralitaExtensionQuantities.value[ext.id] = quantityToDisplay;
+        }
+    });
 });
 
 const saveOffer = () => {
     try {
         let finalExtensions = [];
 
+        // 1. Recoge las extensiones añadidas MANUALMENTE desde los inputs
         for (const [id, qty] of Object.entries(centralitaExtensionQuantities.value)) {
             if (qty > 0) {
                 finalExtensions.push({ addon_id: parseInt(id), quantity: qty });
             }
         }
         
-        if (includedCentralita.value) {
-            finalExtensions = [];
-            const additionalQty = additionalExtensionsQuantity.value || 0;
-            if (additionalExtensionDefinition.value && additionalQty > 0) {
-                finalExtensions.push({ addon_id: additionalExtensionDefinition.value.id, quantity: additionalQty });
-            }
-        } 
-        else if (autoIncludedExtension.value) {
+        // 2. Si es una centralita OPCIONAL con extensión de regalo, la sumamos al total
+        if (!includedCentralita.value && autoIncludedExtension.value) {
             const existing = finalExtensions.find(e => e.addon_id == autoIncludedExtension.value.id);
             if (existing) {
                 existing.quantity++;
@@ -202,20 +191,9 @@ const appliedDiscount = computed(() => {
     );
 });
 
-const additionalExtensionDefinition = computed(() => {
-    if (includedCentralita.value) {
-        return selectedPackage.value.addons.find(a => 
-            a.type === 'centralita_extension' && !a.pivot.is_included
-        );
-    }
-    return null;
-});
-
-// Lógica para mostrar las extensiones adicionales disponibles
 const availableAdditionalExtensions = computed(() => {
     return props.centralitaExtensions;
 });
-
 
 const calculationSummary = computed(() => {
     if (!selectedPackage.value) {
@@ -258,45 +236,31 @@ const calculationSummary = computed(() => {
         }
     });
     
-    if (includedCentralita.value) {
-        commissionDetails.Centralita.push({ description: `Centralita Incluida (${includedCentralita.value.name})`, amount: parseFloat(includedCentralita.value.pivot.included_line_commission) || 0 });
-        
-        includedCentralitaExtensions.value.forEach(ext => {
-            const quantity = ext.pivot.included_quantity || 0;
-            if (quantity > 0) {
-                 commissionDetails.Centralita.push({ description: `${quantity}x ${ext.name} (Incluidas)`, amount: quantity * (parseFloat(ext.pivot.included_line_commission) || 0) });
-            }
-        });
-
-        const additionalQty = additionalExtensionsQuantity.value || 0;
-        if (additionalQty > 0) {
-            const referenceExtension = includedCentralitaExtensions.value[0]; 
-            if (referenceExtension) {
-                const baseAddonInfo = props.centralitaExtensions.find(ext => ext.id === referenceExtension.id);
-                if (baseAddonInfo) {
-                    const itemPrice = (parseFloat(baseAddonInfo.price) || 0) * additionalQty;
-                    price += itemPrice;
-                    summaryBreakdown.push({ description: `${additionalQty}x Ext. ${baseAddonInfo.name} (Adicionales)`, price: itemPrice });
+    // --- LÓGICA DE CÁLCULO UNIFICADA ---
+    const activeCentralita = includedCentralita.value || centralitaAddonOptions.value.find(c => c.id === selectedCentralitaId.value);
+    
+    if (activeCentralita) {
+        if (includedCentralita.value) {
+            commissionDetails.Centralita.push({ description: `Centralita Incluida (${includedCentralita.value.name})`, amount: parseFloat(includedCentralita.value.pivot.included_line_commission) || 0 });
+            
+            includedCentralitaExtensions.value.forEach(ext => {
+                const quantity = ext.pivot.included_quantity || 0;
+                if (quantity > 0) {
+                     commissionDetails.Centralita.push({ description: `${quantity}x ${ext.name} (Incluidas)`, amount: quantity * (parseFloat(ext.pivot.included_line_commission) || 0) });
                 }
-                const commissionPerUnit = parseFloat(referenceExtension.pivot.additional_line_commission) || 0;
-                commissionDetails.Centralita.push({ 
-                    description: `${additionalQty}x ${referenceExtension.name} (Adicionales)`, 
-                    amount: additionalQty * commissionPerUnit 
-                });
+            });
+        } else {
+            const itemPrice = parseFloat(activeCentralita.pivot.price) || 0;
+            price += itemPrice;
+            summaryBreakdown.push({ description: `Centralita: ${activeCentralita.name}`, price: itemPrice });
+            commissionDetails.Centralita.push({ description: `Centralita Contratada (${activeCentralita.name})`, amount: parseFloat(activeCentralita.commission) || 0 });
+
+            if (autoIncludedExtension.value) {
+                 commissionDetails.Centralita.push({ description: `1x ${autoIncludedExtension.value.name} (Por Centralita)`, amount: 0 }); 
             }
         }
-
-    } else if (selectedCentralitaId.value) {
-        const selectedCentralita = centralitaAddonOptions.value.find(c => c.id === selectedCentralitaId.value);
-        if (selectedCentralita) {
-            const itemPrice = parseFloat(selectedCentralita.pivot.price) || 0;
-            price += itemPrice;
-            summaryBreakdown.push({ description: `Centralita: ${selectedCentralita.name}`, price: itemPrice });
-            commissionDetails.Centralita.push({ description: `Centralita Contratada (${selectedCentralita.name})`, amount: parseFloat(selectedCentralita.commission) || 0 });
-        }
-        if (autoIncludedExtension.value) {
-             commissionDetails.Centralita.push({ description: `1x ${autoIncludedExtension.value.name} (Por Centralita)`, amount: 0 }); 
-        }
+        
+        // Cálculo de extensiones adicionales (común para ambos tipos de centralita)
         for (const addonId in centralitaExtensionQuantities.value) {
             const quantity = centralitaExtensionQuantities.value[addonId];
             if (quantity > 0) {
@@ -541,28 +505,22 @@ const calculationSummary = computed(() => {
                                         </div>
                                     </div>
                                     <div class="pt-2">
-                                        <div v-if="includedCentralita">
-                                            <div class="mb-4 space-y-2">
-                                                <p class="text-sm font-medium text-gray-700">Extensiones Incluidas por Paquete:</p>
-                                                <div v-for="ext in includedCentralitaExtensions" :key="`inc_${ext.id}`" class="p-2 bg-gray-100 rounded-md text-sm text-gray-800">
-                                                    ✅ {{ ext.pivot.included_quantity }}x {{ ext.name }}
-                                                </div>
+                                        <div v-if="includedCentralitaExtensions.length > 0" class="mb-4 space-y-2">
+                                            <p class="text-sm font-medium text-gray-700">Extensiones Incluidas por Paquete:</p>
+                                            <div v-for="ext in includedCentralitaExtensions" :key="`inc_${ext.id}`" class="p-2 bg-gray-100 rounded-md text-sm text-gray-800">
+                                                ✅ {{ ext.pivot.included_quantity }}x {{ ext.name }}
                                             </div>
-                                            <label for="additional_extensions_qty" class="text-sm font-medium text-gray-700">Nº de Extensiones Adicionales</label>
-                                            <input id="additional_extensions_qty" type="number" min="0" v-model.number="additionalExtensionsQuantity" class="mt-1 w-24 rounded-md border-gray-300 shadow-sm text-center focus:border-indigo-500 focus:ring-indigo-500" placeholder="0">
                                         </div>
-                                        <div v-else>
-                                            <div v-if="autoIncludedExtension" class="mb-4">
-                                                <p class="text-sm font-medium text-gray-700">Extensión Incluida con Centralita:</p>
-                                                <div class="p-2 bg-gray-100 rounded-md text-sm text-gray-800">
-                                                     ✅ 1x {{ autoIncludedExtension.name }}
-                                                </div>
+                                        <div v-if="autoIncludedExtension" class="mb-4">
+                                            <p class="text-sm font-medium text-gray-700">Extensión Incluida con Centralita:</p>
+                                            <div class="p-2 bg-gray-100 rounded-md text-sm text-gray-800">
+                                                 ✅ 1x {{ autoIncludedExtension.name }}
                                             </div>
-                                            <p class="text-sm font-medium text-gray-700">Añadir Extensiones Adicionales:</p>
-                                            <div v-for="extension in availableAdditionalExtensions" :key="extension.id" class="flex items-center justify-between mt-2">
-                                                <label :for="`ext_add_${extension.id}`" class="text-gray-800">{{ extension.name }} (+{{ parseFloat(extension.price).toFixed(2) }}€)</label>
-                                                <input :id="`ext_add_${extension.id}`" type="number" min="0" v-model.number="centralitaExtensionQuantities[extension.id]" class="w-20 rounded-md border-gray-300 shadow-sm text-center focus:border-indigo-500 focus:ring-indigo-500" placeholder="0">
-                                            </div>
+                                        </div>
+                                        <p class="text-sm font-medium text-gray-700">Añadir Extensiones Adicionales:</p>
+                                        <div v-for="extension in availableAdditionalExtensions" :key="extension.id" class="flex items-center justify-between mt-2">
+                                            <label :for="`ext_add_${extension.id}`" class="text-gray-800">{{ extension.name }} (+{{ parseFloat(extension.price).toFixed(2) }}€)</label>
+                                            <input :id="`ext_add_${extension.id}`" type="number" min="0" v-model.number="centralitaExtensionQuantities[extension.id]" class="w-20 rounded-md border-gray-300 shadow-sm text-center focus:border-indigo-500 focus:ring-indigo-500" placeholder="0">
                                         </div>
                                     </div>
                                 </div>
