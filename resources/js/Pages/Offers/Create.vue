@@ -101,6 +101,28 @@ const addLine = () => {
     addWatchersToLine(newLine);
 };
 const removeLine = (index) => { if (lines.value[index]?.is_extra) lines.value.splice(index, 1); };
+
+// ✅ NUEVA FUNCIÓN: Copiar desde la línea anterior
+const copyPreviousLine = (line, index) => {
+    if (index <= 0 || !lines.value[index - 1]) return;
+
+    const prev = lines.value[index - 1];
+    line.is_portability = prev.is_portability;
+    line.phone_number = prev.phone_number;
+    line.source_operator = prev.source_operator;
+    line.has_vap = prev.has_vap;
+    line.o2o_discount_id = prev.o2o_discount_id;
+    line.selected_brand = prev.selected_brand;
+    line.selected_model_id = prev.selected_model_id;
+    line.selected_duration = prev.selected_duration;
+    line.initial_cost = prev.initial_cost;
+    line.monthly_cost = prev.monthly_cost;
+    line.terminal_pivot = prev.terminal_pivot;
+
+    // Reasignar precios (por coherencia)
+    assignTerminalPrices(line);
+};
+
 const addInternetLine = () => additionalInternetLines.value.push({ id: Date.now(), addon_id: null });
 const removeInternetLine = (index) => additionalInternetLines.value.splice(index, 1);
 const getDurationsForModel = (line) => [...new Set(availableTerminals.value.filter(t => t.id === line.selected_model_id).map(t => t.pivot.duration_months))].sort((a, b) => a - b);
@@ -298,10 +320,35 @@ watch(selectedPackageId, (newPackageId) => {
                         <div v-for="(line, index) in lines" :key="line.id" class="p-6 border rounded-lg max-w-full mx-auto" :class="{'bg-gray-50 border-gray-200': !line.is_extra, 'bg-green-50 border-green-200': line.is_extra}">
                             <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-center mb-4">
                                 <div class="md:col-span-2 flex justify-between items-center">
-                                    <span class="font-medium text-gray-700">{{ line.is_extra ? `Línea Adicional ${index + 1 - lines.filter(l => !l.is_extra).length}` : `Línea Principal ${index + 1}` }}</span>
-                                    <button v-if="line.is_extra" @click="removeLine(index)" type="button" class="text-red-500 hover:text-red-700 p-1 rounded-full hover:bg-red-100">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-                                    </button>
+                                    <span class="font-medium text-gray-700">
+                                        {{ line.is_extra ? `Línea Adicional ${index + 1 - lines.filter(l => !l.is_extra).length}` : `Línea Principal ${index + 1}` }}
+                                    </span>
+                                    <div class="flex space-x-2">
+                                        <!-- ✅ Botón Copiar: visible en todas las líneas excepto la primera (index > 0) -->
+                                        <button
+                                            v-if="index > 0"
+                                            @click="copyPreviousLine(line, index)"
+                                            type="button"
+                                            class="text-blue-600 hover:text-blue-800 p-1 rounded-full hover:bg-blue-100"
+                                            title="Copiar configuración de la línea anterior"
+                                        >
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                            </svg>
+                                        </button>
+
+                                        <!-- Botón Eliminar: solo en líneas adicionales -->
+                                        <button
+                                            v-if="line.is_extra"
+                                            @click="removeLine(index)"
+                                            type="button"
+                                            class="text-red-500 hover:text-red-700 p-1 rounded-full hover:bg-red-100"
+                                        >
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                            </svg>
+                                        </button>
+                                    </div>
                                 </div>
                                 <div class="md:col-span-4">
                                     <label class="block text-xs font-medium text-gray-500">Nº Teléfono</label>
