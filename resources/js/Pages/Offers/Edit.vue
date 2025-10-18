@@ -6,7 +6,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
 import InputError from '@/Components/InputError.vue';
-import Checkbox from '@/Components/Checkbox.vue'; 
+import Checkbox from '@/Components/Checkbox.vue';
 import { useOfferCalculations } from '@/composables/useOfferCalculations.js';
 
 const props = defineProps({
@@ -136,236 +136,237 @@ onMounted(() => {}); // Dejar vacío o para lógica del DOM
                  </Link>
              </div>
         </template>
-        <div class="py-12">
-            <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
-                <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
-                    <div class="p-8 bg-white border-b border-gray-200">
-                        <div class="mb-8 max-w-lg mx-auto">
+
+        <div class="flex flex-col md:flex-row">
+
+            <div class="w-full md:w-4/5 p-4 sm:p-6 lg:p-8">
+                <div class="space-y-8">
+
+                    <div class="bg-white shadow-sm sm:rounded-lg p-8">
+                         <div class="mb-8">
                             <label for="client" class="block text-sm font-medium text-gray-700 mb-2">Cliente</label>
                             <select v-model="form.client_id" id="client" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
                                 <option v-for="client in clients" :key="client.id" :value="client.id">{{ client.name }} ({{ client.cif_nif }})</option>
                             </select>
                             <InputError class="mt-2" :message="form.errors.client_id" />
                         </div>
-                        <div class="mb-8 max-w-lg mx-auto">
+                        <div>
                             <label for="package" class="block text-sm font-medium text-gray-700 mb-2">Paquete Base</label>
                             <input type="text" :value="selectedPackage?.name" id="package" disabled class="mt-1 block w-full rounded-md border-gray-300 shadow-sm bg-gray-100 cursor-not-allowed">
                         </div>
+                    </div>
 
-                        <div v-if="selectedPackage" class="space-y-10">
+                    <div v-if="selectedPackage" class="bg-white shadow-sm sm:rounded-lg p-8 space-y-6">
+                        
+                        <div v-if="internetAddonOptions.length > 0" class="p-6 bg-slate-50 rounded-lg">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Fibra Principal</label>
+                            <div class="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-4 mt-1">
+                                <label v-for="addon in internetAddonOptions" :key="addon.id"
+                                    :class="['flex-1 text-center px-4 py-3 rounded-md border cursor-pointer transition', { 'bg-indigo-600 text-white border-indigo-600 shadow-lg': selectedInternetAddonId === addon.id, 'bg-white border-gray-300 hover:bg-gray-50': selectedInternetAddonId !== addon.id }]">
+                                    <input type="radio" :value="addon.id" v-model="selectedInternetAddonId" class="sr-only">
+                                    <span class="block font-semibold">{{ addon.name }}</span>
+                                    <span class="block text-xs mt-1" v-if="parseFloat(addon.pivot.price) > 0">+{{ parseFloat(addon.pivot.price).toFixed(2) }}€/mes</span>
+                                </label>
+                            </div>
+                        </div>
 
-                            <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
 
-                                <div class="md:col-span-2 space-y-10">
-                                    <div v-if="internetAddonOptions.length > 0">
-                                        <label class="block text-sm font-medium text-gray-700 mb-2">Velocidad Fibra Principal</label>
-                                        <div class="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-4 mt-1">
-                                            <label v-for="addon in internetAddonOptions" :key="addon.id"
-                                                :class="['flex-1 text-center px-4 py-3 rounded-md border cursor-pointer transition', { 'bg-indigo-600 text-white border-indigo-600 shadow-lg': selectedInternetAddonId === addon.id, 'bg-white border-gray-300 hover:bg-gray-50': selectedInternetAddonId !== addon.id }]">
-                                                <input type="radio" :value="addon.id" v-model="selectedInternetAddonId" class="sr-only">
-                                                <span class="block font-semibold">{{ addon.name }}</span>
-                                                <span class="block text-xs mt-1" v-if="parseFloat(addon.pivot.price) > 0">+{{ parseFloat(addon.pivot.price).toFixed(2) }}€/mes</span>
-                                            </label>
-                                        </div>
-                                    </div>
-
-                                    <div v-if="tvAddonOptions.length > 0" class="space-y-4 p-6 bg-slate-50 rounded-lg">
-                                        <h3 class="text-lg font-semibold text-gray-800">Televisión y Deportes</h3>
-                                        <div class="space-y-2">
-                                            <div v-for="addon in tvAddonOptions" :key="addon.id" class="flex items-center">
-                                                <input :id="`tv_addon_${addon.id}`" :value="addon.id" v-model="selectedTvAddonIds" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
-                                                <label :for="`tv_addon_${addon.id}`" class="ml-3 block text-sm text-gray-900">
-                                                    {{ addon.name }} <span v-if="parseFloat(addon.pivot.price) > 0" class="text-gray-600">(+{{ parseFloat(addon.pivot.price).toFixed(2) }}€)</span>
-                                                </label>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div v-if="centralitaAddonOptions.length > 0 || includedCentralita" class="space-y-4 p-6 bg-slate-50 rounded-lg">
-                                        <h3 class="text-lg font-semibold text-gray-800 mb-2">Centralita Virtual</h3>
-                                        <div v-if="includedCentralita" class="p-4 bg-green-100 border border-green-300 rounded-md text-center">
-                                            <p class="font-semibold text-green-800">✅ {{ includedCentralita.name }} Incluida</p>
-                                        </div>
-                                        <div v-else-if="centralitaAddonOptions.length > 0">
-                                            <label for="centralita_optional" class="block text-sm font-medium text-gray-700">Añadir Centralita</label>
-                                            <select v-model="selectedCentralitaId" id="centralita_optional" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
-                                                <option :value="null">No añadir centralita</option>
-                                                <option v-for="centralita in centralitaAddonOptions" :key="centralita.id" :value="centralita.id">{{ centralita.name }} (+{{ parseFloat(centralita.pivot.price).toFixed(2) }}€)</option>
-                                            </select>
-                                        </div>
-                                        <div v-if="isCentralitaActive" class="space-y-4 pt-4 border-t border-dashed">
-                                            <div v-if="operadoraAutomaticaInfo">
-                                                 <div v-if="operadoraAutomaticaInfo.pivot.is_included" class="p-2 bg-gray-100 rounded-md text-sm text-gray-800">✅ Operadora Automática Incluida</div>
-                                                 <div v-else class="flex items-center">
-                                                     <input v-model="isOperadoraAutomaticaSelected" id="operadora_automatica_cb" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
-                                                     <label for="operadora_automatica_cb" class="ml-2 block text-sm text-gray-900">Añadir Operadora Automática (+{{ parseFloat(operadoraAutomaticaInfo.pivot.price).toFixed(2) }}€)</label>
-                                                 </div>
-                                            </div>
-                                            <div class="pt-2">
-                                                 <div v-if="includedCentralitaExtensions.length > 0" class="mb-4 space-y-2">
-                                                     <p class="text-sm font-medium text-gray-700">Extensiones Incluidas por Paquete:</p>
-                                                     <div v-for="ext in includedCentralitaExtensions" :key="`inc_${ext.id}`" class="p-2 bg-gray-100 rounded-md text-sm text-gray-800">✅ {{ ext.pivot.included_quantity }}x {{ ext.name }}</div>
-                                                 </div>
-                                                 <div v-if="autoIncludedExtension && !includedCentralita" class="mb-4">
-                                                     <p class="text-sm font-medium text-gray-700">Extensión Incluida con Centralita:</p>
-                                                     <div class="p-2 bg-gray-100 rounded-md text-sm text-gray-800">✅ 1x {{ autoIncludedExtension.name }}</div>
-                                                 </div>
-                                                 <p class="text-sm font-medium text-gray-700">Añadir Extensiones Adicionales:</p>
-                                                 <div v-for="extension in availableAdditionalExtensions" :key="extension.id" class="flex items-center justify-between mt-2">
-                                                    <label :for="`ext_add_${extension.id}`" class="text-gray-800">{{ extension.name }} (+{{ parseFloat(extension.price).toFixed(2) }}€)</label>
-                                                    <input :id="`ext_add_${extension.id}`" type="number" min="0" v-model.number="centralitaExtensionQuantities[extension.id]" class="w-20 rounded-md border-gray-300 shadow-sm text-center focus:border-indigo-500 focus:ring-indigo-500" placeholder="0">
-                                                </div>
-                                             </div>
-                                        </div>
-                                    </div>
-
-                                    <div class="space-y-4 p-6 bg-slate-50 rounded-lg">
-                                        <h3 class="text-lg font-semibold text-gray-800">Líneas de Internet Adicionales</h3>
-                                        <div v-for="(line, index) in additionalInternetLines" :key="line.id" class="p-4 border rounded-lg bg-blue-50 border-blue-200 flex items-center justify-between">
-                                            <div class="flex-1">
-                                                <label class="block text-xs font-medium text-gray-500">Velocidad Línea Adicional {{ index + 1 }}</label>
-                                                <select v-model="line.addon_id" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-indigo-500 focus:ring-indigo-500">
-                                                    <option :value="null" disabled>-- Selecciona --</option>
-                                                    <option v-for="addon in additionalInternetAddons" :key="addon.id" :value="addon.id">{{ addon.name }} (+{{ parseFloat(addon.price).toFixed(2) }}€)</option>
-                                                </select>
-                                            </div>
-                                            <button @click="removeInternetLine(index)" type="button" class="ml-4 text-red-500 hover:text-red-700"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
-                                        </div>
-                                        <PrimaryButton @click="addInternetLine" type="button">Añadir Internet Adicional</PrimaryButton>
+                            <div v-if="tvAddonOptions.length > 0" class="space-y-4 p-6 bg-slate-50 rounded-lg h-full">
+                                <h3 class="text-lg font-semibold text-gray-800">Televisión</h3>
+                                <div class="space-y-2">
+                                    <div v-for="addon in tvAddonOptions" :key="addon.id" class="flex items-center">
+                                        <input :id="`tv_addon_${addon.id}`" :value="addon.id" v-model="selectedTvAddonIds" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                                        <label :for="`tv_addon_${addon.id}`" class="ml-3 block text-sm text-gray-900">
+                                            {{ addon.name }} <span v-if="parseFloat(addon.pivot.price) > 0" class="text-gray-600">(+{{ parseFloat(addon.pivot.price).toFixed(2) }}€)</span>
+                                        </label>
                                     </div>
                                 </div>
+                            </div>
 
-                                <div class="md:col-span-1 space-y-6 sticky top-10 self-start">
-                                    <div class="p-6 bg-gray-100 rounded-lg space-y-3">
-                                        <h2 class="text-xl font-semibold text-gray-800 text-center">Resumen de la Oferta</h2>
-                                        <div class="space-y-2 border-t pt-4 mt-4">
-                                            <div v-for="(item, index) in calculationSummary.summaryBreakdown" :key="'sum-'+index" class="flex justify-between text-sm" :class="{'text-gray-700': item.price >= 0, 'text-red-600': item.price < 0}">
-                                                <span>{{ item.description }}</span>
-                                                <span class="font-medium">{{ item.price >= 0 ? '+' : '' }}{{ item.price.toFixed(2) }}€</span>
+                            <div v-if="centralitaAddonOptions.length > 0 || includedCentralita" class="space-y-4 p-6 bg-slate-50 rounded-lg h-full">
+                                <h3 class="text-lg font-semibold text-gray-800 mb-2">Centralita</h3>
+                                <div v-if="includedCentralita" class="p-4 bg-green-100 border border-green-300 rounded-md text-center">
+                                    <p class="font-semibold text-green-800">✅ {{ includedCentralita.name }} Incluida</p>
+                                </div>
+                                <div v-else-if="centralitaAddonOptions.length > 0">
+                                    <label for="centralita_optional" class="block text-sm font-medium text-gray-700">Añadir Centralita</label>
+                                    <select v-model="selectedCentralitaId" id="centralita_optional" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                        <option :value="null">No añadir</option>
+                                        <option v-for="centralita in centralitaAddonOptions" :key="centralita.id" :value="centralita.id">{{ centralita.name }} (+{{ parseFloat(centralita.pivot.price).toFixed(2) }}€)</option>
+                                    </select>
+                                </div>
+                                <div v-if="isCentralitaActive" class="space-y-4 pt-4 border-t border-dashed">
+                                    <div v-if="operadoraAutomaticaInfo">
+                                            <div v-if="operadoraAutomaticaInfo.pivot.is_included" class="p-2 bg-gray-100 rounded-md text-sm text-gray-800">✅ Op. Automática Incluida</div>
+                                            <div v-else class="flex items-center">
+                                                <input v-model="isOperadoraAutomaticaSelected" id="operadora_automatica_cb" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                                                <label for="operadora_automatica_cb" class="ml-2 block text-sm text-gray-900">Añadir Op. Automática (+{{ parseFloat(operadoraAutomaticaInfo.pivot.price).toFixed(2) }}€)</label>
                                             </div>
-                                        </div>
-                                        <div class="border-t pt-4 mt-4 space-y-3">
-                                            <div class="flex justify-between text-lg font-bold text-gray-800">
-                                                <span>Pago Inicial Total:</span>
-                                                <span>{{ calculationSummary.totalInitialPayment }}€</span>
-                                            </div>
-                                            <div class="flex justify-between text-3xl font-extrabold text-gray-900 items-baseline">
-                                                <span>Precio Final Mensual:</span>
-                                                <span>{{ calculationSummary.finalPrice }}<span class="text-lg font-medium text-gray-600">€/mes</span></span>
-                                            </div>
-                                        </div>
                                     </div>
-                                    <div class="p-6 bg-gray-100 rounded-lg space-y-3">
-                                        <h2 class="text-xl font-semibold text-gray-800 text-center">Resumen Comisión</h2>
-                                        <div class="border-t pt-4 mt-4 space-y-2">
-                                            <p v-if="$page.props.auth.user.role === 'admin' || $page.props.auth.user.role === 'team_lead'" class="text-md text-gray-500 text-center">
-                                                Comisión Bruta (100%): {{ calculationSummary.totalCommission }}€
-                                            </p>
-                                            <p v-if="$page.props.auth.user.role === 'team_lead'" class="text-lg text-gray-600 text-center">
-                                                Comisión Equipo ({{ auth.user?.team?.commission_percentage || 0 }}%): {{ calculationSummary.teamCommission }}€
-                                            </p>
-                                            <p class="text-xl font-bold text-emerald-600 text-center mt-2">
-                                                Tu Comisión: {{ calculationSummary.userCommission }}€
-                                            </p>
-                                            <div class="text-center pt-2">
-                                                <SecondaryButton @click="showCommissionDetails = !showCommissionDetails">
-                                                    {{ showCommissionDetails ? 'Ocultar Detalle' : 'Ver Detalle' }}
-                                                </SecondaryButton>
+                                    <div class="pt-2">
+                                            <div v-if="includedCentralitaExtensions.length > 0" class="mb-4 space-y-2">
+                                                <p class="text-sm font-medium text-gray-700">Ext. Incluidas:</p>
+                                                <div v-for="ext in includedCentralitaExtensions" :key="`inc_${ext.id}`" class="p-2 bg-gray-100 rounded-md text-sm text-gray-800">✅ {{ ext.pivot.included_quantity }}x {{ ext.name }}</div>
                                             </div>
-                                            <div v-if="showCommissionDetails" class="mt-4 border-t pt-4 text-left">
-                                                <h4 class="text-md font-semibold text-gray-700 mb-2">Desglose de Comisiones</h4>
-                                                <div v-for="(items, category) in calculationSummary.commissionDetails" :key="'com-'+category" class="mb-3">
-                                                    <h5 class="font-bold text-sm text-gray-600">{{ category }}</h5>
-                                                    <ul class="list-disc list-inside text-xs text-gray-600 space-y-1 mt-1">
-                                                        <li v-for="(item, index) in items" :key="'com-item-'+index" class="flex justify-between">
-                                                            <span>{{ item.description }}</span>
-                                                            <span class="font-mono" :class="{'text-red-500': item.amount < 0}">{{ item.amount.toFixed(2) }}€</span>
-                                                        </li>
-                                                    </ul>
-                                                </div>
+                                            <div v-if="autoIncludedExtension && !includedCentralita" class="mb-4">
+                                                <p class="text-sm font-medium text-gray-700">Ext. Incluida:</p>
+                                                <div class="p-2 bg-gray-100 rounded-md text-sm text-gray-800">✅ 1x {{ autoIncludedExtension.name }}</div>
                                             </div>
+                                            <p class="text-sm font-medium text-gray-700">Ext. Adicionales:</p>
+                                            <div v-for="extension in availableAdditionalExtensions" :key="extension.id" class="flex items-center justify-between mt-2">
+                                            <label :for="`ext_add_${extension.id}`" class="text-sm text-gray-800">{{ extension.name }} (+{{ parseFloat(extension.price).toFixed(2) }}€)</label>
+                                            <input :id="`ext_add_${extension.id}`" type="number" min="0" v-model.number="centralitaExtensionQuantities[extension.id]" class="w-20 rounded-md border-gray-300 shadow-sm text-center focus:border-indigo-500 focus:ring-indigo-500" placeholder="0">
                                         </div>
+                                        </div>
+                                </div>
+                            </div>
+
+                            <div class="space-y-4 p-6 bg-slate-50 rounded-lg h-full">
+                                <h3 class="text-lg font-semibold text-gray-800">Internet Adicional</h3>
+                                <div v-for="(line, index) in additionalInternetLines" :key="line.id" class="p-3 border rounded-lg bg-blue-50 border-blue-200">
+                                    <div class="flex-1">
+                                        <div class="flex justify-between items-center mb-1">
+                                            <label class="block text-xs font-medium text-gray-500">Línea Adicional {{ index + 1 }}</label>
+                                            <button @click="removeInternetLine(index)" type="button" class="text-red-500 hover:text-red-700"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
+                                        </div>
+                                        <select v-model="line.addon_id" class="block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                            <option :value="null" disabled>-- Selecciona --</option>
+                                            <option v-for="addon in additionalInternetAddons" :key="addon.id" :value="addon.id">{{ addon.name }} (+{{ parseFloat(addon.price).toFixed(2) }}€)</option>
+                                        </select>
                                     </div>
                                 </div>
+                                <PrimaryButton @click="addInternetLine" type="button" class="w-full justify-center">Añadir Internet</PrimaryButton>
+                            </div>
+                        </div> </div>
 
-                            </div> <div class="space-y-6 mt-10"> {/* Añadido mt-10 */}
-                                 <h3 class="text-lg font-semibold text-gray-800 text-center">Líneas Móviles</h3>
-                                 <div v-for="(line, index) in lines" :key="line.id" class="p-6 border rounded-lg max-w-4xl mx-auto" :class="{'bg-gray-50 border-gray-200': !line.is_extra, 'bg-green-50 border-green-200': line.is_extra}">
-                                     <div class="grid grid-cols-12 gap-4 items-center mb-4">
-                                         <div class="col-span-12 md:col-span-3 flex justify-between items-center">
-                                             <span class="font-medium text-gray-700">{{ line.is_extra ? `Línea Adicional ${index + 1 - lines.filter(l => !l.is_extra).length}` : `Línea Principal ${index + 1}` }}</span>
-                                             <button v-if="line.is_extra" @click="removeLine(index)" type="button" class="text-red-500 hover:text-red-700 p-1 rounded-full hover:bg-red-100">
-                                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-                                             </button>
-                                         </div>
-                                         <div class="col-span-12 md:col-span-5">
-                                             <label class="block text-xs font-medium text-gray-500">Nº Teléfono</label>
-                                             <input v-model="line.phone_number" type="tel" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-indigo-500 focus:ring-indigo-500" placeholder="Ej: 612345678">
-                                         </div>
-                                         <div class="col-span-12 md:col-span-4 flex items-end pb-1">
-                                             <div class="flex items-center h-full">
-                                                 <input v-model="line.is_portability" :id="`portability_${line.id}`" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
-                                                 <label :for="`portability_${line.id}`" class="ml-2 block text-sm text-gray-900">¿Es Portabilidad?</label>
-                                             </div>
-                                         </div>
-                                     </div>
-                                     <div v-if="line.is_portability" class="space-y-4 border-t pt-4 mt-4">
-                                         <div class="grid grid-cols-12 gap-4 items-center">
-                                             <div class="col-span-12 md:col-span-8">
-                                                 <label class="block text-xs font-medium text-gray-500">Operador Origen</label>
-                                                 <select v-model="line.source_operator" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-indigo-500 focus:ring-indigo-500">
-                                                     <option :value="null" disabled>-- Selecciona --</option>
-                                                     <option v-for="op in operators" :key="op" :value="op">{{ op }}</option>
-                                                 </select>
-                                             </div>
-                                             <div class="col-span-12 md:col-span-4 flex items-end pb-1">
-                                                 <div class="flex items-center h-full">
-                                                     <input v-model="line.has_vap" :id="`vap_${line.id}`" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
-                                                     <label :for="`vap_${line.id}`" class="ml-2 block text-sm text-gray-900">con VAP</label>
-                                                 </div>
-                                             </div>
-                                         </div>
-                                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                             <div>
-                                                 <label class="block text-sm font-medium text-gray-700">Descuento O2O</label>
-                                                 <select v-model="line.o2o_discount_id" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-indigo-500 focus:ring-indigo-500">
-                                                     <option :value="null">-- Sin subvención --</option>
-                                                     <option v-for="o2o in getO2oDiscountsForLine(line, index)" :key="o2o.id" :value="o2o.id">{{ o2o.name }}</option>
-                                                 </select>
-                                             </div>
-                                         </div>
-                                         <div v-if="line.has_vap" class="space-y-4 pt-4 border-t border-dashed">
-                                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                 <div class="grid grid-cols-3 gap-2">
-                                                     <div><label class="block text-sm font-medium text-gray-700">Marca</label><select v-model="line.selected_brand" @change="line.selected_model_id = null; line.selected_duration = null; assignTerminalPrices(line);" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-indigo-500 focus:ring-indigo-500"><option :value="null">-- Marca --</option><option v-for="brand in brandsForSelectedPackage" :key="brand" :value="brand">{{ brand }}</option></select></div>
-                                                     <div><label class="block text-sm font-medium text-gray-700">Modelo</label><select v-model="line.selected_model_id" @change="line.selected_duration = null; assignTerminalPrices(line);" :disabled="!line.selected_brand" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-indigo-500 focus:ring-indigo-500"><option :value="null">-- Modelo --</option><option v-for="terminal in modelsByBrand(line.selected_brand)" :key="terminal.id" :value="terminal.id">{{ terminal.model }}</option></select></div>
-                                                     <div><label class="block text-sm font-medium text-gray-700">Meses</label><select v-model="line.selected_duration" @change="assignTerminalPrices(line)" :disabled="!line.selected_model_id" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-indigo-500 focus:ring-indigo-500"><option :value="null">-- Meses --</option><option v-for="duration in getDurationsForModel(line)" :key="duration" :value="duration">{{ duration }} meses</option></select></div>
-                                                 </div>
-                                             </div>
-                                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                 <div><label class="block text-sm font-medium text-gray-700">Pago Inicial (€)</label><input v-model.number="line.initial_cost" type="number" step="0.01" min="0" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-indigo-500 focus:ring-indigo-500"></div>
-                                                 <div><label class="block text-sm font-medium text-gray-700">Cuota Mensual (€)</label><input v-model.number="line.monthly_cost" type="number" step="0.01" min="0" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-indigo-500 focus:ring-indigo-500"></div>
-                                             </div>
-                                         </div>
+                    <div v-if="selectedPackage" class="bg-white shadow-sm sm:rounded-lg p-8 space-y-6">
+                        <h3 class="text-lg font-semibold text-gray-800 text-center">Líneas Móviles</h3>
+                        <div v-for="(line, index) in lines" :key="line.id" class="p-6 border rounded-lg max-w-full mx-auto" :class="{'bg-gray-50 border-gray-200': !line.is_extra, 'bg-green-50 border-green-200': line.is_extra}">
+                             <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-center mb-4">
+                                 <div class="md:col-span-2 flex justify-between items-center">
+                                     <span class="font-medium text-gray-700">{{ line.is_extra ? `Línea Adicional ${index + 1 - lines.filter(l => !l.is_extra).length}` : `Línea Principal ${index + 1}` }}</span>
+                                     <button v-if="line.is_extra" @click="removeLine(index)" type="button" class="text-red-500 hover:text-red-700 p-1 rounded-full hover:bg-red-100">
+                                         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                                     </button>
+                                 </div>
+                                 <div class="md:col-span-4">
+                                     <label class="block text-xs font-medium text-gray-500">Nº Teléfono</label>
+                                     <input v-model="line.phone_number" type="tel" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-indigo-500 focus:ring-indigo-500" placeholder="Ej: 612345678">
+                                 </div>
+                                 <div class="md:col-span-2 flex items-end pb-1">
+                                     <div class="flex items-center h-full">
+                                         <input v-model="line.is_portability" :id="`portability_${line.id}`" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                                         <label :for="`portability_${line.id}`" class="ml-2 block text-sm text-gray-900">Portabilidad</label>
                                      </div>
                                  </div>
                              </div>
-                             <div class="flex justify-center pt-4">
-                                 <PrimaryButton @click="addLine" type="button">Añadir Línea Móvil Adicional</PrimaryButton>
+                             <div v-if="line.is_portability" class="space-y-4 border-t pt-4 mt-4">
+                                 <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
+                                     <div class="md:col-span-4">
+                                         <label class="block text-xs font-medium text-gray-500">Operador Origen</label>
+                                         <select v-model="line.source_operator" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                             <option :value="null" disabled>-- Selecciona --</option>
+                                             <option v-for="op in operators" :key="op" :value="op">{{ op }}</option>
+                                         </select>
+                                     </div>
+                                     <div class="md:col-span-2 flex items-end pb-1">
+                                         <div class="flex items-center h-full">
+                                             <input v-model="line.has_vap" :id="`vap_${line.id}`" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                                             <label :for="`vap_${line.id}`" class="ml-2 block text-sm text-gray-900">con VAP</label>
+                                         </div>
+                                     </div>
+                                     <div class="md:col-span-4">
+                                         <label class="block text-xs font-medium text-gray-500">Descuento O2O</label>
+                                         <select v-model="line.o2o_discount_id" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                             <option :value="null">-- Sin subvención --</option>
+                                             <option v-for="o2o in getO2oDiscountsForLine(line, index)" :key="o2o.id" :value="o2o.id">{{ o2o.name }}</option>
+                                         </select>
+                                     </div>
+                                 </div>
+                                 <div v-if="line.has_vap" class="space-y-4 pt-4 border-t border-dashed">
+                                      <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
+                                          <div class="md:col-span-2"><label class="block text-xs font-medium text-gray-500">Marca</label><select v-model="line.selected_brand" @change="line.selected_model_id = null; line.selected_duration = null; assignTerminalPrices(line);" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-indigo-500 focus:ring-indigo-500"><option :value="null">-- Marca --</option><option v-for="brand in brandsForSelectedPackage" :key="brand" :value="brand">{{ brand }}</option></select></div>
+                                          <div class="md:col-span-3"><label class="block text-xs font-medium text-gray-500">Modelo</label><select v-model="line.selected_model_id" @change="line.selected_duration = null; assignTerminalPrices(line);" :disabled="!line.selected_brand" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-indigo-500 focus:ring-indigo-500"><option :value="null">-- Modelo --</option><option v-for="terminal in modelsByBrand(line.selected_brand)" :key="terminal.id" :value="terminal.id">{{ terminal.model }}</option></select></div>
+                                          <div class="md:col-span-2"><label class="block text-xs font-medium text-gray-500">Meses</label><select v-model="line.selected_duration" @change="assignTerminalPrices(line)" :disabled="!line.selected_model_id" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-indigo-500 focus:ring-indigo-500"><option :value="null">-- Meses --</option><option v-for="duration in getDurationsForModel(line)" :key="duration" :value="duration">{{ duration }} meses</option></select></div>
+                                          <div class="md:col-span-2"><label class="block text-xs font-medium text-gray-500">Pago Inicial (€)</label><input v-model.number="line.initial_cost" type="number" step="0.01" min="0" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-indigo-500 focus:ring-indigo-500"></div>
+                                          <div class="md:col-span-2"><label class="block text-xs font-medium text-gray-500">Cuota Mensual (€)</label><input v-model.number="line.monthly_cost" type="number" step="0.01" min="0" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-indigo-500 focus:ring-indigo-500"></div>
+                                      </div>
+                                 </div>
                              </div>
+                         </div>
+                        <div class="flex justify-center pt-4">
+                            <PrimaryButton @click="addLine" type="button">Añadir Línea Móvil Adicional</PrimaryButton>
+                        </div>
+                    </div>
 
-                             <div class="mt-10 flex justify-center">
-                                 <PrimaryButton @click="saveOffer" :disabled="form.processing">
-                                     Actualizar Oferta
-                                 </PrimaryButton>
-                             </div>
-                         </div>
-                         <div v-else class="text-center text-gray-500 mt-10">
-                             Cargando datos de la oferta...
-                         </div>
+                    <div v-if="selectedPackage" class="mt-10 flex justify-center">
+                        <PrimaryButton @click="saveOffer" :disabled="form.processing">
+                            Actualizar Oferta
+                        </PrimaryButton>
+                    </div>
+
+                    <div v-if="!selectedPackage" class="text-center text-gray-500 mt-10 p-8 bg-white rounded-lg shadow-sm">
+                        Cargando datos de la oferta...
                     </div>
                 </div>
             </div>
+
+            <div class="w-full md:w-1/5 bg-gray-50 p-6 min-h-screen border-l border-gray-200">
+                <div class="sticky top-10 space-y-6">
+                    <div class="p-6 bg-white rounded-lg shadow-sm space-y-3">
+                        <h2 class="text-xl font-semibold text-gray-800 text-center">Resumen de la Oferta</h2>
+                        <div class="space-y-2 border-t pt-4 mt-4">
+                            <div v-for="(item, index) in calculationSummary.summaryBreakdown" :key="'sum-'+index" class="flex justify-between text-sm" :class="{'text-gray-700': item.price >= 0, 'text-red-600': item.price < 0}">
+                                <span>{{ item.description }}</span>
+                                <span class="font-medium">{{ item.price >= 0 ? '+' : '' }}{{ item.price.toFixed(2) }}€</span>
+                            </div>
+                        </div>
+                        <div class="border-t pt-4 mt-4 space-y-3">
+                            <div class="flex justify-between text-lg font-bold text-gray-800">
+                                <span>Pago Inicial Total:</span>
+                                <span>{{ calculationSummary.totalInitialPayment }}€</span>
+                            </div>
+                            <div class="flex justify-between text-3xl font-extrabold text-gray-900 items-baseline">
+                                <span>Precio Final Mensual:</span>
+                                <span>{{ calculationSummary.finalPrice }}<span class="text-lg font-medium text-gray-600">€/mes</span></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="p-6 bg-white rounded-lg shadow-sm space-y-3">
+                        <h2 class="text-xl font-semibold text-gray-800 text-center">Resumen Comisión</h2>
+                        <div class="border-t pt-4 mt-4 space-y-2">
+                            <p v-if="$page.props.auth.user.role === 'admin' || $page.props.auth.user.role === 'team_lead'" class="text-md text-gray-500 text-center">
+                                Comisión Bruta (100%): {{ calculationSummary.totalCommission }}€
+                            </p>
+                            <p v-if="$page.props.auth.user.role === 'team_lead'" class="text-lg text-gray-600 text-center">
+                                Comisión Equipo ({{ auth.user?.team?.commission_percentage || 0 }}%): {{ calculationSummary.teamCommission }}€
+                            </p>
+                            <p class="text-xl font-bold text-emerald-600 text-center mt-2">
+                                Tu Comisión: {{ calculationSummary.userCommission }}€
+                            </p>
+                            <div class="text-center pt-2">
+                                <SecondaryButton @click="showCommissionDetails = !showCommissionDetails">
+                                    {{ showCommissionDetails ? 'Ocultar Detalle' : 'Ver Detalle' }}
+                                </SecondaryButton>
+                            </div>
+                            <div v-if="showCommissionDetails" class="mt-4 border-t pt-4 text-left">
+                                <h4 class="text-md font-semibold text-gray-700 mb-2">Desglose de Comisiones</h4>
+                                <div v-for="(items, category) in calculationSummary.commissionDetails" :key="'com-'+category" class="mb-3">
+                                    <h5 class="font-bold text-sm text-gray-600">{{ category }}</h5>
+                                    <ul class="list-disc list-inside text-xs text-gray-600 space-y-1 mt-1">
+                                        <li v-for="(item, index) in items" :key="'com-item-'+index" class="flex justify-between">
+                                            <span>{{ item.description }}</span>
+                                            <span class="font-mono" :class="{'text-red-500': item.amount < 0}">{{ item.amount.toFixed(2) }}€</span>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
         </div>
     </AuthenticatedLayout>
 </template>
