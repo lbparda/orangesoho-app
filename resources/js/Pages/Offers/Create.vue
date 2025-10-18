@@ -108,7 +108,7 @@ const copyPreviousLine = (line, index) => {
 
     const prev = lines.value[index - 1];
     line.is_portability = prev.is_portability;
-    line.phone_number = prev.phone_number;
+  //  line.phone_number = prev.phone_number;
     line.source_operator = prev.source_operator;
     line.has_vap = prev.has_vap;
     line.o2o_discount_id = prev.o2o_discount_id;
