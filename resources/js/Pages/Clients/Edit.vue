@@ -6,16 +6,33 @@ import InputLabel from '@/Components/InputLabel.vue';
 import TextInput from '@/Components/TextInput.vue';
 import InputError from '@/Components/InputError.vue';
 import DangerButton from '@/Components/DangerButton.vue';
-import SecondaryButton from '@/Components/SecondaryButton.vue'; // <-- Importado
+import SecondaryButton from '@/Components/SecondaryButton.vue';
 import { ref, watch, onMounted, onUnmounted } from 'vue';
 
 const props = defineProps({
     client: Object,
 });
 
-// FORMULARIO INICIALIZADO CON TODOS LOS DATOS DEL CLIENTE
+// --- LÓGICA DE DETECCIÓN DE TIPO (LA CORRECCIÓN) ---
+const determineClientType = (client) => {
+    // 1. Si el tipo ya está definido, lo usamos.
+    if (client.type === 'empresa' || client.type === 'autonomo') {
+        return client.type;
+    }
+    // 2. Si no, intentamos inferirlo. Si tiene 'first_name', es un autónomo.
+    if (client.first_name) {
+        return 'autonomo';
+    }
+    // 3. Por defecto, es una empresa.
+    return 'empresa';
+};
+
+const initialType = determineClientType(props.client);
+// --- FIN DE LA CORRECCIÓN ---
+
+
 const form = useForm({
-    type: props.client.type || 'empresa',
+    type: initialType, // Usamos el tipo detectado
     name: props.client.name,
     first_name: props.client.first_name,
     last_name: props.client.last_name,
@@ -115,14 +132,13 @@ const submit = () => {
 };
 
 const confirmDelete = ref(false);
-const deleteForm = useForm({}); // Formulario específico para la eliminación
+const deleteForm = useForm({});
 
 const deleteClient = () => {
     deleteForm.delete(route('clients.destroy', props.client.id), {
         preserveScroll: true,
         onFinish: () => {
             confirmDelete.value = false;
-            // Inertia se encargará de redirigir si la eliminación es exitosa.
         }
     });
 };

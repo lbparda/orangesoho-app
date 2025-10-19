@@ -7,27 +7,29 @@ import TextInput from '@/Components/TextInput.vue';
 import InputError from '@/Components/InputError.vue';
 import { ref, watch, onMounted, onUnmounted } from 'vue';
 
+// CAMBIO: Leemos el marcador 'source' de la URL al iniciar el componente.
+const source = new URLSearchParams(window.location.search).get('source');
+
 const form = useForm({
-    type: 'empresa', // 'empresa' o 'autonomo'
-    name: '', // Razón Social
-    first_name: '', // Nombre del autonomo
-    last_name: '', // Apellidos del autonomo
-    cif_nif: '',
-    contact_person: '',
-    email: '',
-    phone: '',
-    address: '',
+    source: source, // CAMBIO: Añadimos el marcador al formulario para enviarlo al backend.
+    type: 'empresa',
+    name: '',
+    first_name: '',
+    last_name: '',
+    cif_nif: '',
+    contact_person: '',
+    email: '',
+    phone: '',
+    address: '',
     street_number: '',
     floor: '',
     door: '',
-    city: '',
-    postal_code: '',
+    city: '',
+    postal_code: '',
 });
 
-// MODIFICADO: Cambiado 'particular' por 'autonomo'
 watch(() => form.type, (newType) => {
     form.clearErrors();
-
     if (newType === 'empresa') {
         form.first_name = '';
         form.last_name = '';
@@ -37,8 +39,6 @@ watch(() => form.type, (newType) => {
     }
 });
 
-
-// --- Resto del script sin cambios ---
 const suggestions = ref([]);
 const isSelecting = ref(false);
 const showSuggestions = ref(false);
@@ -48,49 +48,49 @@ const isLoading = ref(false);
 const activeSuggestionIndex = ref(-1);
 
 const searchAddress = async (query) => {
-    if (!query || query.length < 3 || isSelecting.value) {
-        suggestions.value = []; showSuggestions.value = false; return;
-    }
-    showSuggestions.value = true; isLoading.value = true; activeSuggestionIndex.value = -1;
-    try {
-      const params = new URLSearchParams({ q: query, countrycodes: 'ES', format: 'json', addressdetails: 1, limit: 5, 'accept-language': 'es' });
-      const userAgent = 'OrangesohoApp/1.0 (ccklbparda@gmail.com)';
-      const response = await fetch(`https://nominatim.openstreetmap.org/search?${params}`, { headers: { 'User-Agent': userAgent } });
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-      suggestions.value = await response.json();
-    } catch (error) {
-        console.error('Error al buscar dirección:', error); suggestions.value = [];
-    } finally {
+    if (!query || query.length < 3 || isSelecting.value) {
+        suggestions.value = []; showSuggestions.value = false; return;
+    }
+    showSuggestions.value = true; isLoading.value = true; activeSuggestionIndex.value = -1;
+    try {
+        const params = new URLSearchParams({ q: query, countrycodes: 'ES', format: 'json', addressdetails: 1, limit: 5, 'accept-language': 'es' });
+        const userAgent = 'OrangesohoApp/1.0 (ccklbparda@gmail.com)';
+        const response = await fetch(`https://nominatim.openstreetmap.org/search?${params}`, { headers: { 'User-Agent': userAgent } });
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        suggestions.value = await response.json();
+    } catch (error) {
+        console.error('Error al buscar dirección:', error); suggestions.value = [];
+    } finally {
         isLoading.value = false;
     }
 };
 const selectSuggestion = (suggestion) => {
     if (!suggestion) return;
-    isSelecting.value = true;
-    const addr = suggestion.address;
-    if (addr) {
-        form.address = addr.road || ''; form.street_number = addr.house_number || '';
-        form.city = addr.city || addr.town || addr.village || ''; form.postal_code = addr.postcode || '';
-    } else {
+    isSelecting.value = true;
+    const addr = suggestion.address;
+    if (addr) {
+        form.address = addr.road || ''; form.street_number = addr.house_number || '';
+        form.city = addr.city || addr.town || addr.village || ''; form.postal_code = addr.postcode || '';
+    } else {
         form.address = suggestion.display_name; form.street_number = form.city = form.postal_code = '';
-    }
+    }
     form.floor = ''; form.door = '';
-    showSuggestions.value = false; activeSuggestionIndex.value = -1;
-    setTimeout(() => { isSelecting.value = false; }, 100);
+    showSuggestions.value = false; activeSuggestionIndex.value = -1;
+    setTimeout(() => { isSelecting.value = false; }, 100);
 };
 watch(() => form.address, (newVal) => {
-    if (isSelecting.value) return;
-    clearTimeout(searchTimeout);
-    if (newVal && newVal.length >= 3) {
-        searchTimeout = setTimeout(() => searchAddress(newVal), 500);
-    } else {
-        suggestions.value = []; showSuggestions.value = false;
-    }
+    if (isSelecting.value) return;
+    clearTimeout(searchTimeout);
+    if (newVal && newVal.length >= 3) {
+        searchTimeout = setTimeout(() => searchAddress(newVal), 500);
+    } else {
+        suggestions.value = []; showSuggestions.value = false;
+    }
 });
 const handleClickOutside = (event) => {
-    if (addressInputRef.value && !addressInputRef.value.$el.contains(event.target)) {
-        showSuggestions.value = false;
-    }
+    if (addressInputRef.value && !addressInputRef.value.$el.contains(event.target)) {
+        showSuggestions.value = false;
+    }
 };
 onMounted(() => document.addEventListener('click', handleClickOutside));
 onUnmounted(() => document.removeEventListener('click', handleClickOutside));
@@ -103,8 +103,8 @@ const highlightMatch = (text) => {
     return text.replace(regex, '<strong>$1</strong>');
 };
 const submit = () => {
-    showSuggestions.value = false;
-    form.post(route('clients.store'), { preserveScroll: true });
+    showSuggestions.value = false;
+    form.post(route('clients.store'), { preserveScroll: true });
 };
 </script>
 

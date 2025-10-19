@@ -4,13 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Models\Client;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 
 class ClientController extends Controller
 {
-    /**
-     * Display a listing of the resource.
-     */
     public function index()
     {
         return Inertia::render('Clients/Index', [
@@ -18,47 +16,58 @@ class ClientController extends Controller
         ]);
     }
 
-    /**
-     * Show the form for creating a new resource.
-     */
     public function create()
     {
         return Inertia::render('Clients/Create');
     }
 
-    /**
-     * Store a newly created resource in storage.
-     */
     public function store(Request $request)
     {
-        $validated = $request->validate([
-            'name' => 'required|string|max:255',
+        // CAMBIO: Se añade 'source' a la validación
+        $rules = [
+            'source' => 'nullable|string|in:offers',
+            'type' => 'required|in:empresa,autonomo',
             'cif_nif' => 'required|string|max:20|unique:clients,cif_nif',
             'contact_person' => 'nullable|string|max:255',
             'email' => 'nullable|email|max:255',
             'phone' => 'nullable|string|max:20',
-            'address' => 'nullable|string',
-        ]);
+            'address' => 'nullable|string|max:255',
+            'street_number' => 'nullable|string|max:20',
+            'floor' => 'nullable|string|max:20',
+            'door' => 'nullable|string|max:20',
+            'postal_code' => 'nullable|string|max:10',
+            'city' => 'nullable|string|max:255',
+        ];
 
-        $client = Client::create($validated);
+        if ($request->input('type') === 'empresa') {
+            $rules['name'] = 'required|string|max:255';
+        } else { // 'autonomo'
+            $rules['first_name'] = 'required|string|max:255';
+            $rules['last_name'] = 'required|string|max:255';
+        }
 
-        // CAMBIO CRÍTICO: Redirige a offers.create con el ID del nuevo cliente.
-        // Esto fuerza a Inertia a realizar una visita completa (full page visit),
-        // recargando las props de OfferController, incluyendo la lista de clientes.
-        return redirect()->route('offers.create', ['new_client_id' => $client->id])->with('success', 'Cliente creado y listo para usar en la oferta.');
+        $validated = $request->validate($rules);
+
+        $clientData = $validated;
+        if ($validated['type'] === 'autonomo') {
+            $clientData['name'] = $validated['first_name'] . ' ' . $validated['last_name'];
+        }
+
+        $client = Client::create($clientData);
+
+        // CAMBIO: La lógica de redirección ahora usa el marcador 'source'.
+        if ($request->input('source') === 'offers') {
+            return redirect()->route('offers.create', ['new_client_id' => $client->id])->with('success', 'Cliente creado y listo para usar en la oferta.');
+        } else {
+            return redirect()->route('clients.index')->with('success', 'Cliente creado con éxito.');
+        }
     }
-
-    /**
-     * Display the specified resource.
-     */
+    
     public function show(Client $client)
     {
-        // Por ahora no es necesaria, la dejamos vacía.
+        //
     }
 
-    /**
-     * Show the form for editing the specified resource.
-     */
     public function edit(Client $client)
     {
         return Inertia::render('Clients/Edit', [
@@ -66,43 +75,54 @@ class ClientController extends Controller
         ]);
     }
 
-    /**
-     * Update the specified resource in storage.
-     */
     public function update(Request $request, Client $client)
     {
-        $validated = $request->validate([
-            'name' => 'required|string|max:255',
+        $rules = [
+            'type' => 'required|in:empresa,autonomo',
             'cif_nif' => 'required|string|max:20|unique:clients,cif_nif,' . $client->id,
             'contact_person' => 'nullable|string|max:255',
             'email' => 'nullable|email|max:255',
             'phone' => 'nullable|string|max:20',
-            'address' => 'nullable|string',
-        ]);
+            'address' => 'nullable|string|max:255',
+            'street_number' => 'nullable|string|max:20',
+            'floor' => 'nullable|string|max:20',
+            'door' => 'nullable|string|max:20',
+            'postal_code' => 'nullable|string|max:10',
+            'city' => 'nullable|string|max:255',
+        ];
 
-        $client->update($validated);
+        if ($request->input('type') === 'empresa') {
+            $rules['name'] = 'required|string|max:255';
+        } else { // 'autonomo'
+            $rules['first_name'] = 'required|string|max:255';
+            $rules['last_name'] = 'required|string|max:255';
+        }
+
+        $validated = $request->validate($rules);
+
+        $clientData = $validated;
+        if ($validated['type'] === 'autonomo') {
+            $clientData['name'] = $validated['first_name'] . ' ' . $validated['last_name'];
+        }
+
+        $client->update($clientData);
 
         return redirect()->route('clients.index')->with('success', 'Cliente actualizado correctamente.');
     }
 
-    /**
-     * Remove the specified resource from storage.
-     */
     public function destroy(Client $client)
     {
         $client->delete();
         return redirect()->route('clients.index')->with('success', 'Cliente eliminado correctamente.');
     }
+    
     public function showOffers(Client $client)
     {
-        // Cargamos las ofertas de este cliente, paginadas, y con las relaciones
-        // que usamos en la vista de listado de ofertas para mantener la consistencia.
         $offers = $client->offers()
                          ->with(['package', 'user.team'])
                          ->latest()
                          ->paginate(10);
 
-        // Renderizamos una nueva vista de Inertia
         return Inertia::render('Clients/ShowOffers', [
             'client' => $client,
             'offers' => $offers,

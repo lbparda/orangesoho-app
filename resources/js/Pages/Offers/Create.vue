@@ -228,7 +228,8 @@ watch(
                                 </select>
                                 <InputError class="mt-2" :message="form.errors.client_id" />
                                 <p class="text-xs text-gray-500 mt-2">
-                                    ¿No encuentras al cliente? <Link :href="route('clients.create')" class="underline text-indigo-600">Puedes crearlo aquí.</Link>
+                                    ¿No encuentras al cliente? 
+                                    <Link :href="route('clients.create', { source: 'offers' })" class="underline text-indigo-600">Puedes crearlo aquí.</Link>
                                 </p>
                             </div>
 
@@ -302,27 +303,27 @@ watch(
                                 </div>
                                 <div v-if="isCentralitaActive" class="space-y-4 pt-4 border-t border-dashed">
                                     <div v-if="operadoraAutomaticaInfo">
-                                            <div v-if="operadoraAutomaticaInfo.pivot.is_included" class="p-2 bg-gray-100 rounded-md text-sm text-gray-800">✅ Op. Automática Incluida</div>
-                                            <div v-else class="flex items-center">
-                                                <input v-model="isOperadoraAutomaticaSelected" id="operadora_automatica_cb" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
-                                                <label for="operadora_automatica_cb" class="ml-2 block text-sm text-gray-900">Añadir Op. Automática (+{{ parseFloat(operadoraAutomaticaInfo.pivot.price).toFixed(2) }}€)</label>
-                                            </div>
+                                        <div v-if="operadoraAutomaticaInfo.pivot.is_included" class="p-2 bg-gray-100 rounded-md text-sm text-gray-800">✅ Op. Automática Incluida</div>
+                                        <div v-else class="flex items-center">
+                                            <input v-model="isOperadoraAutomaticaSelected" id="operadora_automatica_cb" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                                            <label for="operadora_automatica_cb" class="ml-2 block text-sm text-gray-900">Añadir Op. Automática (+{{ parseFloat(operadoraAutomaticaInfo.pivot.price).toFixed(2) }}€)</label>
+                                        </div>
                                     </div>
                                     <div class="pt-2">
-                                            <div v-if="includedCentralitaExtensions.length > 0" class="mb-4 space-y-2">
-                                                <p class="text-sm font-medium text-gray-700">Ext. Incluidas:</p>
-                                                <div v-for="ext in includedCentralitaExtensions" :key="`inc_${ext.id}`" class="p-2 bg-gray-100 rounded-md text-sm text-gray-800">✅ {{ ext.pivot.included_quantity }}x {{ ext.name }}</div>
-                                            </div>
-                                            <div v-if="autoIncludedExtension && !includedCentralita" class="mb-4">
-                                                <p class="text-sm font-medium text-gray-700">Ext. Incluida:</p>
-                                                <div class="p-2 bg-gray-100 rounded-md text-sm text-gray-800">✅ 1x {{ autoIncludedExtension.name }}</div>
-                                            </div>
-                                            <p class="text-sm font-medium text-gray-700">Ext. Adicionales:</p>
-                                            <div v-for="extension in availableAdditionalExtensions" :key="extension.id" class="flex items-center justify-between mt-2">
+                                        <div v-if="includedCentralitaExtensions.length > 0" class="mb-4 space-y-2">
+                                            <p class="text-sm font-medium text-gray-700">Ext. Incluidas:</p>
+                                            <div v-for="ext in includedCentralitaExtensions" :key="`inc_${ext.id}`" class="p-2 bg-gray-100 rounded-md text-sm text-gray-800">✅ {{ ext.pivot.included_quantity }}x {{ ext.name }}</div>
+                                        </div>
+                                        <div v-if="autoIncludedExtension && !includedCentralita" class="mb-4">
+                                            <p class="text-sm font-medium text-gray-700">Ext. Incluida:</p>
+                                            <div class="p-2 bg-gray-100 rounded-md text-sm text-gray-800">✅ 1x {{ autoIncludedExtension.name }}</div>
+                                        </div>
+                                        <p class="text-sm font-medium text-gray-700">Ext. Adicionales:</p>
+                                        <div v-for="extension in availableAdditionalExtensions" :key="extension.id" class="flex items-center justify-between mt-2">
                                             <label :for="`ext_add_${extension.id}`" class="text-sm text-gray-800">{{ extension.name }} (+{{ parseFloat(extension.price).toFixed(2) }}€)</label>
                                             <input :id="`ext_add_${extension.id}`" type="number" min="0" v-model.number="centralitaExtensionQuantities[extension.id]" class="w-20 rounded-md border-gray-300 shadow-sm text-center focus:border-indigo-500 focus:ring-indigo-500" placeholder="0">
                                         </div>
-                                        </div>
+                                    </div>
                                 </div>
                             </div>
 

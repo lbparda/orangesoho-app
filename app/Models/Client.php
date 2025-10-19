@@ -16,12 +16,22 @@ class Client extends Model
      * @var array<int, string>
      */
     protected $fillable = [
-        'name',
-        'cif_nif',
-        'contact_person',
-        'email',
-        'phone',
-        'address',
+        // --- AÑADE ESTOS CAMPOS ---
+        'type',
+        'first_name',
+        'last_name',
+        'street_number',
+        'floor',
+        'door',
+        'postal_code',
+        'city',
+        // --------------------------
+        'name', 
+        'cif_nif', 
+        'contact_person', 
+        'email', 
+        'phone', 
+        'address'
     ];
 
     public function offers(): HasMany
