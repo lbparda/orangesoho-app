@@ -1,12 +1,11 @@
 <script setup>
-// --- EL SCRIPT ES EL MISMO QUE FUNCIONABA ---
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { ref, computed, watch } from 'vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import InputError from '@/Components/InputError.vue';
-import Checkbox from '@/Components/Checkbox.vue'; // Asegúrate que esta importación existe
+import Checkbox from '@/Components/Checkbox.vue';
 import { useOfferCalculations } from '@/composables/useOfferCalculations.js';
 
 const props = defineProps({
@@ -25,8 +24,17 @@ const props = defineProps({
     initialClientId: [Number, String, null],
 });
 
+const selectedClient = ref(null);
+
+// --- NUEVA FUNCIÓN ---
+// Resetea la selección del cliente para mostrar el desplegable de nuevo
+const changeClient = () => {
+    form.client_id = null;
+};
+// --------------------
+
 const createNewLine = (isExtra = false) => ({
-    id: Date.now() + Math.random(), // ID único para v-for key
+    id: Date.now() + Math.random(),
     is_extra: isExtra,
     is_portability: false,
     phone_number: '', source_operator: null, has_vap: false,
@@ -56,7 +64,6 @@ const isOperadoraAutomaticaSelected = ref(false);
 const selectedTvAddonIds = ref([]);
 const showCommissionDetails = ref(false);
 
-// --- COMPUTED PROPS AUXILIARES ---
 const selectedPackage = computed(() => props.packages.find(p => p.id === selectedPackageId.value) || null);
 const tvAddonOptions = computed(() => selectedPackage.value?.addons.filter(a => a.type === 'tv') || []);
 const mobileAddonInfo = computed(() => selectedPackage.value?.addons.find(a => a.type === 'mobile_line'));
@@ -79,13 +86,11 @@ const availableO2oDiscounts = computed(() => selectedPackage.value?.o2o_discount
 const brandsForSelectedPackage = computed(() => [...new Set(availableTerminals.value.map(t => t.brand))]);
 const availableAdditionalExtensions = computed(() => props.centralitaExtensions);
 
-// --- USO DEL COMPOSABLE ---
 const { calculationSummary } = useOfferCalculations(
     props, selectedPackageId, lines, selectedInternetAddonId, additionalInternetLines,
     selectedCentralitaId, centralitaExtensionQuantities, isOperadoraAutomaticaSelected, selectedTvAddonIds
 );
 
-// --- MÉTODOS ---
 const modelsByBrand = (brand) => availableTerminals.value.filter(t => t.brand === brand).filter((v, i, a) => a.findIndex(t => t.model === v.model) === i);
 const findTerminalPivot = (line) => availableTerminals.value.find(t => t.id === line.selected_model_id && t.pivot.duration_months === line.selected_duration)?.pivot;
 const assignTerminalPrices = (line) => {
@@ -102,13 +107,11 @@ const addLine = () => {
 };
 const removeLine = (index) => { if (lines.value[index]?.is_extra) lines.value.splice(index, 1); };
 
-// ✅ NUEVA FUNCIÓN: Copiar desde la línea anterior
 const copyPreviousLine = (line, index) => {
     if (index <= 0 || !lines.value[index - 1]) return;
 
     const prev = lines.value[index - 1];
     line.is_portability = prev.is_portability;
-  //  line.phone_number = prev.phone_number;
     line.source_operator = prev.source_operator;
     line.has_vap = prev.has_vap;
     line.o2o_discount_id = prev.o2o_discount_id;
@@ -118,8 +121,6 @@ const copyPreviousLine = (line, index) => {
     line.initial_cost = prev.initial_cost;
     line.monthly_cost = prev.monthly_cost;
     line.terminal_pivot = prev.terminal_pivot;
-
-    // Reasignar precios (por coherencia)
     assignTerminalPrices(line);
 };
 
@@ -137,8 +138,8 @@ const getO2oDiscountsForLine = (line, index) => {
     return availableO2oDiscounts.value;
 };
 const saveOffer = () => {
-     if (!form.client_id) { alert("Por favor, selecciona un cliente."); return; }
-     if (!selectedPackage.value) { alert("Por favor, selecciona un paquete."); return; }
+    if (!form.client_id) { alert("Por favor, selecciona un cliente."); return; }
+    if (!selectedPackage.value) { alert("Por favor, selecciona un paquete."); return; }
     try {
         let finalExtensions = [];
         for (const [id, qty] of Object.entries(centralitaExtensionQuantities.value)) {
@@ -167,11 +168,10 @@ const saveOffer = () => {
     } catch (e) { console.error("Error preparing offer:", e); alert("Error inesperado."); }
 };
 
-// --- WATCHERS ---
 const addWatchersToLine = (line) => {
-     watch(() => line.is_portability, (isPortability, old) => { if (old && !isPortability) { line.has_vap = false; line.selected_brand = null; line.selected_model_id = null; line.selected_duration = null; assignTerminalPrices(line); line.source_operator = null; } });
-     watch(() => line.has_vap, (hasVap, old) => { if (old && !hasVap) { line.selected_brand = null; line.selected_model_id = null; line.selected_duration = null; assignTerminalPrices(line); } });
-     watch(() => [line.selected_model_id, line.selected_duration], () => assignTerminalPrices(line)); // Añadido para recalcular si cambia terminal/duración
+    watch(() => line.is_portability, (isPortability, old) => { if (old && !isPortability) { line.has_vap = false; line.selected_brand = null; line.selected_model_id = null; line.selected_duration = null; assignTerminalPrices(line); line.source_operator = null; } });
+    watch(() => line.has_vap, (hasVap, old) => { if (old && !hasVap) { line.selected_brand = null; line.selected_model_id = null; line.selected_duration = null; assignTerminalPrices(line); } });
+    watch(() => [line.selected_model_id, line.selected_duration], () => assignTerminalPrices(line));
 };
 
 watch(selectedPackageId, (newPackageId) => {
@@ -180,14 +180,26 @@ watch(selectedPackageId, (newPackageId) => {
     if (!newPackageId) return;
     const defaultOption = [...internetAddonOptions.value].sort((a, b) => (a.pivot.price ?? 0) - (b.pivot.price ?? 0))[0];
     if (defaultOption) selectedInternetAddonId.value = defaultOption.id;
-    const mobileAddon = mobileAddonInfo.value; // Ya está calculado
+    const mobileAddon = mobileAddonInfo.value;
     const quantity = mobileAddon?.pivot.included_quantity || 0;
     for (let i = 0; i < quantity; i++) {
         const newLine = createNewLine(false);
         lines.value.push(newLine);
-        addWatchersToLine(newLine); // <-- Asegurar que los watchers se añaden
+        addWatchersToLine(newLine);
     }
 });
+
+watch(
+    () => form.client_id,
+    (newClientId) => {
+        if (newClientId) {
+            selectedClient.value = props.clients.find(c => c.id === Number(newClientId)) || null;
+        } else {
+            selectedClient.value = null;
+        }
+    },
+    { immediate: true }
+);
 
 </script>
 
@@ -208,19 +220,39 @@ watch(selectedPackageId, (newPackageId) => {
                         </div>
 
                         <div class="mb-8">
-                            <label for="client" class="block text-sm font-medium text-gray-700 mb-2">1. Selecciona un Cliente</label>
-                            <select v-model="form.client_id" id="client" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
-                                <option :value="null" disabled>-- Elige un cliente --</option>
-                                <option v-for="client in clients" :key="client.id" :value="client.id">{{ client.name }} ({{ client.cif_nif }})</option>
-                            </select>
-                            <InputError class="mt-2" :message="form.errors.client_id" />
-                             <p class="text-xs text-gray-500 mt-2">
-                                ¿No encuentras al cliente? <Link :href="route('clients.create')" class="underline text-indigo-600">Puedes crearlo aquí.</Link>
-                             </p>
+                            <div v-if="!form.client_id">
+                                <label for="client" class="block text-sm font-medium text-gray-700 mb-2">1. Selecciona un Cliente</label>
+                                <select v-model="form.client_id" id="client" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                    <option :value="null" disabled>-- Elige un cliente --</option>
+                                    <option v-for="client in clients" :key="client.id" :value="client.id">{{ client.name }} ({{ client.cif_nif }})</option>
+                                </select>
+                                <InputError class="mt-2" :message="form.errors.client_id" />
+                                <p class="text-xs text-gray-500 mt-2">
+                                    ¿No encuentras al cliente? <Link :href="route('clients.create')" class="underline text-indigo-600">Puedes crearlo aquí.</Link>
+                                </p>
+                            </div>
+
+                            <div v-else>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">1. Cliente Seleccionado</label>
+                                <div v-if="selectedClient" class="p-4 border rounded-md bg-gray-50 shadow-sm">
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1 text-sm">
+                                        <p><strong>Nombre:</strong> {{ selectedClient.name }}</p>
+                                        <p><strong>CIF/NIF:</strong> {{ selectedClient.cif_nif }}</p>
+                                        <p><strong>Email:</strong> {{ selectedClient.email || 'No disponible' }}</p>
+                                        <p><strong>Teléfono:</strong> {{ selectedClient.phone_number || 'No disponible' }}</p>
+                                        <p class="col-span-2"><strong>Dirección:</strong> {{ selectedClient.address || 'No disponible' }}</p>
+                                    </div>
+                                </div>
+                                <div class="mt-4">
+                                    <SecondaryButton type="button" @click="changeClient">
+                                        Cambiar de cliente
+                                    </SecondaryButton>
+                                </div>
+                            </div>
                         </div>
                         <div>
                             <label for="package" class="block text-sm font-medium text-gray-700 mb-2">2. Selecciona un Paquete Base</label>
-                            <select v-model="selectedPackageId" id="package" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                            <select v-model="selectedPackageId" id="package" :disabled="!form.client_id" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 disabled:bg-gray-100">
                                 <option :value="null" disabled>-- Elige un paquete --</option>
                                 <option v-for="pkg in packages" :key="pkg.id" :value="pkg.id">{{ pkg.name }}</option>
                             </select>
@@ -243,7 +275,7 @@ watch(selectedPackageId, (newPackageId) => {
                         </div>
 
                         <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            
+
                             <div v-if="tvAddonOptions.length > 0" class="space-y-4 p-6 bg-slate-50 rounded-lg h-full">
                                 <h3 class="text-lg font-semibold text-gray-800">4. Televisión</h3>
                                 <div class="space-y-2">
@@ -324,7 +356,6 @@ watch(selectedPackageId, (newPackageId) => {
                                         {{ line.is_extra ? `Línea Adicional ${index + 1 - lines.filter(l => !l.is_extra).length}` : `Línea Principal ${index + 1}` }}
                                     </span>
                                     <div class="flex space-x-2">
-                                        <!-- ✅ Botón Copiar: visible en todas las líneas excepto la primera (index > 0) -->
                                         <button
                                             v-if="index > 0"
                                             @click="copyPreviousLine(line, index)"
@@ -337,7 +368,6 @@ watch(selectedPackageId, (newPackageId) => {
                                             </svg>
                                         </button>
 
-                                        <!-- Botón Eliminar: solo en líneas adicionales -->
                                         <button
                                             v-if="line.is_extra"
                                             @click="removeLine(index)"

@@ -1,5 +1,4 @@
 <script setup>
-// --- EL SCRIPT ES EL MISMO QUE FUNCIONABA ---
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { ref, computed, watch, onMounted } from 'vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
@@ -10,14 +9,35 @@ import Checkbox from '@/Components/Checkbox.vue';
 import { useOfferCalculations } from '@/composables/useOfferCalculations.js';
 
 const props = defineProps({
-    offer: Object, packages: Array, discounts: Array, operators: Array,
-    portabilityCommission: Number, additionalInternetAddons: Array, centralitaExtensions: Array,
-    auth: Object, clients: Array,
+    offer: Object,
+    packages: Array,
+    discounts: Array,
+    operators: Array,
+    portabilityCommission: Number,
+    additionalInternetAddons: Array,
+    centralitaExtensions: Array,
+    auth: Object,
+    clients: Array,
 });
 
+// --- LÓGICA PARA GESTIONAR LA VISTA DEL CLIENTE ---
+const selectedClient = ref(null);
+const isReassigningClient = ref(false); // Controla si se muestra el desplegable
+
+const showReassignSelector = () => {
+    isReassigningClient.value = true;
+};
+// --- FIN LÓGICA CLIENTE ---
+
 const form = useForm({
-    client_id: props.offer.client_id, package_id: props.offer.package_id, lines: [],
-    internet_addon_id: null, additional_internet_lines: [], centralita: {}, tv_addons: [], summary: {},
+    client_id: props.offer.client_id,
+    package_id: props.offer.package_id,
+    lines: [],
+    internet_addon_id: null,
+    additional_internet_lines: [],
+    centralita: {},
+    tv_addons: [],
+    summary: {},
 });
 
 const selectedPackageId = ref(props.offer.package_id);
@@ -31,9 +51,16 @@ const findInitialTerminalData = (lineFromServer) => {
 };
 const lines = ref(props.offer.lines.map(line => {
     const { terminal_pivot, terminalInfo } = findInitialTerminalData(line);
-    return { ...line, id: line.id || Date.now() + Math.random(), is_extra: !!line.is_extra, is_portability: !!line.is_portability, has_vap: !!line.has_vap,
-        selected_brand: terminalInfo?.brand || null, selected_model_id: terminalInfo?.id || null,
-        selected_duration: terminal_pivot?.duration_months || null, terminal_pivot: terminal_pivot,
+    return {
+        ...line,
+        id: line.id || Date.now() + Math.random(),
+        is_extra: !!line.is_extra,
+        is_portability: !!line.is_portability,
+        has_vap: !!line.has_vap,
+        selected_brand: terminalInfo?.brand || null,
+        selected_model_id: terminalInfo?.id || null,
+        selected_duration: terminal_pivot?.duration_months || null,
+        terminal_pivot: terminal_pivot,
     };
 }));
 const getAddonId = (type) => props.offer.addons.find(a => a.type === type)?.id;
@@ -91,13 +118,11 @@ const assignTerminalPrices = (line) => {
     line.terminal_pivot = pivot;
 };
 
-// ✅ NUEVA FUNCIÓN: Copiar desde la línea anterior
 const copyPreviousLine = (line, index) => {
     if (index <= 0 || !lines.value[index - 1]) return;
 
     const prev = lines.value[index - 1];
     line.is_portability = prev.is_portability;
-   // line.phone_number = prev.phone_number;
     line.source_operator = prev.source_operator;
     line.has_vap = prev.has_vap;
     line.o2o_discount_id = prev.o2o_discount_id;
@@ -107,8 +132,6 @@ const copyPreviousLine = (line, index) => {
     line.initial_cost = prev.initial_cost;
     line.monthly_cost = prev.monthly_cost;
     line.terminal_pivot = prev.terminal_pivot;
-
-    // Reasignar precios por coherencia
     assignTerminalPrices(line);
 };
 
@@ -144,7 +167,19 @@ const addWatchersToLine = (line) => {
      watch(() => [line.selected_model_id, line.selected_duration], () => assignTerminalPrices(line));
 };
 lines.value.forEach(addWatchersToLine);
-onMounted(() => {}); // Dejar vacío o para lógica del DOM
+
+watch(
+    () => form.client_id,
+    (newClientId) => {
+        if (newClientId) {
+            selectedClient.value = props.clients.find(c => c.id === Number(newClientId)) || null;
+            isReassigningClient.value = false; // Oculta el desplegable al seleccionar
+        } else {
+            selectedClient.value = null;
+        }
+    },
+    { immediate: true }
+);
 </script>
 
 <template>
@@ -166,11 +201,31 @@ onMounted(() => {}); // Dejar vacío o para lógica del DOM
 
                     <div class="bg-white shadow-sm sm:rounded-lg p-8">
                          <div class="mb-8">
-                            <label for="client" class="block text-sm font-medium text-gray-700 mb-2">Cliente</label>
-                            <select v-model="form.client_id" id="client" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
-                                <option v-for="client in clients" :key="client.id" :value="client.id">{{ client.name }} ({{ client.cif_nif }})</option>
-                            </select>
-                            <InputError class="mt-2" :message="form.errors.client_id" />
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Cliente</label>
+                            
+                            <div v-if="!isReassigningClient && selectedClient">
+                                <div class="p-4 border rounded-md bg-gray-50 shadow-sm">
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1 text-sm">
+                                        <p><strong>Nombre:</strong> {{ selectedClient.name }}</p>
+                                        <p><strong>CIF/NIF:</strong> {{ selectedClient.cif_nif }}</p>
+                                        <p><strong>Email:</strong> {{ selectedClient.email || 'No disponible' }}</p>
+                                        <p><strong>Teléfono:</strong> {{ selectedClient.phone_number || 'No disponible' }}</p>
+                                        <p class="col-span-2"><strong>Dirección:</strong> {{ selectedClient.address || 'No disponible' }}</p>
+                                    </div>
+                                </div>
+                                <div class="mt-4">
+                                    <SecondaryButton type="button" @click="showReassignSelector">
+                                        Reasignar Cliente
+                                    </SecondaryButton>
+                                </div>
+                            </div>
+
+                            <div v-else>
+                                <select v-model="form.client_id" id="client" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                    <option v-for="client in clients" :key="client.id" :value="client.id">{{ client.name }} ({{ client.cif_nif }})</option>
+                                </select>
+                                <InputError class="mt-2" :message="form.errors.client_id" />
+                            </div>
                         </div>
                         <div>
                             <label for="package" class="block text-sm font-medium text-gray-700 mb-2">Paquete Base</label>
@@ -220,27 +275,27 @@ onMounted(() => {}); // Dejar vacío o para lógica del DOM
                                 </div>
                                 <div v-if="isCentralitaActive" class="space-y-4 pt-4 border-t border-dashed">
                                     <div v-if="operadoraAutomaticaInfo">
-                                            <div v-if="operadoraAutomaticaInfo.pivot.is_included" class="p-2 bg-gray-100 rounded-md text-sm text-gray-800">✅ Op. Automática Incluida</div>
-                                            <div v-else class="flex items-center">
-                                                <input v-model="isOperadoraAutomaticaSelected" id="operadora_automatica_cb" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
-                                                <label for="operadora_automatica_cb" class="ml-2 block text-sm text-gray-900">Añadir Op. Automática (+{{ parseFloat(operadoraAutomaticaInfo.pivot.price).toFixed(2) }}€)</label>
-                                            </div>
+                                        <div v-if="operadoraAutomaticaInfo.pivot.is_included" class="p-2 bg-gray-100 rounded-md text-sm text-gray-800">✅ Op. Automática Incluida</div>
+                                        <div v-else class="flex items-center">
+                                            <input v-model="isOperadoraAutomaticaSelected" id="operadora_automatica_cb" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                                            <label for="operadora_automatica_cb" class="ml-2 block text-sm text-gray-900">Añadir Op. Automática (+{{ parseFloat(operadoraAutomaticaInfo.pivot.price).toFixed(2) }}€)</label>
+                                        </div>
                                     </div>
                                     <div class="pt-2">
-                                            <div v-if="includedCentralitaExtensions.length > 0" class="mb-4 space-y-2">
-                                                <p class="text-sm font-medium text-gray-700">Ext. Incluidas:</p>
-                                                <div v-for="ext in includedCentralitaExtensions" :key="`inc_${ext.id}`" class="p-2 bg-gray-100 rounded-md text-sm text-gray-800">✅ {{ ext.pivot.included_quantity }}x {{ ext.name }}</div>
-                                            </div>
-                                            <div v-if="autoIncludedExtension && !includedCentralita" class="mb-4">
-                                                <p class="text-sm font-medium text-gray-700">Ext. Incluida:</p>
-                                                <div class="p-2 bg-gray-100 rounded-md text-sm text-gray-800">✅ 1x {{ autoIncludedExtension.name }}</div>
-                                            </div>
-                                            <p class="text-sm font-medium text-gray-700">Ext. Adicionales:</p>
-                                            <div v-for="extension in availableAdditionalExtensions" :key="extension.id" class="flex items-center justify-between mt-2">
-                                            <label :for="`ext_add_${extension.id}`" class="text-sm text-gray-800">{{ extension.name }} (+{{ parseFloat(extension.price).toFixed(2) }}€)</label>
-                                            <input :id="`ext_add_${extension.id}`" type="number" min="0" v-model.number="centralitaExtensionQuantities[extension.id]" class="w-20 rounded-md border-gray-300 shadow-sm text-center focus:border-indigo-500 focus:ring-indigo-500" placeholder="0">
+                                        <div v-if="includedCentralitaExtensions.length > 0" class="mb-4 space-y-2">
+                                            <p class="text-sm font-medium text-gray-700">Ext. Incluidas:</p>
+                                            <div v-for="ext in includedCentralitaExtensions" :key="`inc_${ext.id}`" class="p-2 bg-gray-100 rounded-md text-sm text-gray-800">✅ {{ ext.pivot.included_quantity }}x {{ ext.name }}</div>
                                         </div>
+                                        <div v-if="autoIncludedExtension && !includedCentralita" class="mb-4">
+                                            <p class="text-sm font-medium text-gray-700">Ext. Incluida:</p>
+                                            <div class="p-2 bg-gray-100 rounded-md text-sm text-gray-800">✅ 1x {{ autoIncludedExtension.name }}</div>
                                         </div>
+                                        <p class="text-sm font-medium text-gray-700">Ext. Adicionales:</p>
+                                        <div v-for="extension in availableAdditionalExtensions" :key="extension.id" class="flex items-center justify-between mt-2">
+                                        <label :for="`ext_add_${extension.id}`" class="text-sm text-gray-800">{{ extension.name }} (+{{ parseFloat(extension.price).toFixed(2) }}€)</label>
+                                        <input :id="`ext_add_${extension.id}`" type="number" min="0" v-model.number="centralitaExtensionQuantities[extension.id]" class="w-20 rounded-md border-gray-300 shadow-sm text-center focus:border-indigo-500 focus:ring-indigo-500" placeholder="0">
+                                    </div>
+                                    </div>
                                 </div>
                             </div>
 
@@ -271,7 +326,6 @@ onMounted(() => {}); // Dejar vacío o para lógica del DOM
                                          {{ line.is_extra ? `Línea Adicional ${index + 1 - lines.filter(l => !l.is_extra).length}` : `Línea Principal ${index + 1}` }}
                                      </span>
                                      <div class="flex space-x-2">
-                                         <!-- ✅ Botón Copiar: visible en todas las líneas excepto la primera (index > 0) -->
                                          <button
                                              v-if="index > 0"
                                              @click="copyPreviousLine(line, index)"
@@ -283,8 +337,6 @@ onMounted(() => {}); // Dejar vacío o para lógica del DOM
                                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
                                              </svg>
                                          </button>
-
-                                         <!-- Botón Eliminar: solo en líneas adicionales -->
                                          <button
                                              v-if="line.is_extra"
                                              @click="removeLine(index)"
@@ -341,7 +393,7 @@ onMounted(() => {}); // Dejar vacío o para lógica del DOM
                                       </div>
                                  </div>
                              </div>
-                         </div>
+                        </div>
                         <div class="flex justify-center pt-4">
                             <PrimaryButton @click="addLine" type="button">Añadir Línea Móvil Adicional</PrimaryButton>
                         </div>
