@@ -8,10 +8,10 @@ import InputError from '@/Components/InputError.vue';
 import { ref, watch, onMounted, onUnmounted } from 'vue';
 
 const form = useForm({
-    type: 'empresa', // 'empresa' o 'particular'
+    type: 'empresa', // 'empresa' o 'autonomo'
     name: '', // Razón Social
-    first_name: '', // Nombre del particular
-    last_name: '', // Apellidos del particular
+    first_name: '', // Nombre del autonomo
+    last_name: '', // Apellidos del autonomo
     cif_nif: '',
     contact_person: '',
     email: '',
@@ -24,17 +24,14 @@ const form = useForm({
     postal_code: '',
 });
 
-// MEJORA: Limpia los campos que se ocultan al cambiar de tipo
+// MODIFICADO: Cambiado 'particular' por 'autonomo'
 watch(() => form.type, (newType) => {
-    // Resetea los errores para evitar que se muestren en campos ocultos
     form.clearErrors();
 
     if (newType === 'empresa') {
-        // Limpiamos los campos de particular
         form.first_name = '';
         form.last_name = '';
-    } else { // Si es 'particular'
-        // Limpiamos los campos de empresa
+    } else { // 'autonomo'
         form.name = '';
         form.contact_person = '';
     }
@@ -132,16 +129,13 @@ const submit = () => {
                                     <InputLabel for="type" value="Tipo de Cliente *" />
                                     <select id="type" v-model="form.type" class="mt-1 block w-full border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm">
                                         <option value="empresa">Empresa (CIF)</option>
-                                        <option value="particular">Particular (NIF)</option>
+                                        <option value="autonomo">Autónomo (NIF)</option>
                                     </select>
                                 </div>
                                 
                                 <div>
                                     <InputLabel for="cif_nif" :value="form.type === 'empresa' ? 'CIF *' : 'NIF *'" />
-                                    <div class="relative">
-                                        <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">#</span>
-                                        <TextInput id="cif_nif" v-model="form.cif_nif" type="text" class="mt-1 block w-full pl-8" required />
-                                    </div>
+                                    <TextInput id="cif_nif" v-model="form.cif_nif" type="text" class="mt-1 block w-full" required />
                                     <InputError class="mt-2" :message="form.errors.cif_nif" />
                                 </div>
 
@@ -158,7 +152,7 @@ const submit = () => {
                                     </div>
                                 </template>
 
-                                <template v-if="form.type === 'particular'">
+                                <template v-if="form.type === 'autonomo'">
                                     <div>
                                         <InputLabel for="first_name" value="Nombre *" />
                                         <TextInput id="first_name" v-model="form.first_name" type="text" class="mt-1 block w-full" />
