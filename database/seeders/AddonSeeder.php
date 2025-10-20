@@ -92,5 +92,16 @@ class AddonSeeder extends Seeder
             ['name' => 'Futbol y más deportes'],
             ['type' => 'tv', 'price' => 33.00, 'commission' => 55.00, 'description' => 'Fútbol y una selección de otros deportes.']
         );
+          // --- TV FUTBOL ---
+        Addon::updateOrCreate(
+            ['name' => 'Futbol Bares <10000'],
+            ['type' => 'tv', 'price' => 285.00, 'commission' => 50.00, 'description' => 'Todo el fútbol.']
+        );
+        Addon::updateOrCreate(
+            ['name' => 'Futbol Bares <45000'],
+            ['type' => 'tv', 'price' => 300.00, 'commission' => 55.00, 'description' => 'Todo el fútbol.']
+        );
+
+
     }
 }

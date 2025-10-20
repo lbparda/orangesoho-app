@@ -209,7 +209,7 @@ watch(
                                         <p><strong>Nombre:</strong> {{ selectedClient.name }}</p>
                                         <p><strong>CIF/NIF:</strong> {{ selectedClient.cif_nif }}</p>
                                         <p><strong>Email:</strong> {{ selectedClient.email || 'No disponible' }}</p>
-                                        <p><strong>Teléfono:</strong> {{ selectedClient.phone_number || 'No disponible' }}</p>
+                                        <p><strong>Teléfono:</strong> {{ selectedClient.phone || 'No disponible' }}</p>
                                         <p class="col-span-2"><strong>Dirección:</strong> {{ selectedClient.address || 'No disponible' }}</p>
                                     </div>
                                 </div>
