@@ -92,14 +92,25 @@ class AddonSeeder extends Seeder
             ['name' => 'Futbol y más deportes'],
             ['type' => 'tv', 'price' => 33.00, 'commission' => 55.00, 'description' => 'Fútbol y una selección de otros deportes.']
         );
-          // --- TV FUTBOL ---
+        // --- NUEVO: ADDONS PARA TV BARES POR HABITANTES ---
         Addon::updateOrCreate(
-            ['name' => 'Futbol Bares <10000'],
-            ['type' => 'tv', 'price' => 285.00, 'commission' => 50.00, 'description' => 'Todo el fútbol.']
+            ['name' => 'Futbol Bares < 10.000 hab.'],
+            ['type' => 'tv', 'price' => 285.00, 'commission' => 50.00, 'description' => 'TV para bares en localidades con menos de 10.000 habitantes.']
         );
+
         Addon::updateOrCreate(
-            ['name' => 'Futbol Bares <45000'],
-            ['type' => 'tv', 'price' => 300.00, 'commission' => 55.00, 'description' => 'Todo el fútbol.']
+            ['name' => 'Futbol Bares 10.000-45.000 hab.'],
+            ['type' => 'tv', 'price' => 310.00, 'commission' => 50.00, 'description' => 'TV para bares en localidades entre 10.000 y 45.000 habitantes.']
+        );
+
+        Addon::updateOrCreate(
+            ['name' => 'Futbol Bares 45.000-250.000 hab.'],
+            ['type' => 'tv', 'price' => 330.00, 'commission' => 50.00, 'description' => 'TV para bares en localidades entre 45.000 y 250.000 habitantes.']
+        );
+
+        Addon::updateOrCreate(
+            ['name' => 'Futbol Bares > 250.000 hab.'],
+            ['type' => 'tv', 'price' => 355.00, 'commission' => 50.00, 'description' => 'TV para bares en localidades con más de 250.000 habitantes.']
         );
 
 
