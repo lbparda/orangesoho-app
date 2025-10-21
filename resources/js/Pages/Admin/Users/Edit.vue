@@ -76,7 +76,7 @@ const submit = () => {
                             <InputError class="mt-2" :message="form.errors.team_id" />
                         </div>
 
-                        <<div class="mt-4">
+                        <div class="mt-4">
                             <InputLabel for="role" value="Rol del Usuario" />
                             <select id="role" v-model="form.role" class="mt-1 block w-full border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm">
                                 <option value="user">Usuario</option>
