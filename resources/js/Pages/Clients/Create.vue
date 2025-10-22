@@ -5,13 +5,15 @@ import PrimaryButton from '@/Components/PrimaryButton.vue';
 import InputLabel from '@/Components/InputLabel.vue';
 import TextInput from '@/Components/TextInput.vue';
 import InputError from '@/Components/InputError.vue';
-import { ref, watch, onMounted, onUnmounted } from 'vue';
+import { ref, watch } from 'vue';
+import { useAddressAutocomplete } from '@/composables/useAddressAutocomplete.js'; // <-- Importar el Composable
 
-// CAMBIO: Leemos el marcador 'source' de la URL al iniciar el componente.
+// Lectura del parámetro 'source'
 const source = new URLSearchParams(window.location.search).get('source');
 
+// --- LÓGICA DEL FORMULARIO ---
 const form = useForm({
-    source: source, // CAMBIO: Añadimos el marcador al formulario para enviarlo al backend.
+    source: source,
     type: 'empresa',
     name: '',
     first_name: '',
@@ -39,73 +41,26 @@ watch(() => form.type, (newType) => {
     }
 });
 
-const suggestions = ref([]);
-const isSelecting = ref(false);
-const showSuggestions = ref(false);
-let searchTimeout = null;
-const addressInputRef = ref(null);
-const isLoading = ref(false);
-const activeSuggestionIndex = ref(-1);
-
-const searchAddress = async (query) => {
-    if (!query || query.length < 3 || isSelecting.value) {
-        suggestions.value = []; showSuggestions.value = false; return;
-    }
-    showSuggestions.value = true; isLoading.value = true; activeSuggestionIndex.value = -1;
-    try {
-        const params = new URLSearchParams({ q: query, countrycodes: 'ES', format: 'json', addressdetails: 1, limit: 5, 'accept-language': 'es' });
-        const userAgent = 'OrangesohoApp/1.0 (ccklbparda@gmail.com)';
-        const response = await fetch(`https://nominatim.openstreetmap.org/search?${params}`, { headers: { 'User-Agent': userAgent } });
-        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-        suggestions.value = await response.json();
-    } catch (error) {
-        console.error('Error al buscar dirección:', error); suggestions.value = [];
-    } finally {
-        isLoading.value = false;
-    }
-};
-const selectSuggestion = (suggestion) => {
-    if (!suggestion) return;
-    isSelecting.value = true;
-    const addr = suggestion.address;
-    if (addr) {
-        form.address = addr.road || ''; form.street_number = addr.house_number || '';
-        form.city = addr.city || addr.town || addr.village || ''; form.postal_code = addr.postcode || '';
-    } else {
-        form.address = suggestion.display_name; form.street_number = form.city = form.postal_code = '';
-    }
-    form.floor = ''; form.door = '';
-    showSuggestions.value = false; activeSuggestionIndex.value = -1;
-    setTimeout(() => { isSelecting.value = false; }, 100);
-};
-watch(() => form.address, (newVal) => {
-    if (isSelecting.value) return;
-    clearTimeout(searchTimeout);
-    if (newVal && newVal.length >= 3) {
-        searchTimeout = setTimeout(() => searchAddress(newVal), 500);
-    } else {
-        suggestions.value = []; showSuggestions.value = false;
-    }
-});
-const handleClickOutside = (event) => {
-    if (addressInputRef.value && !addressInputRef.value.$el.contains(event.target)) {
-        showSuggestions.value = false;
-    }
-};
-onMounted(() => document.addEventListener('click', handleClickOutside));
-onUnmounted(() => document.removeEventListener('click', handleClickOutside));
-const onArrowDown = () => { if (activeSuggestionIndex.value < suggestions.value.length - 1) activeSuggestionIndex.value++; };
-const onArrowUp = () => { if (activeSuggestionIndex.value > 0) activeSuggestionIndex.value--; };
-const onEnter = () => { selectSuggestion(suggestions.value[activeSuggestionIndex.value]); };
-const highlightMatch = (text) => {
-    if (!form.address || form.address.length < 3) return text;
-    const regex = new RegExp(`(${form.address})`, 'gi');
-    return text.replace(regex, '<strong>$1</strong>');
-};
 const submit = () => {
+    // Asegurarse de ocultar las sugerencias antes de enviar
     showSuggestions.value = false;
     form.post(route('clients.store'), { preserveScroll: true });
 };
+
+// --- Usar el Composable de Autocompletado ---
+const {
+    suggestions,
+    showSuggestions,
+    isLoading,
+    activeSuggestionIndex,
+    addressInputRef,
+    onArrowDown,
+    onArrowUp,
+    onEnter,
+    highlightMatch,
+    selectSuggestion,
+} = useAddressAutocomplete(form);
+
 </script>
 
 <template>
@@ -120,10 +75,9 @@ const submit = () => {
             <div class="max-w-4xl mx-auto sm:px-6 lg:px-8">
                 <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
                     <form @submit.prevent="submit" class="p-6 md:p-8 space-y-8">
-                        
-                        <div class="space-y-6">
+
+                        <section class="space-y-6">
                             <h3 class="text-lg font-medium leading-6 text-gray-900">Datos Principales</h3>
-                            
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div>
                                     <InputLabel for="type" value="Tipo de Cliente *" />
@@ -132,13 +86,11 @@ const submit = () => {
                                         <option value="autonomo">Autónomo (NIF)</option>
                                     </select>
                                 </div>
-                                
                                 <div>
                                     <InputLabel for="cif_nif" :value="form.type === 'empresa' ? 'CIF *' : 'NIF *'" />
                                     <TextInput id="cif_nif" v-model="form.cif_nif" type="text" class="mt-1 block w-full" required />
                                     <InputError class="mt-2" :message="form.errors.cif_nif" />
                                 </div>
-
                                 <template v-if="form.type === 'empresa'">
                                     <div class="md:col-span-2">
                                         <InputLabel for="name" value="Razón Social *" />
@@ -151,7 +103,6 @@ const submit = () => {
                                         <InputError class="mt-2" :message="form.errors.contact_person" />
                                     </div>
                                 </template>
-
                                 <template v-if="form.type === 'autonomo'">
                                     <div>
                                         <InputLabel for="first_name" value="Nombre *" />
@@ -165,9 +116,9 @@ const submit = () => {
                                     </div>
                                 </template>
                             </div>
-                        </div>
+                        </section>
 
-                        <div class="space-y-6 border-t border-gray-200 pt-8">
+                        <section class="space-y-6 border-t border-gray-200 pt-8">
                              <h3 class="text-lg font-medium leading-6 text-gray-900">Información de Contacto y Dirección</h3>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div>
@@ -185,15 +136,15 @@ const submit = () => {
                                     <InputLabel for="address" value="Buscar Dirección" />
                                     <div class="relative">
                                         <TextInput id="address" ref="addressInputRef" v-model="form.address" type="text" class="mt-1 block w-full" placeholder="Ej: Calle Gran Vía, Madrid" autocomplete="off" @focus="showSuggestions = true" @keydown.down.prevent="onArrowDown" @keydown.up.prevent="onArrowUp" @keydown.enter.prevent="onEnter"/>
-                                        <div v-if="isLoading" class="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none"><svg class="animate-spin h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg></div>
+                                        <div v-if="isLoading" class="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none"><svg class="animate-spin h-5 w-5 text-gray-400" xmlns="[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg></div>
                                     </div>
-                                    <ul v-show="showSuggestions && (suggestions.length > 0 || isLoading)" class="absolute mt-1 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto z-50">
-                                        <li v-if="suggestions.length === 0 && !isLoading && form.address.length > 2" class="px-4 py-2 text-sm text-gray-500 italic">No se encontraron resultados.</li>
-                                        <li v-for="(suggestion, index) in suggestions" :key="suggestion.place_id" @click="selectSuggestion(suggestion)" :class="{ 'bg-indigo-100': index === activeSuggestionIndex }" class="px-4 py-2 hover:bg-indigo-100 cursor-pointer text-sm" v-html="highlightMatch(suggestion.display_name)"></li>
+                                    <ul v-show="showSuggestions && (suggestions?.length > 0 || isLoading)" class="absolute mt-1 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto z-50">
+                                        <li v-if="!suggestions?.length && !isLoading && form.address.length > 2" class="px-4 py-2 text-sm text-gray-500 italic">No se encontraron resultados.</li>
+                                        <li v-for="(suggestion, index) in suggestions || []" :key="suggestion.place_id" @click="selectSuggestion(suggestion)" :class="{ 'bg-indigo-100': index === activeSuggestionIndex }" class="px-4 py-2 hover:bg-indigo-100 cursor-pointer text-sm" v-html="highlightMatch(suggestion.display_name)"></li>
                                     </ul>
                                     <InputError class="mt-2" :message="form.errors.address" />
                                 </div>
-                                
+
                                 <div class="md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-6">
                                     <div>
                                         <InputLabel for="street_number" value="Número" />
@@ -224,12 +175,13 @@ const submit = () => {
                                     <InputError class="mt-2" :message="form.errors.city" />
                                 </div>
                             </div>
-                        </div>
+                        </section>
 
                         <div class="flex items-center justify-end pt-4 border-t border-gray-200">
-                            <Link :href="route('clients.index')" class="text-sm text-gray-600 hover:text-gray-900 underline mr-4">Cancelar</Link>
+                            <Link v-if="source === 'offers'" :href="route('offers.create')" class="text-sm text-gray-600 hover:text-gray-900 underline mr-4">Volver a la Oferta</Link>
+                            <Link v-else :href="route('clients.index')" class="text-sm text-gray-600 hover:text-gray-900 underline mr-4">Cancelar</Link>
                             <PrimaryButton :class="{ 'opacity-25': form.processing }" :disabled="form.processing" class="flex items-center">
-                                <svg v-if="form.processing" class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                                <svg v-if="form.processing" class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
                                 {{ form.processing ? 'Guardando...' : 'Guardar Cliente' }}
                             </PrimaryButton>
                         </div>

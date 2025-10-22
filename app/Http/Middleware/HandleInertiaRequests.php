@@ -37,7 +37,12 @@ class HandleInertiaRequests extends Middleware
                     'name' => $request->user()->name,
                     'email' => $request->user()->email,
                     'is_admin' => $request->user()->is_admin,
-                    'role' => $request->user()->role, // <-- LÍNEA AÑADIDA
+                    'role' => $request->user()->role, // <-- Comparte el rol
+                    'team' => $request->user()->team, // <-- Comparte el equipo
+                    // --- LÍNEA AÑADIDA ---
+                    // Esto envía el resultado de la función isManager() al frontend
+                    'is_manager' => $request->user()->isManager(),
+                    // --- FIN LÍNEA AÑADIDA ---
                 ] : null,
             ],
             'flash' => [

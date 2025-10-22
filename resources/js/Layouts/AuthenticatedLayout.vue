@@ -29,7 +29,7 @@ const showingNavigationDropdown = ref(false);
                                 <NavLink :href="route('dashboard')" :active="route().current('dashboard')">
                                     Dashboard
                                 </NavLink>
-                                 <NavLink :href="route('offers.create')" :active="route().current('offers.create')">
+                                <NavLink :href="route('offers.create')" :active="route().current('offers.create')">
                                     Crear Oferta
                                 </NavLink>
                                 <NavLink :href="route('offers.index')" :active="route().current('offers.index')">
@@ -40,7 +40,7 @@ const showingNavigationDropdown = ref(false);
                                 </NavLink>
                                 
                                 <div v-if="$page.props.auth.user && $page.props.auth.user.is_admin" class="hidden sm:flex sm:items-center sm:ms-6">
-                                     <div class="ms-3 relative">
+                                    <div class="ms-3 relative">
                                         <Dropdown align="right" width="48">
                                             <template #trigger>
                                                 <span class="inline-flex rounded-md">
@@ -59,7 +59,7 @@ const showingNavigationDropdown = ref(false);
                                     </div>
                                 </div>
                                 
-                                <NavLink v-if="$page.props.auth.user && $page.props.auth.user.role === 'team_lead'" :href="route('team-lead.users.index')" :active="route().current().startsWith('team-lead')">
+                                <NavLink v-if="$page.props.auth.user && $page.props.auth.user.is_manager" :href="route('team-lead.users.index')" :active="route().current().startsWith('team-lead')">
                                     Gestionar Equipo
                                 </NavLink>
                             </div>
@@ -112,10 +112,10 @@ const showingNavigationDropdown = ref(false);
                         </div>
                     </div>
 
-                    <div v-if="$page.props.auth.user && $page.props.auth.user.role === 'team_lead'" class="border-t border-gray-200 pt-4 pb-1">
+                    <div v-if="$page.props.auth.user && $page.props.auth.user.is_manager" class="border-t border-gray-200 pt-4 pb-1">
                         <div class="px-4"><div class="font-medium text-base text-gray-800">Jefe de Equipo</div></div>
                         <div class="mt-3 space-y-1">
-                            <ResponsiveNavLink :href="route('team-lead.users.index')"> Gestionar Mi Equipo </ResponsiveNavLink>
+                            <ResponsiveNavLink :href="route('team-lead.users.index')"> Gestionar Equipo </ResponsiveNavLink>
                         </div>
                     </div>
 

@@ -2,9 +2,11 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory; // <-- ESTA LÍNEA FALTABA
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsTo; // <-- AÑADIDO
+use App\Models\User; // <-- AÑADIDO
 
 class Client extends Model
 {
@@ -16,7 +18,6 @@ class Client extends Model
      * @var array<int, string>
      */
     protected $fillable = [
-        // --- AÑADE ESTOS CAMPOS ---
         'type',
         'first_name',
         'last_name',
@@ -25,17 +26,29 @@ class Client extends Model
         'door',
         'postal_code',
         'city',
-        // --------------------------
         'name', 
         'cif_nif', 
         'contact_person', 
         'email', 
         'phone', 
-        'address'
+        'address',
+        'user_id' // <-- Asegúrate de que user_id esté en $fillable
     ];
 
+    /**
+     * Define la relación: un cliente puede tener muchas ofertas.
+     */
     public function offers(): HasMany
     {
         return $this->hasMany(Offer::class);
+    }
+
+    /**
+     * Define la relación: un cliente pertenece a un usuario.
+     * // <-- ESTA ES LA FUNCIÓN QUE FALTABA
+     */
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
     }
 }

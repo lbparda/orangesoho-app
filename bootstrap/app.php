@@ -20,6 +20,7 @@ return Application::configure(basePath: dirname(__DIR__))
         // Aquí registramos el alias para nuestro middleware de administrador.
         $middleware->alias([
             'is_admin' => \App\Http\Middleware\IsAdmin::class,
+            'isTeamLead' => \App\Http\Middleware\IsTeamLead::class, // <-- Añade esta línea
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

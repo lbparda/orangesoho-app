@@ -67,6 +67,17 @@ Route::prefix('team-lead')
         Route::put('users/{user}', [ManagementController::class, 'update'])->name('users.update');
 });
 
+// --- GRUPO DE RUTAS DE JEFE DE EQUIPO ---
+Route::middleware(['auth', 'isTeamLead'])->prefix('team-lead')->name('team-lead.')->group(function () {
+    Route::get('/users/create', [App\Http\Controllers\TeamLead\UserController::class, 'create'])->name('users.create');
+    Route::post('/users', [App\Http\Controllers\TeamLead\UserController::class, 'store'])->name('users.store');
+});
+
+
+
+
+
+
 // --- GRUPO DE RUTAS DE EDICION DE OFERTA ---
 // Estas rutas ya están cubiertas por Route::resource('offers', ...), puedes borrarlas si quieres.
 // Las dejo por si las necesitas para algo específico.

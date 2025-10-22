@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use App\Models\Team;
+use App\Models\Offer;  // <-- AÑADIDO
+use App\Models\Client; // <-- AÑADIDO
 
 class User extends Authenticatable
 {
@@ -66,5 +68,23 @@ class User extends Authenticatable
     public function offers()
     {
         return $this->hasMany(Offer::class);
+    }
+
+    /**
+     * Get the clients for the user.
+     * // <-- AÑADIDO
+     */
+    public function clients()
+    {
+        return $this->hasMany(Client::class);
+    }
+
+    /**
+     * Determina si el usuario tiene un rol de mánager (jefe de equipo o de ventas).
+     * // <-- AÑADIDO
+     */
+    public function isManager(): bool
+    {
+        return in_array($this->role, ['team_lead', 'jefe de ventas']);
     }
 }

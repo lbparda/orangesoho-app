@@ -3,27 +3,54 @@
 namespace App\Http\Controllers;
 
 use App\Models\Client;
+use App\Models\User;
 use Illuminate\Http\Request;
-use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
+
+// La línea conflictiva ha sido eliminada de aquí
 
 class ClientController extends Controller
 {
+    /**
+     * Muestra una lista de clientes filtrada por el rol del usuario.
+     */
     public function index()
     {
+        $user = Auth::user();
+
+        // Se inicia la consulta base para los clientes
+        $clientsQuery = Client::with('user:id,name');
+
+        if ($user->isManager()) {
+            // El jefe de equipo/ventas ve los clientes de todos los miembros de su equipo
+            $teamMembersIds = User::where('team_id', $user->team_id)->pluck('id');
+            $clientsQuery->whereIn('user_id', $teamMembersIds);
+
+        } elseif ($user->role === 'user') {
+            // Un usuario normal solo ve sus propios clientes
+            $clientsQuery->where('user_id', $user->id);
+        }
+        // Si el rol es 'admin', no se aplica ningún filtro y verá todos los clientes.
+
         return Inertia::render('Clients/Index', [
-            'clients' => Client::latest()->paginate(10)
+            'clients' => $clientsQuery->latest()->paginate(10)
         ]);
     }
 
+    /**
+     * Muestra el formulario para crear un nuevo cliente.
+     */
     public function create()
     {
         return Inertia::render('Clients/Create');
     }
 
+    /**
+     * Guarda un nuevo cliente en la base de datos.
+     */
     public function store(Request $request)
     {
-        // CAMBIO: Se añade 'source' a la validación
         $rules = [
             'source' => 'nullable|string|in:offers',
             'type' => 'required|in:empresa,autonomo',
@@ -53,9 +80,12 @@ class ClientController extends Controller
             $clientData['name'] = $validated['first_name'] . ' ' . $validated['last_name'];
         }
 
+        // Se asigna el ID del usuario autenticado al nuevo cliente
+        $clientData['user_id'] = Auth::id();
+
         $client = Client::create($clientData);
 
-        // CAMBIO: La lógica de redirección ahora usa el marcador 'source'.
+        // Lógica de redirección basada en el origen
         if ($request->input('source') === 'offers') {
             return redirect()->route('offers.create', ['new_client_id' => $client->id])->with('success', 'Cliente creado y listo para usar en la oferta.');
         } else {
@@ -65,9 +95,12 @@ class ClientController extends Controller
     
     public function show(Client $client)
     {
-        //
+        // Puedes implementar la lógica para mostrar un cliente individual si lo necesitas
     }
 
+    /**
+     * Muestra el formulario para editar un cliente existente.
+     */
     public function edit(Client $client)
     {
         return Inertia::render('Clients/Edit', [
@@ -75,6 +108,9 @@ class ClientController extends Controller
         ]);
     }
 
+    /**
+     * Actualiza un cliente en la base de datos.
+     */
     public function update(Request $request, Client $client)
     {
         $rules = [
@@ -110,18 +146,24 @@ class ClientController extends Controller
         return redirect()->route('clients.index')->with('success', 'Cliente actualizado correctamente.');
     }
 
+    /**
+     * Elimina un cliente de la base de datos.
+     */
     public function destroy(Client $client)
     {
         $client->delete();
         return redirect()->route('clients.index')->with('success', 'Cliente eliminado correctamente.');
     }
     
+    /**
+     * Muestra las ofertas asociadas a un cliente.
+     */
     public function showOffers(Client $client)
     {
         $offers = $client->offers()
-                         ->with(['package', 'user.team'])
-                         ->latest()
-                         ->paginate(10);
+                          ->with(['package', 'user.team'])
+                          ->latest()
+                          ->paginate(10);
 
         return Inertia::render('Clients/ShowOffers', [
             'client' => $client,
