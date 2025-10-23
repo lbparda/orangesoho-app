@@ -23,6 +23,8 @@ class OfferController extends Controller
         $user = $request->user();
 
         // Usamos isManager() para simplificar
+        // Los nuevos campos (probability, signing_date, processing_date)
+        // se cargarán automáticamente aquí, ya que son parte del modelo Offer.
         $query = Offer::with(['package', 'user.team','client'])->latest();
 
         if ($user->isManager()) { // Comprueba 'team_lead' y 'jefe de ventas'
@@ -68,6 +70,8 @@ class OfferController extends Controller
                                 ->get();
         // --- FIN LÓGICA DE FILTRADO ---
 
+        $probabilityOptions = [0, 25, 50, 75, 90, 100]; // <-- AÑADIDO
+
         $newClientId = $request->get('new_client_id');
 
         return Inertia::render('Offers/Create', [
@@ -80,6 +84,7 @@ class OfferController extends Controller
             'auth' => ['user' => auth()->user()->load('team')],
             'clients' => $clients, // Pasamos clientes filtrados
             'initialClientId' => $newClientId ? (int)$newClientId : null, // Asegurar que sea int o null
+            'probabilityOptions' => $probabilityOptions, // <-- AÑADIDO
         ]);
     }
 
@@ -94,7 +99,10 @@ class OfferController extends Controller
             'additional_internet_lines' => 'present|array',
             'centralita' => 'present|array',
             'tv_addons' => 'nullable|array',
-            'tv_addons.*' => 'exists:addons,id'
+            'tv_addons.*' => 'exists:addons,id',
+            'probability' => 'nullable|integer|in:0,25,50,75,90,100', // <-- AÑADIDO
+            'signing_date' => 'nullable|date',                     // <-- AÑADIDO
+            'processing_date' => 'nullable|date',                  // <-- AÑADIDO
         ]);
 
         try {
@@ -104,6 +112,9 @@ class OfferController extends Controller
                     'client_id' => $validated['client_id'],
                     'summary' => $validated['summary'],
                     'user_id' => $request->user()->id,
+                    'probability' => $validated['probability'] ?? null,         // <-- AÑADIDO
+                    'signing_date' => $validated['signing_date'] ?? null,       // <-- AÑADIDO
+                    'processing_date' => $validated['processing_date'] ?? null, // <-- AÑADIDO
                 ]);
 
                 foreach ($validated['lines'] as $lineData) {
@@ -142,7 +153,7 @@ class OfferController extends Controller
                 if (!empty($centralitaData['extensions'])) {
                     foreach ($centralitaData['extensions'] as $ext) {
                          if (!empty($ext['addon_id']) && !empty($ext['quantity']) && $ext['quantity'] > 0) {
-                              $addonsToSync[$ext['addon_id']] = ['quantity' => ($addonsToSync[$ext['addon_id']]['quantity'] ?? 0) + $ext['quantity']];
+                             $addonsToSync[$ext['addon_id']] = ['quantity' => ($addonsToSync[$ext['addon_id']]['quantity'] ?? 0) + $ext['quantity']];
                          }
                     }
                 }
@@ -189,6 +200,8 @@ class OfferController extends Controller
         $clients = $clientsQuery->select('id', 'name', 'cif_nif')->orderBy('name')->get();
         // --- Fin Filtrado ---
 
+        $probabilityOptions = [0, 25, 50, 75, 90, 100]; // <-- AÑADIDO
+
         // Cargar relaciones necesarias para la edición
         $offer->load(['lines', 'addons', 'client']); // Añadido 'client'
 
@@ -209,7 +222,7 @@ class OfferController extends Controller
         });
 
         return Inertia::render('Offers/Edit', [
-            'offer' => $offer,
+            'offer' => $offer, // 'probability', 'signing_date', 'processing_date' ya vienen aquí
             'packages' => $packages,
             'discounts' => $discounts,
             'operators' => $operators,
@@ -218,6 +231,7 @@ class OfferController extends Controller
             'centralitaExtensions' => $centralitaExtensions,
             'auth' => ['user' => auth()->user()->load('team')],
             'clients' => $clients, // Pasamos clientes filtrados
+            'probabilityOptions' => $probabilityOptions, // <-- AÑADIDO
         ]);
     }
 
@@ -231,8 +245,8 @@ class OfferController extends Controller
              $canAccessClient = true;
          } elseif ($user->isManager()) {
              $clientExists = Client::where('id', $clientId)
-                             ->whereIn('user_id', User::where('team_id', $user->team_id)->pluck('id'))
-                             ->exists();
+                                 ->whereIn('user_id', User::where('team_id', $user->team_id)->pluck('id'))
+                                 ->exists();
              $canAccessClient = $clientExists;
          } else { // user role
               $clientExists = Client::where('id', $clientId)->where('user_id', $user->id)->exists();
@@ -243,17 +257,20 @@ class OfferController extends Controller
               return back()->with('error', 'No tienes permiso para asignar esta oferta a ese cliente.');
          }
 
-         // Validación (igual que en store)
+         // Validación (igual que en store, más los nuevos campos)
          $validated = $request->validate([
-             'client_id' => 'required|exists:clients,id',
-             'package_id' => 'required|exists:packages,id',
-             'summary' => 'required|array',
-             'lines' => 'present|array',
-             'internet_addon_id' => 'nullable|exists:addons,id',
-             'additional_internet_lines' => 'present|array',
-             'centralita' => 'present|array',
-             'tv_addons' => 'nullable|array',
-             'tv_addons.*' => 'exists:addons,id'
+              'client_id' => 'required|exists:clients,id',
+              'package_id' => 'required|exists:packages,id',
+              'summary' => 'required|array',
+              'lines' => 'present|array',
+              'internet_addon_id' => 'nullable|exists:addons,id',
+              'additional_internet_lines' => 'present|array',
+              'centralita' => 'present|array',
+              'tv_addons' => 'nullable|array',
+              'tv_addons.*' => 'exists:addons,id',
+              'probability' => 'nullable|integer|in:0,25,50,75,90,100', // <-- AÑADIDO
+              'signing_date' => 'nullable|date',                     // <-- AÑADIDO
+              'processing_date' => 'nullable|date',                  // <-- AÑADIDO
          ]);
 
 
@@ -263,6 +280,9 @@ class OfferController extends Controller
                     'package_id' => $validated['package_id'],
                     'client_id' => $validated['client_id'],
                     'summary' => $validated['summary'],
+                    'probability' => $validated['probability'] ?? null,         // <-- AÑADIDO
+                    'signing_date' => $validated['signing_date'] ?? null,       // <-- AÑADIDO
+                    'processing_date' => $validated['processing_date'] ?? null, // <-- AÑADIDO
                     // user_id no se actualiza, el creador es siempre el mismo
                 ]);
 
@@ -286,11 +306,11 @@ class OfferController extends Controller
                 $addonsToSync = [];
                  if (!empty($validated['internet_addon_id'])) {
                     $addonsToSync[$validated['internet_addon_id']] = ['quantity' => 1];
-                }
+                 }
                 if (!empty($validated['additional_internet_lines'])) {
                     foreach ($validated['additional_internet_lines'] as $internetLine) {
                          if (!empty($internetLine['addon_id'])) {
-                            $addonsToSync[$internetLine['addon_id']] = ['quantity' => ($addonsToSync[$internetLine['addon_id']]['quantity'] ?? 0) + 1];
+                             $addonsToSync[$internetLine['addon_id']] = ['quantity' => ($addonsToSync[$internetLine['addon_id']]['quantity'] ?? 0) + 1];
                          }
                     }
                 }
@@ -304,7 +324,7 @@ class OfferController extends Controller
                 if (!empty($centralitaData['extensions'])) {
                     foreach ($centralitaData['extensions'] as $ext) {
                          if (!empty($ext['addon_id']) && !empty($ext['quantity']) && $ext['quantity'] > 0) {
-                              $addonsToSync[$ext['addon_id']] = ['quantity' => ($addonsToSync[$ext['addon_id']]['quantity'] ?? 0) + $ext['quantity']];
+                             $addonsToSync[$ext['addon_id']] = ['quantity' => ($addonsToSync[$ext['addon_id']]['quantity'] ?? 0) + $ext['quantity']];
                          }
                     }
                 }
@@ -331,6 +351,7 @@ class OfferController extends Controller
     public function show(Offer $offer)
     {
         // Cargar todas las relaciones necesarias
+        // Los nuevos campos ya están en $offer
         $offer->load(['package.addons', 'user.team', 'lines', 'addons', 'client']);
 
         // Cargar detalles del terminal para cada línea
@@ -359,6 +380,7 @@ class OfferController extends Controller
         set_time_limit(300); // 5 minutos
 
         // Cargar relaciones
+        // Los nuevos campos ya están en $offer
         $offer->load(['package', 'user', 'lines', 'addons', 'client']);
 
         // Cargar detalles del terminal (igual que en show)

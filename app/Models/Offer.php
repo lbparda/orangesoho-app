@@ -12,23 +12,24 @@ class Offer extends Model
 {
     use HasFactory;
 
-    /**
-     * ✨ AÑADE ESTE BLOQUE COMPLETO ✨
-     * The attributes that are mass assignable.
-     *
-     * @var array<int, string>
-     */
     protected $fillable = [
         'package_id',
         'client_id',
         'summary',
         'user_id',
-    ];
-    protected $casts = [
-        'summary' => 'array',
+        'probability',      // <-- Añadido
+        'signing_date',     // <-- Añadido
+        'processing_date',  // <-- Añadido
     ];
 
-    public function package(): BelongsTo
+    protected $casts = [
+        'summary' => 'array',
+        'signing_date' => 'date',     // <-- Añadido para castear a objeto Date
+        'processing_date' => 'date',  // <-- Añadido para castear a objeto Date
+    ];
+
+    // ... (resto de relaciones y métodos)
+     public function package(): BelongsTo
     {
         return $this->belongsTo(Package::class);
     }

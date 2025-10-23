@@ -5,7 +5,7 @@ import PrimaryButton from '@/Components/PrimaryButton.vue';
 import DangerButton from '@/Components/DangerButton.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
 import ConfirmationModal from '@/Components/ConfirmationModal.vue'; // <-- Tu Modal
-import { ref, computed } from 'vue'; // <-- computed añadido por si acaso
+import { ref, computed } from 'vue'; // <-- computed añadido
 
 defineProps({
     offers: Object,
@@ -34,31 +34,76 @@ const deleteOffer = () => {
         onSuccess: () => closeModal(),
         onError: (errors) => {
             console.error("Error al eliminar la oferta:", errors);
+            // Podrías mostrar un mensaje de error al usuario aquí
             closeModal();
         },
         onFinish: () => {
-            offerToDelete.value = null;
+            // Ya no es necesario resetear offerToDelete aquí si se hace en closeModal
+            // offerToDelete.value = null;
         },
     });
 };
 // --- FIN LÓGICA PARA ELIMINAR ---
 
 // --- Funciones de formato ---
-const formatDate = (dateString) => {
+const formatDate = (dateString) => { // Formato para Fecha Creación
     if (!dateString) return '-';
     try {
         const date = new Date(dateString);
+         if (isNaN(date.getTime())) return 'Inválida'; // Comprobar si la fecha es válida
         return date.toLocaleDateString('es-ES', { year: 'numeric', month: '2-digit', day: '2-digit' });
-    } catch (e) { return 'Fecha inválida'; }
+        // Si quisieras hora:
+        // return date.toLocaleString('es-ES', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+    } catch (e) { return 'Error Fecha'; }
 };
+
+// <-- FUNCIÓN MODIFICADA -->
+const formatSimpleDate = (dateString) => { // Formato DD/MM/YYYY
+    if (!dateString) return '-';
+    try {
+        // Crear objeto Date. Esto maneja 'YYYY-MM-DD', 'YYYY-MM-DD HH:MM:SS', 'YYYY-MM-DDTHH:MM:SSZ' etc.
+        const date = new Date(dateString);
+
+        // Comprobar si la fecha creada es válida
+        if (isNaN(date.getTime())) {
+             console.warn("Invalid date string received:", dateString); // Aviso en consola
+             // Fallback muy básico si new Date falla (poco probable si el backend envía formato estándar)
+             if (typeof dateString === 'string' && dateString.length >= 10) {
+                 const parts = dateString.substring(0, 10).split('-');
+                 if (parts.length === 3) {
+                     return `${parts[2]}/${parts[1]}/${parts[0]}`; // DD/MM/YYYY
+                 }
+             }
+            return 'Inválida';
+        }
+
+        // Obtener día, mes y año (usando UTC para evitar problemas de zona horaria si solo es fecha)
+        // Si sabes que siempre vendrá con hora local relevante, puedes quitar UTC
+        const day = String(date.getUTCDate()).padStart(2, '0');
+        const month = String(date.getUTCMonth() + 1).padStart(2, '0'); // Meses son 0-indexados
+        const year = date.getUTCFullYear();
+
+        // Asegurarse de que el año no sea algo como 1970 si la fecha era inválida pero pasó el isNaN
+        if (year < 1000) return 'Inválida';
+
+        return `${day}/${month}/${year}`;
+    } catch (e) {
+        console.error("Error formatting simple date:", dateString, e);
+        return 'Error Fecha';
+    }
+};
+
 
 const formatCurrency = (summary) => {
     const finalPrice = summary?.finalPrice;
-    if (finalPrice == null) return '-';
+    // Comprobación más robusta para asegurar que es un número
+    if (finalPrice === null || finalPrice === undefined || isNaN(parseFloat(finalPrice))) return '-';
      try {
-        return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(finalPrice);
+        // Usar parseFloat para asegurar que es un número antes de formatear
+        return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(parseFloat(finalPrice));
     } catch (e) { return 'Error €'; }
 };
+
 
 // Mensaje dinámico para el modal
 const deletionMessage = computed(() => {
@@ -78,7 +123,7 @@ const deletionMessage = computed(() => {
                  <Link :href="route('offers.create')">
                     <PrimaryButton>Crear Oferta</PrimaryButton>
                  </Link>
-            </div>
+             </div>
         </template>
 
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 mt-6">
@@ -102,7 +147,10 @@ const deletionMessage = computed(() => {
                                     <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Vendedor</th>
                                     <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Paquete</th>
                                     <th scope="col" class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Precio Final</th>
-                                    <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha</th>
+                                    <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Prob (%)</th>
+                                    <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">F. Firma</th>
+                                    <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">F. Tramit.</th>
+                                    <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">F. Creación</th>
                                     <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
                                 </tr>
                             </thead>
@@ -113,7 +161,8 @@ const deletionMessage = computed(() => {
                                     <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500">{{ offer.user?.name || 'N/A' }}</td>
                                     <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500">{{ offer.package?.name || 'N/A' }}</td>
                                     <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500 text-right">{{ formatCurrency(offer.summary) }}</td>
-                                    <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500 text-center">{{ formatDate(offer.created_at) }}</td>
+                                    <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500 text-center">{{ offer.probability ?? '-' }}</td>
+                                    <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500 text-center">{{ formatSimpleDate(offer.signing_date) }}</td> <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500 text-center">{{ formatSimpleDate(offer.processing_date) }}</td> <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500 text-center">{{ formatDate(offer.created_at) }}</td>
                                     <td class="px-4 py-4 whitespace-nowrap text-center text-sm font-medium space-x-2">
                                         <Link :href="route('offers.show', offer.id)" class="text-indigo-600 hover:text-indigo-800">Ver</Link>
                                         <Link :href="route('offers.edit', offer.id)" class="text-green-600 hover:text-green-800">Editar</Link>
@@ -129,7 +178,7 @@ const deletionMessage = computed(() => {
                                     </td>
                                 </tr>
                                 <tr v-if="offers.data.length === 0">
-                                    <td colspan="7" class="px-6 py-10 text-center text-sm text-gray-500 italic">No hay ofertas guardadas todavía.</td>
+                                    <td colspan="10" class="px-6 py-10 text-center text-sm text-gray-500 italic">No hay ofertas guardadas todavía.</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -153,10 +202,10 @@ const deletionMessage = computed(() => {
         <ConfirmationModal
             :show="confirmingOfferDeletion"
             title="Eliminar Oferta"
-            :message="deletionMessage" 
+            :message="deletionMessage"
             @close="closeModal"
-            @confirm="deleteOffer" 
+            @confirm="deleteOffer"
         >
             </ConfirmationModal>
-        </AuthenticatedLayout>
+    </AuthenticatedLayout>
 </template>

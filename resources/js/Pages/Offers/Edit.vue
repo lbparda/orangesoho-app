@@ -18,6 +18,7 @@ const props = defineProps({
     centralitaExtensions: Array,
     auth: Object,
     clients: Array,
+    probabilityOptions: Array, // <-- AÑADIDO
 });
 
 // --- LÓGICA PARA GESTIONAR LA VISTA DEL CLIENTE ---
@@ -29,15 +30,29 @@ const showReassignSelector = () => {
 };
 // --- FIN LÓGICA CLIENTE ---
 
+// Helper para formatear fecha YYYY-MM-DD o devolver cadena vacía
+const formatDateForInput = (dateString) => {
+    if (!dateString) return '';
+    try {
+        // Asume que Laravel envía la fecha como 'YYYY-MM-DD HH:MM:SS' o similar
+        return dateString.substring(0, 10);
+    } catch (e) {
+        return ''; // Devuelve vacío si hay error
+    }
+};
+
 const form = useForm({
     client_id: props.offer.client_id,
     package_id: props.offer.package_id,
-    lines: [],
-    internet_addon_id: null,
-    additional_internet_lines: [],
-    centralita: {},
-    tv_addons: [],
-    summary: {},
+    lines: [], // Se rellena en la inicialización abajo
+    internet_addon_id: null, // Se rellena abajo
+    additional_internet_lines: [], // Se rellena abajo
+    centralita: {}, // Se rellena abajo
+    tv_addons: [], // Se rellena abajo
+    summary: {}, // Se recalcula
+    probability: props.offer.probability,           // <-- AÑADIDO
+    signing_date: formatDateForInput(props.offer.signing_date),       // <-- AÑADIDO (con formato)
+    processing_date: formatDateForInput(props.offer.processing_date), // <-- AÑADIDO (con formato)
 });
 
 const selectedPackageId = ref(props.offer.package_id);
@@ -45,12 +60,17 @@ const findInitialTerminalData = (lineFromServer) => {
     if (!lineFromServer.package_terminal_id) return { terminal_pivot: null, terminalInfo: null };
     const pkg = props.packages.find(p => p.id === props.offer.package_id);
     if (!pkg?.terminals) return { terminal_pivot: null, terminalInfo: null };
-    const terminalPivotEntry = pkg.terminals.find(t => t.pivot.id === lineFromServer.package_terminal_id);
+    // Buscamos usando el 'pivot_id' que ahora viene del controlador en 'edit'
+    const terminalPivotEntry = pkg.terminals.find(t => t.pivot_id === lineFromServer.package_terminal_id);
     if (!terminalPivotEntry) return { terminal_pivot: null, terminalInfo: null };
+    // Devolvemos el objeto 'pivot' directamente si lo encontramos
     return { terminal_pivot: terminalPivotEntry.pivot || null, terminalInfo: terminalPivotEntry || null };
 };
 const lines = ref(props.offer.lines.map(line => {
-    const { terminal_pivot, terminalInfo } = findInitialTerminalData(line);
+    // Usamos la información cargada desde el controlador (line.terminal_pivot)
+    const terminalPivotData = line.terminal_pivot; // Viene del controlador edit
+    const terminalInfo = terminalPivotData?.terminal; // El terminal está anidado dentro de pivotData
+
     return {
         ...line,
         id: line.id || Date.now() + Math.random(),
@@ -58,9 +78,10 @@ const lines = ref(props.offer.lines.map(line => {
         is_portability: !!line.is_portability,
         has_vap: !!line.has_vap,
         selected_brand: terminalInfo?.brand || null,
-        selected_model_id: terminalInfo?.id || null,
-        selected_duration: terminal_pivot?.duration_months || null,
-        terminal_pivot: terminal_pivot,
+        selected_model_id: terminalInfo?.id || null, // Usamos el ID del terminal
+        selected_duration: terminalPivotData?.duration_months || null,
+        terminal_pivot: terminalPivotData, // Guardamos el objeto pivot completo
+        // initial_cost y monthly_cost ya vienen en la línea desde el backend
     };
 }));
 const getAddonId = (type) => props.offer.addons.find(a => a.type === type)?.id;
@@ -110,17 +131,20 @@ const { calculationSummary } = useOfferCalculations(
 );
 
 const modelsByBrand = (brand) => availableTerminals.value.filter(t => t.brand === brand).filter((v, i, a) => a.findIndex(t => t.model === v.model) === i);
+// Ahora usamos pivot_id (el ID de la tabla package_terminal)
 const findTerminalPivot = (line) => availableTerminals.value.find(t => t.id === line.selected_model_id && t.pivot.duration_months === line.selected_duration)?.pivot;
+
 const assignTerminalPrices = (line) => {
     const pivot = findTerminalPivot(line);
     line.initial_cost = parseFloat(pivot?.initial_cost || 0);
     line.monthly_cost = parseFloat(pivot?.monthly_cost || 0);
-    line.terminal_pivot = pivot;
+    line.terminal_pivot = pivot; // Guardamos el objeto pivot completo
+    // Aseguramos que el pivot_id (package_terminal.id) se guarda para el envío
+    line.package_terminal_id = pivot?.id || null;
 };
 
 const copyPreviousLine = (line, index) => {
     if (index <= 0 || !lines.value[index - 1]) return;
-
     const prev = lines.value[index - 1];
     line.is_portability = prev.is_portability;
     line.source_operator = prev.source_operator;
@@ -129,14 +153,12 @@ const copyPreviousLine = (line, index) => {
     line.selected_brand = prev.selected_brand;
     line.selected_model_id = prev.selected_model_id;
     line.selected_duration = prev.selected_duration;
-    line.initial_cost = prev.initial_cost;
-    line.monthly_cost = prev.monthly_cost;
-    line.terminal_pivot = prev.terminal_pivot;
+    // assignTerminalPrices se encargará de recalcular y asignar pivot y costs
     assignTerminalPrices(line);
 };
 
 const addLine = () => {
-    const newLine = { id: Date.now(), is_extra: true, is_portability: false, phone_number: '', source_operator: null, has_vap: false, o2o_discount_id: null, selected_brand: null, selected_model_id: null, selected_duration: null, terminal_pivot: null, initial_cost: 0, monthly_cost: 0 };
+    const newLine = { id: Date.now(), is_extra: true, is_portability: false, phone_number: '', source_operator: null, has_vap: false, o2o_discount_id: null, selected_brand: null, selected_model_id: null, selected_duration: null, terminal_pivot: null, package_terminal_id: null, initial_cost: 0, monthly_cost: 0 };
     lines.value.push(newLine); addWatchersToLine(newLine);
 };
 const removeLine = (index) => { if (lines.value[index]?.is_extra) lines.value.splice(index, 1); };
@@ -145,27 +167,47 @@ const removeInternetLine = (index) => additionalInternetLines.value.splice(index
 const getDurationsForModel = (line) => [...new Set(availableTerminals.value.filter(t => t.id === line.selected_model_id).map(t => t.pivot.duration_months))].sort((a, b) => a - b);
 const getO2oDiscountsForLine = (line, index) => {
     if (!mobileAddonInfo.value) return availableO2oDiscounts.value;
-    const limit = mobileAddonInfo.value.pivot.line_limit; const extras = lines.value.slice(0, index).filter(l => l.is_extra).length;
-    return line.is_extra && extras < limit ? availableO2oDiscounts.value.filter(d => (parseFloat(d.total_discount_amount) / parseFloat(d.duration_months)) <= 1) : availableO2oDiscounts.value;
+    const limit = mobileAddonInfo.value.pivot.line_limit ?? 0; // Usar ?? 0 por si no viene
+    const extrasBefore = lines.value.slice(0, index).filter(l => l.is_extra).length;
+    return line.is_extra && extrasBefore < limit ? availableO2oDiscounts.value.filter(d => (parseFloat(d.total_discount_amount) / parseFloat(d.duration_months)) <= 1) : availableO2oDiscounts.value;
 };
+
 const saveOffer = () => {
     try {
         let finalExt = [];
         for (const [id, qty] of Object.entries(centralitaExtensionQuantities.value)) if (qty > 0) finalExt.push({ addon_id: parseInt(id), quantity: qty });
         if (!includedCentralita.value && autoIncludedExtension.value) { const e = finalExt.find(x => x.addon_id == autoIncludedExtension.value.id); if (e) e.quantity++; else finalExt.push({ addon_id: autoIncludedExtension.value.id, quantity: 1 }); }
-        form.lines = lines.value.map(l => ({ ...l, terminal_pivot_id: l.terminal_pivot?.id || null }));
+
+        // Mapeamos las líneas asegurándonos de enviar 'terminal_pivot_id' correctamente
+        form.lines = lines.value.map(l => ({
+            is_extra: l.is_extra,
+            is_portability: l.is_portability,
+            phone_number: l.phone_number,
+            source_operator: l.source_operator,
+            has_vap: l.has_vap,
+            o2o_discount_id: l.o2o_discount_id,
+            terminal_pivot_id: l.terminal_pivot?.id || null, // Usamos el ID del pivot
+            initial_cost: l.initial_cost,
+            monthly_cost: l.monthly_cost,
+        }));
+
         form.internet_addon_id = selectedInternetAddonId.value;
         form.additional_internet_lines = additionalInternetLines.value.filter(l => l.addon_id).map(l => ({ addon_id: l.addon_id }));
         form.centralita = { id: selectedCentralitaId.value || includedCentralita.value?.id || null, operadora_automatica_selected: isOperadoraAutomaticaSelected.value, operadora_automatica_id: operadoraAutomaticaInfo.value?.id || null, extensions: finalExt };
-        form.tv_addons = selectedTvAddonIds.value; form.summary = calculationSummary.value;
+        form.tv_addons = selectedTvAddonIds.value;
+        form.summary = calculationSummary.value;
+        // probability, signing_date, processing_date ya están en form.
+
         form.put(route('offers.update', props.offer.id), { onSuccess: () => alert('¡Oferta actualizada!'), onError: (e) => { console.error(e); alert('Error al actualizar.'); } });
-    } catch (e) { console.error(e); alert("Error inesperado."); }
+    } catch (e) { console.error(e); alert("Error inesperado al preparar la actualización."); }
 };
+
 const addWatchersToLine = (line) => {
-     watch(() => line.is_portability, (isPort, old) => { if (old && !isPort) { line.has_vap = false; line.selected_brand = null; line.selected_model_id = null; line.selected_duration = null; assignTerminalPrices(line); line.source_operator = null; } });
-     watch(() => line.has_vap, (hasVap, old) => { if (old && !hasVap) { line.selected_brand = null; line.selected_model_id = null; line.selected_duration = null; assignTerminalPrices(line); } });
-     watch(() => [line.selected_model_id, line.selected_duration], () => assignTerminalPrices(line));
+    watch(() => line.is_portability, (isPort, old) => { if (old && !isPort) { line.has_vap = false; line.selected_brand = null; line.selected_model_id = null; line.selected_duration = null; assignTerminalPrices(line); line.source_operator = null; } });
+    watch(() => line.has_vap, (hasVap, old) => { if (old && !hasVap) { line.selected_brand = null; line.selected_model_id = null; line.selected_duration = null; assignTerminalPrices(line); } });
+    watch(() => [line.selected_model_id, line.selected_duration], () => assignTerminalPrices(line));
 };
+// Añadir watchers a las líneas cargadas inicialmente
 lines.value.forEach(addWatchersToLine);
 
 watch(
@@ -178,7 +220,7 @@ watch(
             selectedClient.value = null;
         }
     },
-    { immediate: true }
+    { immediate: true } // Ejecuta al montar para cargar el cliente inicial
 );
 </script>
 
@@ -202,7 +244,7 @@ watch(
                     <div class="bg-white shadow-sm sm:rounded-lg p-8">
                          <div class="mb-8">
                             <label class="block text-sm font-medium text-gray-700 mb-2">Cliente</label>
-                            
+
                             <div v-if="!isReassigningClient && selectedClient">
                                 <div class="p-4 border rounded-md bg-gray-50 shadow-sm">
                                     <div class="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1 text-sm">
@@ -234,7 +276,27 @@ watch(
                     </div>
 
                     <div v-if="selectedPackage" class="bg-white shadow-sm sm:rounded-lg p-8 space-y-6">
-                        
+
+                        <section class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <div>
+                                <label for="probability" class="block text-sm font-medium text-gray-700">Probabilidad (%)</label>
+                                <select v-model="form.probability" id="probability" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                    <option :value="null">-- Selecciona --</option>
+                                    <option v-for="option in probabilityOptions" :key="option" :value="option">{{ option }}%</option>
+                                </select>
+                                <InputError class="mt-2" :message="form.errors.probability" />
+                            </div>
+                            <div>
+                                <label for="signing_date" class="block text-sm font-medium text-gray-700">Fecha Firma</label>
+                                <input type="date" v-model="form.signing_date" id="signing_date" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                <InputError class="mt-2" :message="form.errors.signing_date" />
+                            </div>
+                            <div>
+                                <label for="processing_date" class="block text-sm font-medium text-gray-700">Fecha Tramitación</label>
+                                <input type="date" v-model="form.processing_date" id="processing_date" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                <InputError class="mt-2" :message="form.errors.processing_date" />
+                            </div>
+                        </section>
                         <div v-if="internetAddonOptions.length > 0" class="p-6 bg-slate-50 rounded-lg">
                             <label class="block text-sm font-medium text-gray-700 mb-2">Fibra Principal</label>
                             <div class="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-4 mt-1">
@@ -292,9 +354,9 @@ watch(
                                         </div>
                                         <p class="text-sm font-medium text-gray-700">Ext. Adicionales:</p>
                                         <div v-for="extension in availableAdditionalExtensions" :key="extension.id" class="flex items-center justify-between mt-2">
-                                        <label :for="`ext_add_${extension.id}`" class="text-sm text-gray-800">{{ extension.name }} (+{{ parseFloat(extension.price).toFixed(2) }}€)</label>
-                                        <input :id="`ext_add_${extension.id}`" type="number" min="0" v-model.number="centralitaExtensionQuantities[extension.id]" class="w-20 rounded-md border-gray-300 shadow-sm text-center focus:border-indigo-500 focus:ring-indigo-500" placeholder="0">
-                                    </div>
+                                            <label :for="`ext_add_${extension.id}`" class="text-sm text-gray-800">{{ extension.name }} (+{{ parseFloat(extension.price).toFixed(2) }}€)</label>
+                                            <input :id="`ext_add_${extension.id}`" type="number" min="0" v-model.number="centralitaExtensionQuantities[extension.id]" class="w-20 rounded-md border-gray-300 shadow-sm text-center focus:border-indigo-500 focus:ring-indigo-500" placeholder="0">
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -320,79 +382,79 @@ watch(
                     <div v-if="selectedPackage" class="bg-white shadow-sm sm:rounded-lg p-8 space-y-6">
                         <h3 class="text-lg font-semibold text-gray-800 text-center">Líneas Móviles</h3>
                         <div v-for="(line, index) in lines" :key="line.id" class="p-6 border rounded-lg max-w-full mx-auto" :class="{'bg-gray-50 border-gray-200': !line.is_extra, 'bg-green-50 border-green-200': line.is_extra}">
-                             <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-center mb-4">
-                                 <div class="md:col-span-2 flex justify-between items-center">
-                                     <span class="font-medium text-gray-700">
-                                         {{ line.is_extra ? `Línea Adicional ${index + 1 - lines.filter(l => !l.is_extra).length}` : `Línea Principal ${index + 1}` }}
-                                     </span>
-                                     <div class="flex space-x-2">
-                                         <button
-                                             v-if="index > 0"
-                                             @click="copyPreviousLine(line, index)"
-                                             type="button"
-                                             class="text-blue-600 hover:text-blue-800 p-1 rounded-full hover:bg-blue-100"
-                                             title="Copiar configuración de la línea anterior"
-                                         >
-                                             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                                             </svg>
-                                         </button>
-                                         <button
-                                             v-if="line.is_extra"
-                                             @click="removeLine(index)"
-                                             type="button"
-                                             class="text-red-500 hover:text-red-700 p-1 rounded-full hover:bg-red-100"
-                                         >
-                                             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                                 <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-                                             </svg>
-                                         </button>
-                                     </div>
-                                 </div>
-                                 <div class="md:col-span-4">
-                                     <label class="block text-xs font-medium text-gray-500">Nº Teléfono</label>
-                                     <input v-model="line.phone_number" type="tel" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-indigo-500 focus:ring-indigo-500" placeholder="Ej: 612345678">
-                                 </div>
-                                 <div class="md:col-span-2 flex items-end pb-1">
-                                     <div class="flex items-center h-full">
-                                         <input v-model="line.is_portability" :id="`portability_${line.id}`" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
-                                         <label :for="`portability_${line.id}`" class="ml-2 block text-sm text-gray-900">Portabilidad</label>
-                                     </div>
-                                 </div>
-                             </div>
-                             <div v-if="line.is_portability" class="space-y-4 border-t pt-4 mt-4">
-                                 <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
-                                     <div class="md:col-span-4">
-                                         <label class="block text-xs font-medium text-gray-500">Operador Origen</label>
-                                         <select v-model="line.source_operator" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-indigo-500 focus:ring-indigo-500">
-                                             <option :value="null" disabled>-- Selecciona --</option>
-                                             <option v-for="op in operators" :key="op" :value="op">{{ op }}</option>
-                                         </select>
-                                     </div>
-                                     <div class="md:col-span-2 flex items-end pb-1">
-                                         <div class="flex items-center h-full">
-                                             <input v-model="line.has_vap" :id="`vap_${line.id}`" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
-                                             <label :for="`vap_${line.id}`" class="ml-2 block text-sm text-gray-900">con VAP</label>
-                                         </div>
-                                     </div>
-                                     <div class="md:col-span-4">
-                                         <label class="block text-xs font-medium text-gray-500">Descuento O2O</label>
-                                         <select v-model="line.o2o_discount_id" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-indigo-500 focus:ring-indigo-500">
-                                             <option :value="null">-- Sin subvención --</option>
-                                             <option v-for="o2o in getO2oDiscountsForLine(line, index)" :key="o2o.id" :value="o2o.id">{{ o2o.name }}</option>
-                                         </select>
-                                     </div>
-                                 </div>
-                                 <div v-if="line.has_vap" class="space-y-4 pt-4 border-t border-dashed">
-                                      <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
-                                          <div class="md:col-span-2"><label class="block text-xs font-medium text-gray-500">Marca</label><select v-model="line.selected_brand" @change="line.selected_model_id = null; line.selected_duration = null; assignTerminalPrices(line);" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-indigo-500 focus:ring-indigo-500"><option :value="null">-- Marca --</option><option v-for="brand in brandsForSelectedPackage" :key="brand" :value="brand">{{ brand }}</option></select></div>
-                                          <div class="md:col-span-3"><label class="block text-xs font-medium text-gray-500">Modelo</label><select v-model="line.selected_model_id" @change="line.selected_duration = null; assignTerminalPrices(line);" :disabled="!line.selected_brand" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-indigo-500 focus:ring-indigo-500"><option :value="null">-- Modelo --</option><option v-for="terminal in modelsByBrand(line.selected_brand)" :key="terminal.id" :value="terminal.id">{{ terminal.model }}</option></select></div>
-                                          <div class="md:col-span-2"><label class="block text-xs font-medium text-gray-500">Meses</label><select v-model="line.selected_duration" @change="assignTerminalPrices(line)" :disabled="!line.selected_model_id" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-indigo-500 focus:ring-indigo-500"><option :value="null">-- Meses --</option><option v-for="duration in getDurationsForModel(line)" :key="duration" :value="duration">{{ duration }} meses</option></select></div>
-                                          <div class="md:col-span-2"><label class="block text-xs font-medium text-gray-500">Pago Inicial (€)</label><input v-model.number="line.initial_cost" type="number" step="0.01" min="0" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-indigo-500 focus:ring-indigo-500"></div>
-                                          <div class="md:col-span-2"><label class="block text-xs font-medium text-gray-500">Cuota Mensual (€)</label><input v-model.number="line.monthly_cost" type="number" step="0.01" min="0" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-indigo-500 focus:ring-indigo-500"></div>
-                                      </div>
-                                 </div>
-                             </div>
+                            <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-center mb-4">
+                                <div class="md:col-span-2 flex justify-between items-center">
+                                    <span class="font-medium text-gray-700">
+                                        {{ line.is_extra ? `Línea Adicional ${index + 1 - lines.filter(l => !l.is_extra).length}` : `Línea Principal ${index + 1}` }}
+                                    </span>
+                                    <div class="flex space-x-2">
+                                        <button
+                                            v-if="index > 0"
+                                            @click="copyPreviousLine(line, index)"
+                                            type="button"
+                                            class="text-blue-600 hover:text-blue-800 p-1 rounded-full hover:bg-blue-100"
+                                            title="Copiar configuración de la línea anterior"
+                                        >
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                            </svg>
+                                        </button>
+                                        <button
+                                            v-if="line.is_extra"
+                                            @click="removeLine(index)"
+                                            type="button"
+                                            class="text-red-500 hover:text-red-700 p-1 rounded-full hover:bg-red-100"
+                                        >
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                            </svg>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="md:col-span-4">
+                                    <label class="block text-xs font-medium text-gray-500">Nº Teléfono</label>
+                                    <input v-model="line.phone_number" type="tel" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-indigo-500 focus:ring-indigo-500" placeholder="Ej: 612345678">
+                                </div>
+                                <div class="md:col-span-2 flex items-end pb-1">
+                                    <div class="flex items-center h-full">
+                                        <input v-model="line.is_portability" :id="`portability_${line.id}`" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                                        <label :for="`portability_${line.id}`" class="ml-2 block text-sm text-gray-900">Portabilidad</label>
+                                    </div>
+                                </div>
+                            </div>
+                            <div v-if="line.is_portability" class="space-y-4 border-t pt-4 mt-4">
+                                <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
+                                    <div class="md:col-span-4">
+                                        <label class="block text-xs font-medium text-gray-500">Operador Origen</label>
+                                        <select v-model="line.source_operator" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                            <option :value="null" disabled>-- Selecciona --</option>
+                                            <option v-for="op in operators" :key="op" :value="op">{{ op }}</option>
+                                        </select>
+                                    </div>
+                                    <div class="md:col-span-2 flex items-end pb-1">
+                                        <div class="flex items-center h-full">
+                                            <input v-model="line.has_vap" :id="`vap_${line.id}`" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                                            <label :for="`vap_${line.id}`" class="ml-2 block text-sm text-gray-900">con VAP</label>
+                                        </div>
+                                    </div>
+                                    <div class="md:col-span-4">
+                                        <label class="block text-xs font-medium text-gray-500">Descuento O2O</label>
+                                        <select v-model="line.o2o_discount_id" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                            <option :value="null">-- Sin subvención --</option>
+                                            <option v-for="o2o in getO2oDiscountsForLine(line, index)" :key="o2o.id" :value="o2o.id">{{ o2o.name }}</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div v-if="line.has_vap" class="space-y-4 pt-4 border-t border-dashed">
+                                    <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
+                                        <div class="md:col-span-2"><label class="block text-xs font-medium text-gray-500">Marca</label><select v-model="line.selected_brand" @change="line.selected_model_id = null; line.selected_duration = null; assignTerminalPrices(line);" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-indigo-500 focus:ring-indigo-500"><option :value="null">-- Marca --</option><option v-for="brand in brandsForSelectedPackage" :key="brand" :value="brand">{{ brand }}</option></select></div>
+                                        <div class="md:col-span-3"><label class="block text-xs font-medium text-gray-500">Modelo</label><select v-model="line.selected_model_id" @change="line.selected_duration = null; assignTerminalPrices(line);" :disabled="!line.selected_brand" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-indigo-500 focus:ring-indigo-500"><option :value="null">-- Modelo --</option><option v-for="terminal in modelsByBrand(line.selected_brand)" :key="terminal.id" :value="terminal.id">{{ terminal.model }}</option></select></div>
+                                        <div class="md:col-span-2"><label class="block text-xs font-medium text-gray-500">Meses</label><select v-model="line.selected_duration" @change="assignTerminalPrices(line)" :disabled="!line.selected_model_id" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-indigo-500 focus:ring-indigo-500"><option :value="null">-- Meses --</option><option v-for="duration in getDurationsForModel(line)" :key="duration" :value="duration">{{ duration }} meses</option></select></div>
+                                        <div class="md:col-span-2"><label class="block text-xs font-medium text-gray-500">Pago Inicial (€)</label><input v-model.number="line.initial_cost" type="number" step="0.01" min="0" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-indigo-500 focus:ring-indigo-500"></div>
+                                        <div class="md:col-span-2"><label class="block text-xs font-medium text-gray-500">Cuota Mensual (€)</label><input v-model.number="line.monthly_cost" type="number" step="0.01" min="0" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-indigo-500 focus:ring-indigo-500"></div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                         <div class="flex justify-center pt-4">
                             <PrimaryButton @click="addLine" type="button">Añadir Línea Móvil Adicional</PrimaryButton>

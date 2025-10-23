@@ -22,6 +22,7 @@ const props = defineProps({
     centralitaExtensions: Array,
     auth: Object,
     initialClientId: [Number, String, null],
+    probabilityOptions: Array, // <-- AÑADIDO
 });
 
 const selectedClient = ref(null);
@@ -52,6 +53,9 @@ const form = useForm({
     centralita: null,
     tv_addons: [],
     summary: null,
+    probability: null,      // <-- AÑADIDO
+    signing_date: '',       // <-- AÑADIDO
+    processing_date: '',    // <-- AÑADIDO
 });
 
 const selectedPackageId = ref(null);
@@ -164,6 +168,7 @@ const saveOffer = () => {
         };
         form.tv_addons = selectedTvAddonIds.value;
         form.summary = calculationSummary.value;
+        // Los campos probability, signing_date y processing_date ya están en el form.
         form.post(route('offers.store'), { onSuccess: () => alert('¡Oferta guardada!'), onError: (e) => { console.error(e); alert('Error al guardar.'); } });
     } catch (e) { console.error("Error preparing offer:", e); alert("Error inesperado."); }
 };
@@ -228,7 +233,7 @@ watch(
                                 </select>
                                 <InputError class="mt-2" :message="form.errors.client_id" />
                                 <p class="text-xs text-gray-500 mt-2">
-                                    ¿No encuentras al cliente? 
+                                    ¿No encuentras al cliente?
                                     <Link :href="route('clients.create', { source: 'offers' })" class="underline text-indigo-600">Puedes crearlo aquí.</Link>
                                 </p>
                             </div>
@@ -263,6 +268,26 @@ watch(
 
                     <div v-if="selectedPackage" class="bg-white shadow-sm sm:rounded-lg p-8 space-y-6">
 
+                        <section class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <div>
+                                <label for="probability" class="block text-sm font-medium text-gray-700">Probabilidad (%)</label>
+                                <select v-model="form.probability" id="probability" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                    <option :value="null">-- Selecciona --</option>
+                                    <option v-for="option in probabilityOptions" :key="option" :value="option">{{ option }}%</option>
+                                </select>
+                                <InputError class="mt-2" :message="form.errors.probability" />
+                            </div>
+                            <div>
+                                <label for="signing_date" class="block text-sm font-medium text-gray-700">Fecha Firma</label>
+                                <input type="date" v-model="form.signing_date" id="signing_date" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                <InputError class="mt-2" :message="form.errors.signing_date" />
+                            </div>
+                            <div>
+                                <label for="processing_date" class="block text-sm font-medium text-gray-700">Fecha Tramitación</label>
+                                <input type="date" v-model="form.processing_date" id="processing_date" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                <InputError class="mt-2" :message="form.errors.processing_date" />
+                            </div>
+                        </section>
                         <div v-if="internetAddonOptions.length > 0" class="p-6 bg-slate-50 rounded-lg">
                             <label class="block text-sm font-medium text-gray-700 mb-2">3. Fibra Principal</label>
                             <div class="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-4 mt-1">
@@ -348,7 +373,7 @@ watch(
                     <div v-if="selectedPackage" class="bg-white shadow-sm sm:rounded-lg p-8 space-y-6">
                         <h3 class="text-lg font-semibold text-gray-800 text-center">7. Líneas Móviles</h3>
                         <div v-if="lines.length === 0" class="text-gray-500 text-sm text-center">
-                                Este paquete no incluye líneas móviles de base. Puedes añadirlas manualmente.
+                            Este paquete no incluye líneas móviles de base. Puedes añadirlas manualmente.
                         </div>
                         <div v-for="(line, index) in lines" :key="line.id" class="p-6 border rounded-lg max-w-full mx-auto" :class="{'bg-gray-50 border-gray-200': !line.is_extra, 'bg-green-50 border-green-200': line.is_extra}">
                             <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-center mb-4">
