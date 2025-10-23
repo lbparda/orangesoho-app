@@ -430,39 +430,42 @@ class OfferController extends Controller
              return redirect()->route('offers.index')->with('error', 'No se pudo eliminar la oferta. Puede tener elementos asociados.');
         }
     }
-    public function exportFunnel(Request $request)
+  public function exportFunnel(Request $request)
     {
         $user = Auth::user();
 
-        // --- Comprobación de Rol ---
-        // Usamos isManager() que incluye 'jefe de ventas' y añadimos 'admin'
-       if ($user->role !== 'admin' && !$user->isManager()) { // <-- CAMBIO AQUÍ
-             // O redirigir con error: return redirect()->route('offers.index')->with('error', 'No tienes permiso para exportar.');
+        // --- Paso 1: Comprobación de Permiso MÁS FLEXIBLE ---
+        // Permitir si es admin, jefe de ventas O team_lead
+        $allowedRoles = ['admin', 'jefe de ventas', 'team_lead']; // <-- Define los roles permitidos
+        if (!in_array($user->role, $allowedRoles)) { // <-- Comprueba si el rol está en la lista
             abort(403, 'No tienes permiso para realizar esta exportación.');
         }
-        // --- Fin Comprobación ---
+        // --- Fin Comprobación de Permiso ---
 
 
-        // --- Lógica de Consulta (similar a index, pero sin paginación) ---
+        // --- Paso 2: Lógica de Consulta Ajustada ---
         $query = Offer::with(['package', 'user.team','client'])
-                      ->withCount('lines') // Contamos las líneas eficientemente
-                      ->latest(); // O el orden que prefieras para el export
+                      ->withCount('lines')
+                      ->latest();
 
-        if ($user->isManager()) {
-            if ($user->team_id) {
+        // Aplicar filtros si es jefe de ventas O team_lead
+        if ($user->role === 'jefe de ventas' || $user->role === 'team_lead') { // <-- Comprueba ambos roles
+             if ($user->team_id) {
                 $teamMemberIds = User::where('team_id', $user->team_id)->pluck('id');
-                $query->whereIn('user_id', $teamMemberIds);
-            } else {
-                $query->where('user_id', $user->id); // Manager sin equipo ve solo los suyos
-            }
+                $teamMemberIds->push($user->id);
+                $query->whereIn('user_id', $teamMemberIds->unique());
+             } else {
+                 // Jefe/Lead sin equipo, solo ve los suyos
+                 $query->where('user_id', $user->id);
+             }
         }
-        // Admin ve todo (no se aplica filtro adicional)
+        // Admin ve todo (no entra en el 'if' anterior)
 
         $offersToExport = $query->get();
         // --- Fin Lógica de Consulta ---
 
 
-        // --- Generación del CSV ---
+        // --- Generación del CSV (sin cambios) ---
         $filename = "funnel_ofertas_" . date('Ymd_His') . ".csv";
         $headers = [
             'Content-Type'        => 'text/csv; charset=utf-8',
@@ -474,27 +477,14 @@ class OfferController extends Controller
 
         $callback = function() use ($offersToExport) {
             $file = fopen('php://output', 'w');
-            // Escribir BOM para UTF-8 (ayuda a Excel con caracteres especiales)
-             fwrite($file, "\xEF\xBB\xBF");
+             fwrite($file, "\xEF\xBB\xBF"); // BOM
 
-            // Cabeceras del CSV
             fputcsv($file, [
-                'ID Oferta',
-                'Cliente',
-                'CIF/NIF',
-                'Vendedor',
-                'Equipo Vendedor',
-                'Paquete',
-                'Precio Final (€)',
-                'Probabilidad (%)',
-                'Fecha Firma',
-                'Fecha Tramitación',
-                'Fecha Creación',
-                'Num. Líneas Móviles',
-                // Puedes añadir más campos del 'summary' si es necesario
-            ], ';'); // Usar punto y coma como delimitador para Excel en español
+                'ID Oferta', 'Cliente', 'CIF/NIF', 'Vendedor', 'Equipo Vendedor',
+                'Paquete', 'Precio Final (€)', 'Probabilidad (%)', 'Fecha Firma',
+                'Fecha Tramitación', 'Fecha Creación', 'Num. Líneas Móviles',
+            ], ';');
 
-            // Datos
             foreach ($offersToExport as $offer) {
                 fputcsv($file, [
                     $offer->id,
@@ -503,21 +493,18 @@ class OfferController extends Controller
                     $offer->user?->name ?? 'N/A',
                     $offer->user?->team?->name ?? 'N/A',
                     $offer->package?->name ?? 'N/A',
-                    // Asegurarse de que el precio es un número formateado para CSV (con punto decimal)
                     number_format($offer->summary['finalPrice'] ?? 0, 2, '.', ''),
-                    $offer->probability ?? '', // Vacío si es null
-                    $offer->signing_date ? $offer->signing_date->format('Y-m-d') : '', // Formato YYYY-MM-DD
-                    $offer->processing_date ? $offer->processing_date->format('Y-m-d') : '', // Formato YYYY-MM-DD
+                    $offer->probability ?? '',
+                    $offer->signing_date ? $offer->signing_date->format('Y-m-d') : '',
+                    $offer->processing_date ? $offer->processing_date->format('Y-m-d') : '',
                     $offer->created_at ? $offer->created_at->format('Y-m-d H:i:s') : '',
-                    $offer->lines_count ?? 0, // Usamos el contador cargado
+                    $offer->lines_count ?? 0,
                 ], ';');
             }
-
             fclose($file);
         };
 
         return Response::stream($callback, 200, $headers);
-        // --- Fin Generación del CSV ---
     }
 
 } // Fin de la clase OfferController

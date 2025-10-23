@@ -1,5 +1,5 @@
 <script setup>
-import { Head, Link, useForm, usePage } from '@inertiajs/vue3'; // <-- Añadido usePage
+import { Head, Link, useForm, usePage } from '@inertiajs/vue3'; // <-- usePage ya estaba
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import DangerButton from '@/Components/DangerButton.vue';
@@ -12,7 +12,7 @@ defineProps({
 });
 
 // Acceder a $page props
-const page = usePage(); // <-- Añadido para acceder a props globales
+const page = usePage(); // <-- Correcto
 
 // --- LÓGICA PARA ELIMINAR ---
 const confirmingOfferDeletion = ref(false);
@@ -41,7 +41,7 @@ const deleteOffer = () => {
             closeModal();
         },
         onFinish: () => {
-             // Ya no es necesario resetear offerToDelete aquí si se hace en closeModal
+            // Ya no es necesario resetear offerToDelete aquí si se hace en closeModal
             // offerToDelete.value = null;
         },
     });
@@ -101,11 +101,23 @@ const deletionMessage = computed(() => {
     return `¿Estás seguro de que quieres eliminar la oferta #${offerToDelete.value.id} para el cliente ${offerToDelete.value.client?.name || 'N/A'}? Esta acción no se puede deshacer.`;
 });
 
-// <-- COMPUTED PROPERTY PARA CHECK DE ROL (USANDO usePage) -->
+// <-- COMPUTED PROPERTY 'canExport' MODIFICADA -->
 const canExport = computed(() => {
-    const userRole = page.props.auth?.user?.role; // Acceso seguro usando page
-    return userRole === 'admin' || userRole === 'jefe de ventas'; // Asegúrate que 'jefe de ventas' es el rol exacto
+    // Acceso seguro al rol y conversión a minúsculas para comparación insensible
+    const userRole = page.props.auth?.user?.role?.toLowerCase();
+
+    // --- LÍNEA DE DEPURACIÓN AÑADIDA ---
+    console.log('[DEBUG] Rol del usuario para exportación:', userRole);
+    // ------------------------------------
+
+    // Lista de roles permitidos (en minúsculas)
+    // ¡¡¡ASEGÚRATE DE QUE ESTOS NOMBRES COINCIDAN CON LOS ROLES EN TU BD (convertidos a minúsculas)!!!
+    const allowedRoles = ['admin', 'jefe de ventas', 'team_lead']; // <-- Incluye todos los roles permitidos
+
+    // Comprueba si el rol del usuario (en minúsculas) está en la lista
+    return allowedRoles.includes(userRole);
 });
+// <-- FIN MODIFICACIÓN -->
 
 </script>
 
@@ -116,21 +128,21 @@ const canExport = computed(() => {
         <template #header>
             <div class="flex justify-between items-center">
                  <h1 class="text-2xl font-bold text-gray-800">Ofertas Guardadas</h1>
-                 
-                 <div class="flex space-x-2">
-                   
-                    <a v-if="canExport" :href="route('offers.exportFunnel')"
-                       class="inline-flex items-center px-4 py-2 bg-emerald-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-emerald-500 active:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 transition ease-in-out duration-150">
-                       <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                           <path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                       </svg>
-                       Exportar Funnel
-                    </a>
-                    
 
-                    <Link :href="route('offers.create')">
-                       <PrimaryButton>Crear Oferta</PrimaryButton>
-                    </Link>
+                 <div class="flex space-x-2">
+
+                     <a v-if="canExport" :href="route('offers.exportFunnel')"
+                        class="inline-flex items-center px-4 py-2 bg-emerald-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-emerald-500 active:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 transition ease-in-out duration-150">
+                         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                             <path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                         </svg>
+                         Exportar Funnel
+                     </a>
+
+
+                     <Link :href="route('offers.create')">
+                         <PrimaryButton>Crear Oferta</PrimaryButton>
+                     </Link>
                  </div>
              </div>
         </template>
