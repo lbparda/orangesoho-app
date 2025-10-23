@@ -1,13 +1,43 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { Head, Link, usePage } from '@inertiajs/vue3';
+import { Head, Link, usePage, useForm } from '@inertiajs/vue3'; // <--- Añadir useForm
 import PrimaryButton from '@/Components/PrimaryButton.vue';
+import DangerButton from '@/Components/DangerButton.vue'; // <--- Añadir DangerButton
+import ConfirmationModal from '@/Components/ConfirmationModal.vue'; // <--- Añadir ConfirmationModal
+import { ref } from 'vue'; // <--- Añadir ref
 
 defineProps({
     clients: Object, // Laravel's paginated object
 });
 
 const successMessage = usePage().props.flash.success;
+
+// --- Lógica para el borrado ---
+const confirmingClientDeletion = ref(false);
+const clientToDelete = ref(null);
+const deleteForm = useForm({});
+
+const confirmClientDeletion = (client) => {
+    clientToDelete.value = client;
+    confirmingClientDeletion.value = true;
+};
+
+const deleteClient = () => {
+    if (!clientToDelete.value) return;
+    deleteForm.delete(route('clients.destroy', clientToDelete.value.id), {
+        preserveScroll: true,
+        onSuccess: () => closeModal(),
+        onError: () => closeModal(), // Cierra también en caso de error
+    });
+};
+
+const closeModal = () => {
+    confirmingClientDeletion.value = false;
+    clientToDelete.value = null;
+    deleteForm.reset(); // Limpia el estado del formulario
+};
+// --- Fin Lógica para el borrado ---
+
 </script>
 
 <template>
@@ -28,8 +58,11 @@ const successMessage = usePage().props.flash.success;
                 <div v-if="successMessage" class="mb-4 p-4 text-sm text-green-700 bg-green-100 rounded-lg" role="alert">
                     {{ successMessage }}
                 </div>
+                 <div v-if="$page.props.flash.error" class="mb-4 p-4 text-sm text-red-700 bg-red-100 rounded-lg" role="alert">
+                     {{ $page.props.flash.error }}
+                 </div>
                 <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
-                    <div class="p-6 bg-white border-b border-gray-200">
+                    <div class="p-6 bg-white border-b border-gray-200 overflow-x-auto">
                         <table class="min-w-full divide-y divide-gray-200">
                             <thead class="bg-gray-50">
                                 <tr>
@@ -37,6 +70,7 @@ const successMessage = usePage().props.flash.success;
                                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">CIF/NIF</th>
                                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
                                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Teléfono</th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Asignado a</th>
                                     <th scope="col" class="relative px-6 py-3">
                                         <span class="sr-only">Acciones</span>
                                     </th>
@@ -48,20 +82,41 @@ const successMessage = usePage().props.flash.success;
                                     <td class="px-6 py-4 whitespace-nowrap">{{ client.cif_nif }}</td>
                                     <td class="px-6 py-4 whitespace-nowrap">{{ client.email }}</td>
                                     <td class="px-6 py-4 whitespace-nowrap">{{ client.phone }}</td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ client.user?.name || 'No asignado' }}</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
+                                        <Link :href="route('clients.offers', client.id)" class="text-blue-600 hover:text-blue-900">Ofertas</Link>
                                         <Link :href="route('clients.edit', client.id)" class="text-indigo-600 hover:text-indigo-900">Editar</Link>
-                                        <Link :href="route('clients.offers', client.id)" class="ml-4 text-blue-600 hover:text-blue-900">Ver Ofertas</Link>
+                                        <DangerButton @click="confirmClientDeletion(client)" class="text-xs px-2 py-1">Eliminar</DangerButton>
                                     </td>
-                                    
                                 </tr>
                                 <tr v-if="clients.data.length === 0">
-                                    <td colspan="5" class="px-6 py-4 whitespace-nowrap text-center text-gray-500">No se encontraron clientes.</td>
+                                    <td colspan="6" class="px-6 py-4 whitespace-nowrap text-center text-gray-500">No se encontraron clientes.</td>
                                 </tr>
                             </tbody>
                         </table>
                     </div>
+                     <div v-if="clients.links.length > 3" class="mt-4 px-6 pb-4 flex justify-between items-center">
+                         <div class="text-sm text-gray-700">
+                            Mostrando {{ clients.from }} a {{ clients.to }} de {{ clients.total }} resultados
+                        </div>
+                        <div class="flex flex-wrap -mb-1">
+                            <template v-for="(link, key) in clients.links" :key="key">
+                                <div v-if="link.url === null" class="mr-1 mb-1 px-3 py-2 text-sm leading-4 text-gray-400 border rounded" v-html="link.label" />
+                                <Link v-else class="mr-1 mb-1 px-3 py-2 text-sm leading-4 border rounded hover:bg-gray-100 focus:border-indigo-500 focus:text-indigo-500 transition ease-in-out duration-150" :class="{ 'bg-indigo-50 border-indigo-500 text-indigo-600': link.active }" :href="link.url" v-html="link.label" preserve-scroll />
+                            </template>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
+
+        <ConfirmationModal
+            :show="confirmingClientDeletion"
+            @close="closeModal"
+            @confirm="deleteClient"
+            title="Eliminar Cliente"
+            :message="`¿Estás seguro de que quieres eliminar el cliente '${clientToDelete?.name}'? Se borrarán sus datos permanentemente. Esta acción no se puede deshacer.`"
+        />
+
     </AuthenticatedLayout>
 </template>

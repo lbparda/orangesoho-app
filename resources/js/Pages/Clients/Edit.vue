@@ -5,11 +5,11 @@ import PrimaryButton from '@/Components/PrimaryButton.vue';
 import InputLabel from '@/Components/InputLabel.vue';
 import TextInput from '@/Components/TextInput.vue';
 import InputError from '@/Components/InputError.vue';
-import DangerButton from '@/Components/DangerButton.vue';
-import SecondaryButton from '@/Components/SecondaryButton.vue';
-import ConfirmationModal from '@/Components/ConfirmationModal.vue'; // <-- 1. Importar el Modal
+// import DangerButton from '@/Components/DangerButton.vue'; // <-- ELIMINADO
+// import SecondaryButton from '@/Components/SecondaryButton.vue'; // <-- ELIMINADO
+// import ConfirmationModal from '@/Components/ConfirmationModal.vue'; // <-- ELIMINADO
 import { ref, watch } from 'vue';
-import { useAddressAutocomplete } from '@/composables/useAddressAutocomplete.js'; // <-- 2. Importar el Composable
+import { useAddressAutocomplete } from '@/composables/useAddressAutocomplete.js';
 
 const props = defineProps({
     client: Object,
@@ -73,18 +73,18 @@ const {
 } = useAddressAutocomplete(form);
 
 
-// --- LÓGICA DE ELIMINACIÓN ---
-const confirmDelete = ref(false);
-const deleteForm = useForm({});
-
-const deleteClient = () => {
-    deleteForm.delete(route('clients.destroy', props.client.id), {
-        preserveScroll: true,
-        onFinish: () => {
-            confirmDelete.value = false;
-        }
-    });
-};
+// --- LÓGICA DE ELIMINACIÓN --- (BLOQUE ELIMINADO)
+// const confirmDelete = ref(false);
+// const deleteForm = useForm({});
+//
+// const deleteClient = () => {
+//     deleteForm.delete(route('clients.destroy', props.client.id), {
+//         preserveScroll: true,
+//         onFinish: () => {
+//             confirmDelete.value = false;
+//         }
+//     });
+// };
 </script>
 
 <template>
@@ -177,8 +177,7 @@ const deleteClient = () => {
                             </div>
                         </section>
 
-                        <div class="flex items-center justify-between pt-4 border-t border-gray-200">
-                            <DangerButton @click="confirmDelete = true" type="button">Eliminar Cliente</DangerButton>
+                        <div class="flex items-center justify-end pt-4 border-t border-gray-200">
                             <div class="flex items-center">
                                 <Link :href="route('clients.index')" class="text-sm text-gray-600 hover:text-gray-900 underline mr-4">Cancelar</Link>
                                 <PrimaryButton :class="{ 'opacity-25': form.processing }" :disabled="form.processing" class="flex items-center">
@@ -192,20 +191,5 @@ const deleteClient = () => {
             </div>
         </div>
         
-        <ConfirmationModal :show="confirmDelete" @close="confirmDelete = false">
-            <template #title>
-                Eliminar Cliente
-            </template>
-            <template #content>
-                ¿Seguro que quieres eliminar este cliente? Se borrarán permanentemente los datos de <strong>{{ form.name || `${form.first_name} ${form.last_name}` }}</strong>. Esta acción no se puede deshacer.
-            </template>
-            <template #footer>
-                <SecondaryButton @click="confirmDelete = false">Cancelar</SecondaryButton>
-                <DangerButton @click="deleteClient" :class="{ 'opacity-25': deleteForm.processing }" :disabled="deleteForm.processing" class="ms-3">
-                    Sí, Eliminar
-                </DangerButton>
-            </template>
-        </ConfirmationModal>
-
-    </AuthenticatedLayout>
+        </AuthenticatedLayout>
 </template>
