@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth; // <-- Importante
 use Inertia\Inertia;
 use Illuminate\Support\Str; // <-- Importante
+use Illuminate\Support\Facades\Response; // <-- AÑADE ESTA LÍNEA
 
 class OfferController extends Controller
 {
@@ -429,4 +430,94 @@ class OfferController extends Controller
              return redirect()->route('offers.index')->with('error', 'No se pudo eliminar la oferta. Puede tener elementos asociados.');
         }
     }
-}
+    public function exportFunnel(Request $request)
+    {
+        $user = Auth::user();
+
+        // --- Comprobación de Rol ---
+        // Usamos isManager() que incluye 'jefe de ventas' y añadimos 'admin'
+       if ($user->role !== 'admin' && !$user->isManager()) { // <-- CAMBIO AQUÍ
+             // O redirigir con error: return redirect()->route('offers.index')->with('error', 'No tienes permiso para exportar.');
+            abort(403, 'No tienes permiso para realizar esta exportación.');
+        }
+        // --- Fin Comprobación ---
+
+
+        // --- Lógica de Consulta (similar a index, pero sin paginación) ---
+        $query = Offer::with(['package', 'user.team','client'])
+                      ->withCount('lines') // Contamos las líneas eficientemente
+                      ->latest(); // O el orden que prefieras para el export
+
+        if ($user->isManager()) {
+            if ($user->team_id) {
+                $teamMemberIds = User::where('team_id', $user->team_id)->pluck('id');
+                $query->whereIn('user_id', $teamMemberIds);
+            } else {
+                $query->where('user_id', $user->id); // Manager sin equipo ve solo los suyos
+            }
+        }
+        // Admin ve todo (no se aplica filtro adicional)
+
+        $offersToExport = $query->get();
+        // --- Fin Lógica de Consulta ---
+
+
+        // --- Generación del CSV ---
+        $filename = "funnel_ofertas_" . date('Ymd_His') . ".csv";
+        $headers = [
+            'Content-Type'        => 'text/csv; charset=utf-8',
+            'Content-Disposition' => "attachment; filename=\"{$filename}\"",
+            'Pragma'              => 'no-cache',
+            'Cache-Control'       => 'must-revalidate, post-check=0, pre-check=0',
+            'Expires'             => '0',
+        ];
+
+        $callback = function() use ($offersToExport) {
+            $file = fopen('php://output', 'w');
+            // Escribir BOM para UTF-8 (ayuda a Excel con caracteres especiales)
+             fwrite($file, "\xEF\xBB\xBF");
+
+            // Cabeceras del CSV
+            fputcsv($file, [
+                'ID Oferta',
+                'Cliente',
+                'CIF/NIF',
+                'Vendedor',
+                'Equipo Vendedor',
+                'Paquete',
+                'Precio Final (€)',
+                'Probabilidad (%)',
+                'Fecha Firma',
+                'Fecha Tramitación',
+                'Fecha Creación',
+                'Num. Líneas Móviles',
+                // Puedes añadir más campos del 'summary' si es necesario
+            ], ';'); // Usar punto y coma como delimitador para Excel en español
+
+            // Datos
+            foreach ($offersToExport as $offer) {
+                fputcsv($file, [
+                    $offer->id,
+                    $offer->client?->name ?? 'N/A',
+                    $offer->client?->cif_nif ?? 'N/A',
+                    $offer->user?->name ?? 'N/A',
+                    $offer->user?->team?->name ?? 'N/A',
+                    $offer->package?->name ?? 'N/A',
+                    // Asegurarse de que el precio es un número formateado para CSV (con punto decimal)
+                    number_format($offer->summary['finalPrice'] ?? 0, 2, '.', ''),
+                    $offer->probability ?? '', // Vacío si es null
+                    $offer->signing_date ? $offer->signing_date->format('Y-m-d') : '', // Formato YYYY-MM-DD
+                    $offer->processing_date ? $offer->processing_date->format('Y-m-d') : '', // Formato YYYY-MM-DD
+                    $offer->created_at ? $offer->created_at->format('Y-m-d H:i:s') : '',
+                    $offer->lines_count ?? 0, // Usamos el contador cargado
+                ], ';');
+            }
+
+            fclose($file);
+        };
+
+        return Response::stream($callback, 200, $headers);
+        // --- Fin Generación del CSV ---
+    }
+
+} // Fin de la clase OfferController

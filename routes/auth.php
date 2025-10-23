@@ -11,6 +11,10 @@ use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\Auth\VerifyEmailController;
 use Illuminate\Support\Facades\Route;
 
+// --- Añade el use para OfferController ---
+use App\Http\Controllers\OfferController;
+// --- (Añade aquí uses para otros controladores como ClientController, ProfileController si los usas en otras rutas no mostradas) ---
+
 Route::middleware('guest')->group(function () {
     // DESCOMENTAMOS Y ASEGURAMOS QUE EL REGISTRO ESTÁ DESHABILITADO
      Route::get('register', [RegisteredUserController::class, 'create'])->name('register');
@@ -36,6 +40,23 @@ Route::middleware('guest')->group(function () {
 });
 
 Route::middleware('auth')->group(function () {
+
+    // --- (AQUÍ DEBERÍAN ESTAR TUS OTRAS RUTAS PROTEGIDAS: Dashboard, Profile, Offers resource, Clients resource, etc.) ---
+    // Ejemplo de cómo deberían estar tus rutas de Offers (si usas resource):
+    /*
+    Route::resource('offers', OfferController::class);
+    Route::get('/offers/{offer}/pdf', [OfferController::class, 'generatePDF'])->name('offers.pdf');
+    */
+    // --- (Asegúrate de que tus rutas de offers existen aquí) ---
+
+
+    // ### ¡NUEVA RUTA DE EXPORTACIÓN AÑADIDA AQUÍ! ###
+    Route::get('/offers-export-funnel', [OfferController::class, 'exportFunnel'])
+        ->name('offers.exportFunnel');
+    // ### ------------------------------------------ ###
+
+
+    // --- Rutas de Verificación y Contraseña (Las que ya tenías) ---
     Route::get('verify-email', EmailVerificationPromptController::class)
                 ->name('verification.notice');
 
@@ -57,3 +78,7 @@ Route::middleware('auth')->group(function () {
     Route::post('logout', [AuthenticatedSessionController::class, 'destroy'])
                 ->name('logout');
 });
+
+// Nota: Si tus rutas de Offers, Clients, Profile, Dashboard, etc., están en otro archivo
+// o definidas de otra manera, asegúrate de que esta nueva ruta 'offers.exportFunnel'
+// esté también protegida por el middleware 'auth'.

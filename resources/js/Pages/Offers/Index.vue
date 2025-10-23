@@ -1,5 +1,5 @@
 <script setup>
-import { Head, Link, useForm } from '@inertiajs/vue3';
+import { Head, Link, useForm, usePage } from '@inertiajs/vue3'; // <-- Añadido usePage
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import DangerButton from '@/Components/DangerButton.vue';
@@ -10,6 +10,9 @@ import { ref, computed } from 'vue'; // <-- computed añadido
 defineProps({
     offers: Object,
 });
+
+// Acceder a $page props
+const page = usePage(); // <-- Añadido para acceder a props globales
 
 // --- LÓGICA PARA ELIMINAR ---
 const confirmingOfferDeletion = ref(false);
@@ -38,7 +41,7 @@ const deleteOffer = () => {
             closeModal();
         },
         onFinish: () => {
-            // Ya no es necesario resetear offerToDelete aquí si se hace en closeModal
+             // Ya no es necesario resetear offerToDelete aquí si se hace en closeModal
             // offerToDelete.value = null;
         },
     });
@@ -57,35 +60,24 @@ const formatDate = (dateString) => { // Formato para Fecha Creación
     } catch (e) { return 'Error Fecha'; }
 };
 
-// <-- FUNCIÓN MODIFICADA -->
 const formatSimpleDate = (dateString) => { // Formato DD/MM/YYYY
     if (!dateString) return '-';
     try {
-        // Crear objeto Date. Esto maneja 'YYYY-MM-DD', 'YYYY-MM-DD HH:MM:SS', 'YYYY-MM-DDTHH:MM:SSZ' etc.
         const date = new Date(dateString);
-
-        // Comprobar si la fecha creada es válida
         if (isNaN(date.getTime())) {
-             console.warn("Invalid date string received:", dateString); // Aviso en consola
-             // Fallback muy básico si new Date falla (poco probable si el backend envía formato estándar)
+             console.warn("Invalid date string received:", dateString);
              if (typeof dateString === 'string' && dateString.length >= 10) {
                  const parts = dateString.substring(0, 10).split('-');
                  if (parts.length === 3) {
-                     return `${parts[2]}/${parts[1]}/${parts[0]}`; // DD/MM/YYYY
+                     return `${parts[2]}/${parts[1]}/${parts[0]}`;
                  }
              }
             return 'Inválida';
         }
-
-        // Obtener día, mes y año (usando UTC para evitar problemas de zona horaria si solo es fecha)
-        // Si sabes que siempre vendrá con hora local relevante, puedes quitar UTC
         const day = String(date.getUTCDate()).padStart(2, '0');
-        const month = String(date.getUTCMonth() + 1).padStart(2, '0'); // Meses son 0-indexados
+        const month = String(date.getUTCMonth() + 1).padStart(2, '0');
         const year = date.getUTCFullYear();
-
-        // Asegurarse de que el año no sea algo como 1970 si la fecha era inválida pero pasó el isNaN
         if (year < 1000) return 'Inválida';
-
         return `${day}/${month}/${year}`;
     } catch (e) {
         console.error("Error formatting simple date:", dateString, e);
@@ -96,10 +88,8 @@ const formatSimpleDate = (dateString) => { // Formato DD/MM/YYYY
 
 const formatCurrency = (summary) => {
     const finalPrice = summary?.finalPrice;
-    // Comprobación más robusta para asegurar que es un número
     if (finalPrice === null || finalPrice === undefined || isNaN(parseFloat(finalPrice))) return '-';
      try {
-        // Usar parseFloat para asegurar que es un número antes de formatear
         return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(parseFloat(finalPrice));
     } catch (e) { return 'Error €'; }
 };
@@ -111,6 +101,12 @@ const deletionMessage = computed(() => {
     return `¿Estás seguro de que quieres eliminar la oferta #${offerToDelete.value.id} para el cliente ${offerToDelete.value.client?.name || 'N/A'}? Esta acción no se puede deshacer.`;
 });
 
+// <-- COMPUTED PROPERTY PARA CHECK DE ROL (USANDO usePage) -->
+const canExport = computed(() => {
+    const userRole = page.props.auth?.user?.role; // Acceso seguro usando page
+    return userRole === 'admin' || userRole === 'jefe de ventas'; // Asegúrate que 'jefe de ventas' es el rol exacto
+});
+
 </script>
 
 <template>
@@ -120,9 +116,22 @@ const deletionMessage = computed(() => {
         <template #header>
             <div class="flex justify-between items-center">
                  <h1 class="text-2xl font-bold text-gray-800">Ofertas Guardadas</h1>
-                 <Link :href="route('offers.create')">
-                    <PrimaryButton>Crear Oferta</PrimaryButton>
-                 </Link>
+                 
+                 <div class="flex space-x-2">
+                   
+                    <a v-if="canExport" :href="route('offers.exportFunnel')"
+                       class="inline-flex items-center px-4 py-2 bg-emerald-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-emerald-500 active:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 transition ease-in-out duration-150">
+                       <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                           <path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                       </svg>
+                       Exportar Funnel
+                    </a>
+                    
+
+                    <Link :href="route('offers.create')">
+                       <PrimaryButton>Crear Oferta</PrimaryButton>
+                    </Link>
+                 </div>
              </div>
         </template>
 
@@ -162,7 +171,9 @@ const deletionMessage = computed(() => {
                                     <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500">{{ offer.package?.name || 'N/A' }}</td>
                                     <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500 text-right">{{ formatCurrency(offer.summary) }}</td>
                                     <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500 text-center">{{ offer.probability ?? '-' }}</td>
-                                    <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500 text-center">{{ formatSimpleDate(offer.signing_date) }}</td> <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500 text-center">{{ formatSimpleDate(offer.processing_date) }}</td> <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500 text-center">{{ formatDate(offer.created_at) }}</td>
+                                    <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500 text-center">{{ formatSimpleDate(offer.signing_date) }}</td>
+                                    <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500 text-center">{{ formatSimpleDate(offer.processing_date) }}</td>
+                                    <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500 text-center">{{ formatDate(offer.created_at) }}</td>
                                     <td class="px-4 py-4 whitespace-nowrap text-center text-sm font-medium space-x-2">
                                         <Link :href="route('offers.show', offer.id)" class="text-indigo-600 hover:text-indigo-800">Ver</Link>
                                         <Link :href="route('offers.edit', offer.id)" class="text-green-600 hover:text-green-800">Editar</Link>
@@ -184,7 +195,7 @@ const deletionMessage = computed(() => {
                         </table>
                     </div>
 
-                     <div v-if="offers.links.length > 3" class="mt-4 px-6 pb-4 flex justify-between items-center">
+                    <div v-if="offers.links.length > 3" class="mt-4 px-6 pb-4 flex justify-between items-center">
                          <div class="text-sm text-gray-700">
                             Mostrando {{ offers.from }} a {{ offers.to }} de {{ offers.total }} resultados
                         </div>
@@ -206,6 +217,7 @@ const deletionMessage = computed(() => {
             @close="closeModal"
             @confirm="deleteOffer"
         >
-            </ConfirmationModal>
+        </ConfirmationModal>
+
     </AuthenticatedLayout>
 </template>
