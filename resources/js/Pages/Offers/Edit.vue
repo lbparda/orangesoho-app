@@ -20,7 +20,7 @@ const props = defineProps({
     clients: Array,
     probabilityOptions: Array,
     portabilityExceptions: Array,
-    fiberFeatures: Array, // <-- AÑADIDO: Prop para IP Fija
+    fiberFeatures: Array, // <-- Prop para IP Fija
 });
 
 const selectedClient = ref(null);
@@ -42,6 +42,9 @@ const formatDateForInput = (dateString) => {
 // --- Funciones auxiliares para inicializar el estado del form ---
 const getAddonId = (type) => props.offer.addons.find(a => a.type === type)?.id;
 const getAddons = (type) => props.offer.addons.filter(a => a.type === type);
+// --- INICIO CÓDIGO MODIFICADO: Helper para comprobar si existe addon ---
+const hasAddon = (type) => props.offer.addons.some(a => a.type === type);
+// --- FIN CÓDIGO MODIFICADO ---
 
 const form = useForm({
     client_id: props.offer.client_id,
@@ -51,7 +54,9 @@ const form = useForm({
     additional_internet_lines: getAddons('internet_additional').map(a => ({ id: a.id + Math.random(), addon_id: a.id })),
     centralita: {}, // Se rellena abajo
     tv_addons: getAddons('tv').map(a => a.id),
-   is_ip_fija_selected: false,
+    // --- INICIO CÓDIGO MODIFICADO: Inicialización correcta de IP Fija ---
+    is_ip_fija_selected: hasAddon('internet_feature'), // Comprueba si ya estaba seleccionada
+    // --- FIN CÓDIGO MODIFICADO ---
     summary: {}, // Se recalcula
     probability: props.offer.probability,
     signing_date: formatDateForInput(props.offer.signing_date),
@@ -86,7 +91,6 @@ const selectedTvAddonIds = ref(form.tv_addons); // Inicializa con el valor del f
 const isOperadoraAutomaticaSelected = ref(!!getAddonId('centralita_feature'));
 const initialOptionalCentralita = props.offer.addons.find(a => a.type === 'centralita' && !a.pivot.is_included);
 const selectedCentralitaId = ref(initialOptionalCentralita?.id || null);
-// const isIpFijaSelected = ref(/* ... */); // <-- ELIMINADO: Se mueve al 'form'
 const showCommissionDetails = ref(false);
 
 // Computeds (sin cambios aquí, usan los refs de arriba)
@@ -96,7 +100,7 @@ const internetAddonOptions = computed(() => selectedPackage.value?.addons.filter
 const tvAddonOptions = computed(() => selectedPackage.value?.addons.filter(a => a.type === 'tv') || []);
 const centralitaAddonOptions = computed(() => selectedPackage.value?.addons.filter(a => a.type === 'centralita' && !a.pivot.is_included) || []);
 const includedCentralita = computed(() => selectedPackage.value?.addons.find(a => a.type === 'centralita' && a.pivot.is_included));
-const isCentralitaActive = computed(() => !!includedCentralita.value || !!selectedCentralitaId.value);
+const isCentralitaActive = computed(() => !!includedCentralita.value || !!selectedCentralitaId.value); // <-- Clave para la lógica
 const autoIncludedExtension = computed(() => {
     if (!selectedCentralitaId.value) return null;
     const selected = centralitaAddonOptions.value.find(c => c.id === selectedCentralitaId.value);
@@ -122,11 +126,11 @@ additionalSavedExtensions.forEach(ext => {
 });
 const centralitaExtensionQuantities = ref(initialExtensionQuantities);
 
-// Pasamos form.is_ip_fija_selected al composable
+// Pasamos el objeto 'form' completo al composable
 const { calculationSummary } = useOfferCalculations(
     props, selectedPackageId, lines, selectedInternetAddonId, additionalInternetLines,
     selectedCentralitaId, centralitaExtensionQuantities, isOperadoraAutomaticaSelected, selectedTvAddonIds,
-    form.is_ip_fija_selected // <-- MODIFICADO: Pasar el valor del form
+    form // <-- Pasar el objeto form completo
 );
 
 const modelsByBrand = (brand) => availableTerminals.value.filter(t => t.brand === brand).filter((v, i, a) => a.findIndex(t => t.model === v.model) === i);
@@ -191,9 +195,7 @@ const saveOffer = () => {
         form.additional_internet_lines = additionalInternetLines.value.filter(l => l.addon_id).map(l => ({ addon_id: l.addon_id }));
         form.centralita = { id: selectedCentralitaId.value || includedCentralita.value?.id || null, operadora_automatica_selected: isOperadoraAutomaticaSelected.value, operadora_automatica_id: operadoraAutomaticaInfo.value?.id || null, extensions: finalExt };
         form.tv_addons = selectedTvAddonIds.value;
-        // is_ip_fija_selected ya está en el form
         form.summary = calculationSummary.value;
-        // probability, signing_date, processing_date ya están en form.
 
         form.put(route('offers.update', props.offer.id), { onSuccess: () => alert('¡Oferta actualizada!'), onError: (e) => { console.error(e); alert('Error al actualizar.'); } });
     } catch (e) { console.error(e); alert("Error inesperado al preparar la actualización."); }
@@ -224,6 +226,19 @@ watch(() => form.internet_addon_id, (newVal) => { selectedInternetAddonId.value 
 watch(() => form.tv_addons, (newVal) => { selectedTvAddonIds.value = newVal; }, { deep: true });
 // No es necesario sincronizar additionalInternetLines porque se modifica directamente el ref
 // y luego se copia al form al guardar.
+
+// --- INICIO CÓDIGO AÑADIDO ---
+// Watcher para marcar IP Fija si la centralita está activa
+watch(isCentralitaActive, (isActive) => {
+    if (isActive) {
+        form.is_ip_fija_selected = true;
+    }
+    // Opcional: Desmarcar si deja de estar activa (descomentar si es necesario)
+     else {
+         form.is_ip_fija_selected = false;
+     }
+}, { immediate: true }); // immediate: true para que se ejecute al cargar si ya hay centralita
+// --- FIN CÓDIGO AÑADIDO ---
 
 </script>
 
@@ -421,11 +436,11 @@ watch(() => form.tv_addons, (newVal) => { selectedTvAddonIds.value = newVal; }, 
                                              type="button"
                                              class="text-red-500 hover:text-red-700 p-1 rounded-full hover:bg-red-100"
                                          >
-                                              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                                  <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-                                              </svg>
-                                         </button>
-                                     </div>
+                                             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                                 <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                             </svg>
+                                        </button>
+                                    </div>
                                 </div>
                                 <div class="md:col-span-4">
                                     <label class="block text-xs font-medium text-gray-500">Nº Teléfono</label>
@@ -471,11 +486,11 @@ watch(() => form.tv_addons, (newVal) => { selectedTvAddonIds.value = newVal; }, 
                                     </div>
                                 </div>
                             </div>
-                        </div>
-                        <div class="flex justify-center pt-4">
-                            <PrimaryButton @click="addLine" type="button">Añadir Línea Móvil Adicional</PrimaryButton>
-                        </div>
-                    </div>
+                         </div>
+                         <div class="flex justify-center pt-4">
+                             <PrimaryButton @click="addLine" type="button">Añadir Línea Móvil Adicional</PrimaryButton>
+                         </div>
+                     </div>
 
                     <div v-if="selectedPackage" class="mt-10 flex justify-center">
                         <PrimaryButton @click="saveOffer" :disabled="form.processing">
@@ -511,39 +526,39 @@ watch(() => form.tv_addons, (newVal) => { selectedTvAddonIds.value = newVal; }, 
                         </div>
                     </div>
                      <div class="p-6 bg-white rounded-lg shadow-sm space-y-3">
-                        <h2 class="text-xl font-semibold text-gray-800 text-center">Resumen Comisión</h2>
-                        <div class="border-t pt-4 mt-4 space-y-2">
-                            <p v-if="$page.props.auth.user.role === 'admin' || $page.props.auth.user.role === 'team_lead'" class="text-md text-gray-500 text-center">
-                                Comisión Bruta (100%): {{ calculationSummary.totalCommission }}€
-                            </p>
-                            <p v-if="$page.props.auth.user.role === 'team_lead'" class="text-lg text-gray-600 text-center">
-                                Comisión Equipo ({{ auth.user?.team?.commission_percentage || 0 }}%): {{ calculationSummary.teamCommission }}€
-                            </p>
-                            <p class="text-xl font-bold text-emerald-600 text-center mt-2">
-                                Tu Comisión: {{ calculationSummary.userCommission }}€
-                            </p>
-                            <div class="text-center pt-2">
-                                <SecondaryButton @click="showCommissionDetails = !showCommissionDetails">
-                                    {{ showCommissionDetails ? 'Ocultar Detalle' : 'Ver Detalle' }}
-                                </SecondaryButton>
-                            </div>
-                            <div v-if="showCommissionDetails" class="mt-4 border-t pt-4 text-left">
-                                <h4 class="text-md font-semibold text-gray-700 mb-2">Desglose de Comisiones</h4>
-                                <div v-for="(items, category) in calculationSummary.commissionDetails" :key="'com-'+category" class="mb-3">
-                                    <h5 class="font-bold text-sm text-gray-600">{{ category }}</h5>
-                                    <ul class="list-disc list-inside text-xs text-gray-600 space-y-1 mt-1">
-                                        <li v-for="(item, index) in items" :key="'com-item-'+index" class="flex justify-between">
-                                            <span>{{ item.description }}</span>
-                                            <span class="font-mono" :class="{'text-red-500': item.amount < 0}">{{ item.amount.toFixed(2) }}€</span>
-                                        </li>
-                                    </ul>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+                         <h2 class="text-xl font-semibold text-gray-800 text-center">Resumen Comisión</h2>
+                         <div class="border-t pt-4 mt-4 space-y-2">
+                             <p v-if="$page.props.auth.user.role === 'admin' || $page.props.auth.user.role === 'team_lead'" class="text-md text-gray-500 text-center">
+                                 Comisión Bruta (100%): {{ calculationSummary.totalCommission }}€
+                             </p>
+                             <p v-if="$page.props.auth.user.role === 'team_lead'" class="text-lg text-gray-600 text-center">
+                                 Comisión Equipo ({{ auth.user?.team?.commission_percentage || 0 }}%): {{ calculationSummary.teamCommission }}€
+                             </p>
+                             <p class="text-xl font-bold text-emerald-600 text-center mt-2">
+                                 Tu Comisión: {{ calculationSummary.userCommission }}€
+                             </p>
+                             <div class="text-center pt-2">
+                                 <SecondaryButton @click="showCommissionDetails = !showCommissionDetails">
+                                     {{ showCommissionDetails ? 'Ocultar Detalle' : 'Ver Detalle' }}
+                                 </SecondaryButton>
+                             </div>
+                             <div v-if="showCommissionDetails" class="mt-4 border-t pt-4 text-left">
+                                 <h4 class="text-md font-semibold text-gray-700 mb-2">Desglose de Comisiones</h4>
+                                 <div v-for="(items, category) in calculationSummary.commissionDetails" :key="'com-'+category" class="mb-3">
+                                     <h5 class="font-bold text-sm text-gray-600">{{ category }}</h5>
+                                     <ul class="list-disc list-inside text-xs text-gray-600 space-y-1 mt-1">
+                                         <li v-for="(item, index) in items" :key="'com-item-'+index" class="flex justify-between">
+                                             <span>{{ item.description }}</span>
+                                             <span class="font-mono" :class="{'text-red-500': item.amount < 0}">{{ item.amount.toFixed(2) }}€</span>
+                                         </li>
+                                     </ul>
+                                 </div>
+                             </div>
+                         </div>
+                     </div>
+                 </div>
+             </div>
 
-        </div>
-    </AuthenticatedLayout>
-</template>
+         </div>
+     </AuthenticatedLayout>
+ </template>

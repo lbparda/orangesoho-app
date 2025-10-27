@@ -24,7 +24,7 @@ const props = defineProps({
     initialClientId: [Number, String, null],
     probabilityOptions: Array,
     portabilityExceptions: Array,
-    fiberFeatures: Array, // <-- AÑADIDO: Prop para IP Fija
+    fiberFeatures: Array, // <-- Prop para IP Fija
 });
 
 const selectedClient = ref(null);
@@ -51,7 +51,7 @@ const form = useForm({
     additional_internet_lines: [],
     centralita: null,
     tv_addons: [],
-    is_ip_fija_selected: false, // <-- AÑADIDO: Estado IP Fija en el form
+    is_ip_fija_selected: false, // <-- Estado IP Fija en el form
     summary: null,
     probability: null,
     signing_date: '',
@@ -66,7 +66,6 @@ const selectedCentralitaId = ref(null);
 const centralitaExtensionQuantities = ref({});
 const isOperadoraAutomaticaSelected = ref(false);
 const selectedTvAddonIds = ref([]);
-// const isIpFijaSelected = ref(false); // <-- ELIMINADO: Se mueve al 'form'
 const showCommissionDetails = ref(false);
 
 const selectedPackage = computed(() => props.packages.find(p => p.id === selectedPackageId.value) || null);
@@ -75,7 +74,7 @@ const mobileAddonInfo = computed(() => selectedPackage.value?.addons.find(a => a
 const internetAddonOptions = computed(() => selectedPackage.value?.addons.filter(a => a.type === 'internet') || []);
 const centralitaAddonOptions = computed(() => selectedPackage.value?.addons.filter(a => a.type === 'centralita' && !a.pivot.is_included) || []);
 const includedCentralita = computed(() => selectedPackage.value?.addons.find(a => a.type === 'centralita' && a.pivot.is_included));
-const isCentralitaActive = computed(() => !!includedCentralita.value || !!selectedCentralitaId.value);
+const isCentralitaActive = computed(() => !!includedCentralita.value || !!selectedCentralitaId.value); // <-- Clave para la lógica
 const autoIncludedExtension = computed(() => {
     if (!selectedCentralitaId.value) return null;
     const selected = centralitaAddonOptions.value.find(c => c.id === selectedCentralitaId.value);
@@ -95,11 +94,10 @@ const availableAdditionalExtensions = computed(() => props.centralitaExtensions)
 const { calculationSummary } = useOfferCalculations(
     props, selectedPackageId, lines, selectedInternetAddonId, additionalInternetLines,
     selectedCentralitaId, centralitaExtensionQuantities, isOperadoraAutomaticaSelected, selectedTvAddonIds,
-    form // <-- MODIFICADO: Pasar el objeto form completo
+    form // <-- Pasar el objeto form completo
 );
 
 const modelsByBrand = (brand) => availableTerminals.value.filter(t => t.brand === brand).filter((v, i, a) => a.findIndex(t => t.model === v.model) === i);
-// Ahora usamos pivot.id (que viene de package_terminal.id)
 const findTerminalPivot = (line) => availableTerminals.value.find(t => t.id === line.selected_model_id && t.pivot.duration_months === line.selected_duration)?.pivot;
 const assignTerminalPrices = (line) => {
     const pivot = findTerminalPivot(line);
@@ -126,7 +124,6 @@ const copyPreviousLine = (line, index) => {
     line.selected_brand = prev.selected_brand;
     line.selected_model_id = prev.selected_model_id;
     line.selected_duration = prev.selected_duration;
-    // initial_cost y monthly_cost se asignan ahora con assignTerminalPrices
     assignTerminalPrices(line); // Asigna pivot, costs y package_terminal_id
 };
 
@@ -170,9 +167,7 @@ const saveOffer = () => {
             operadora_automatica_id: operadoraAutomaticaInfo.value?.id || null, extensions: finalExtensions,
         };
         form.tv_addons = selectedTvAddonIds.value;
-        // is_ip_fija_selected ya está en el form
         form.summary = calculationSummary.value;
-        // probability, signing_date y processing_date ya están en el form.
         form.post(route('offers.store'), { onSuccess: () => alert('¡Oferta guardada!'), onError: (e) => { console.error(e); alert('Error al guardar.'); } });
     } catch (e) { console.error("Error preparing offer:", e); alert("Error inesperado."); }
 };
@@ -210,6 +205,19 @@ watch(
     },
     { immediate: true }
 );
+
+// --- INICIO CÓDIGO AÑADIDO ---
+// Watcher para marcar IP Fija si la centralita está activa
+watch(isCentralitaActive, (isActive) => {
+    if (isActive) {
+        form.is_ip_fija_selected = true;
+    }
+    // Opcional: Desmarcar si deja de estar activa (descomentar si es necesario)
+     else {
+         form.is_ip_fija_selected = false;
+     }
+}, { immediate: true }); // immediate: true para que se ejecute al cargar si ya hay centralita
+// --- FIN CÓDIGO AÑADIDO ---
 
 </script>
 
@@ -466,7 +474,7 @@ watch(
                                    </div>
                                </div>
                            </div>
-                       </div>
+                        </div>
                         <div class="flex justify-center pt-4">
                             <PrimaryButton @click="addLine" type="button">Añadir Línea Móvil Adicional</PrimaryButton>
                         </div>
