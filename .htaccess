@@ -1,0 +1,4 @@
+RewriteEngine On
+RewriteCond %{HTTP_HOST} ^127\.0\.0\.1$ [OR]
+RewriteCond %{HTTP_HOST} ^localhost$
+RewriteRule ^(.*)$ http://orangesoho-app.test/$1 [L,R=301]
