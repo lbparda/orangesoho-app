@@ -296,8 +296,20 @@ export function useOfferCalculations(
                 }
 
                 if (line.is_portability) {
-                    commissionDetails["Líneas Móviles"].push({ description: `Portabilidad ${lineName}`, amount: props.portabilityCommission });
-                }
+                    // Comprobamos si el operador de la línea está en la lista de excepciones
+                    // (Asumimos que props.portabilityExceptions es un array, 
+                    // lo inicializamos a [] si no llega por si acaso)
+                    const exceptions = props.portabilityExceptions || [];
+                    const isException = exceptions.includes(line.source_operator);
+
+                    // Si es una excepción, la comisión es 0. Si no, es la comisión normal.
+                    const commissionAmount = isException ? 0 : (parseFloat(props.portabilityCommission) || 0);
+                    
+                    commissionDetails["Líneas Móviles"].push({ 
+                        description: `Portabilidad ${lineName}`, 
+                        amount: commissionAmount 
+                    });
+                }
 
                 if (line.terminal_pivot && line.selected_duration) {
                     const terminalTotalPrice = (parseFloat(line.initial_cost) || 0) + (parseFloat(line.monthly_cost || 0) * parseInt(line.selected_duration, 10));

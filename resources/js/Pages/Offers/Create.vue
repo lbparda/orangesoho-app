@@ -22,7 +22,8 @@ const props = defineProps({
     centralitaExtensions: Array,
     auth: Object,
     initialClientId: [Number, String, null],
-    probabilityOptions: Array, // <-- AÑADIDO
+    probabilityOptions: Array,
+    portabilityExceptions: Array,
 });
 
 const selectedClient = ref(null);

@@ -18,7 +18,8 @@ const props = defineProps({
     centralitaExtensions: Array,
     auth: Object,
     clients: Array,
-    probabilityOptions: Array, // <-- AÑADIDO
+    probabilityOptions: Array,
+    portabilityExceptions: Array,
 });
 
 // --- LÓGICA PARA GESTIONAR LA VISTA DEL CLIENTE ---
