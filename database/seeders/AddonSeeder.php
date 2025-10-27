@@ -113,6 +113,13 @@ class AddonSeeder extends Seeder
             ['type' => 'tv', 'price' => 355.00, 'commission' => 50.00, 'description' => 'TV para bares en localidades con más de 250.000 habitantes.']
         );
 
+        Addon::create([
+            'name' => 'IP Fija',
+            'type' => 'internet_feature', 
+            'price' => 12.00,
+            'commission' => 0.00 ]
+        );
+
 
     }
 }

@@ -57,6 +57,7 @@ class OfferController extends Controller
         $portabilityExceptions = config('commissions.portability_group_exceptions', []);
         $additionalInternetAddons = Addon::where('type', 'internet_additional')->get();
         $centralitaExtensions = Addon::where('type', 'centralita_extension')->get();
+        $fiberFeatures = Addon::where('type', 'internet_feature')->get(); // <-- AÑADIDO
 
         // --- LÓGICA DE FILTRADO DE CLIENTES ---
         $clientsQuery = Client::query();
@@ -84,6 +85,7 @@ class OfferController extends Controller
             'portabilityExceptions' => $portabilityExceptions,
             'additionalInternetAddons' => $additionalInternetAddons,
             'centralitaExtensions' => $centralitaExtensions,
+            'fiberFeatures' => $fiberFeatures,
             'auth' => ['user' => auth()->user()->load('team')],
             'clients' => $clients, // Pasamos clientes filtrados
             'initialClientId' => $newClientId ? (int)$newClientId : null, // Asegurar que sea int o null
@@ -103,6 +105,7 @@ class OfferController extends Controller
             'centralita' => 'present|array',
             'tv_addons' => 'nullable|array',
             'tv_addons.*' => 'exists:addons,id',
+            'is_ip_fija_selected' => 'nullable|boolean', // <-- AÑADIDO
             'probability' => 'nullable|integer|in:0,25,50,75,90,100', // <-- AÑADIDO
             'signing_date' => 'nullable|date',                     // <-- AÑADIDO
             'processing_date' => 'nullable|date',                  // <-- AÑADIDO
@@ -135,6 +138,16 @@ class OfferController extends Controller
                 }
 
                 $addonsToSync = [];
+
+                // --- AÑADIDO: Lógica para IP Fija ---
+                if (!empty($validated['is_ip_fija_selected'])) {
+                    $ipFijaAddon = \App\Models\Addon::where('type', 'internet_feature')->first();
+                    if ($ipFijaAddon) {
+                        $addonsToSync[$ipFijaAddon->id] = ['quantity' => 1];
+                    }
+                }
+                // --- FIN AÑADIDO ---
+
                 // Lógica para sincronizar addons (Internet, Centralita, TV)
                 if (!empty($validated['internet_addon_id'])) {
                     $addonsToSync[$validated['internet_addon_id']] = ['quantity' => 1];
@@ -191,6 +204,7 @@ class OfferController extends Controller
         $portabilityExceptions = config('commissions.portability_group_exceptions', []);
         $additionalInternetAddons = Addon::where('type', 'internet_additional')->get();
         $centralitaExtensions = Addon::where('type', 'centralita_extension')->get();
+        $fiberFeatures = Addon::where('type', 'internet_feature')->get(); // <-- AÑADIDO
 
         // --- Filtrado de Clientes también en Edit ---
         $user = Auth::user();
@@ -234,6 +248,7 @@ class OfferController extends Controller
             'portabilityExceptions' => $portabilityExceptions,
             'additionalInternetAddons' => $additionalInternetAddons,
             'centralitaExtensions' => $centralitaExtensions,
+            'fiberFeatures' => $fiberFeatures,
             'auth' => ['user' => auth()->user()->load('team')],
             'clients' => $clients, // Pasamos clientes filtrados
             'probabilityOptions' => $probabilityOptions, // <-- AÑADIDO
@@ -273,6 +288,7 @@ class OfferController extends Controller
               'centralita' => 'present|array',
               'tv_addons' => 'nullable|array',
               'tv_addons.*' => 'exists:addons,id',
+              'is_ip_fija_selected' => 'nullable|boolean', // <-- AÑADIDO
               'probability' => 'nullable|integer|in:0,25,50,75,90,100', // <-- AÑADIDO
               'signing_date' => 'nullable|date',                     // <-- AÑADIDO
               'processing_date' => 'nullable|date',                  // <-- AÑADIDO
@@ -309,6 +325,16 @@ class OfferController extends Controller
 
                 // Sincronizar addons (igual que en store)
                 $addonsToSync = [];
+
+                // --- AÑADIDO: Lógica para IP Fija ---
+                if (!empty($validated['is_ip_fija_selected'])) {
+                    $ipFijaAddon = \App\Models\Addon::where('type', 'internet_feature')->first();
+                    if ($ipFijaAddon) {
+                        $addonsToSync[$ipFijaAddon->id] = ['quantity' => 1];
+                    }
+                }
+                // --- FIN AÑADIDO ---
+
                  if (!empty($validated['internet_addon_id'])) {
                     $addonsToSync[$validated['internet_addon_id']] = ['quantity' => 1];
                  }
@@ -378,6 +404,7 @@ class OfferController extends Controller
             'offer' => $offer,
         ]);
     }
+
 
     public function generatePDF(Offer $offer)
     {

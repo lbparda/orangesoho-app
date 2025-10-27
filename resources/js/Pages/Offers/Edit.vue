@@ -5,7 +5,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
 import InputError from '@/Components/InputError.vue';
-import Checkbox from '@/Components/Checkbox.vue';
+import Checkbox from '@/Components/Checkbox.vue'; // Asegúrate que la ruta sea correcta
 import { useOfferCalculations } from '@/composables/useOfferCalculations.js';
 
 const props = defineProps({
@@ -20,58 +20,50 @@ const props = defineProps({
     clients: Array,
     probabilityOptions: Array,
     portabilityExceptions: Array,
+    fiberFeatures: Array, // <-- AÑADIDO: Prop para IP Fija
 });
 
-// --- LÓGICA PARA GESTIONAR LA VISTA DEL CLIENTE ---
 const selectedClient = ref(null);
-const isReassigningClient = ref(false); // Controla si se muestra el desplegable
+const isReassigningClient = ref(false);
 
 const showReassignSelector = () => {
     isReassigningClient.value = true;
 };
-// --- FIN LÓGICA CLIENTE ---
 
-// Helper para formatear fecha YYYY-MM-DD o devolver cadena vacía
 const formatDateForInput = (dateString) => {
     if (!dateString) return '';
     try {
-        // Asume que Laravel envía la fecha como 'YYYY-MM-DD HH:MM:SS' o similar
         return dateString.substring(0, 10);
     } catch (e) {
-        return ''; // Devuelve vacío si hay error
+        return '';
     }
 };
+
+// --- Funciones auxiliares para inicializar el estado del form ---
+const getAddonId = (type) => props.offer.addons.find(a => a.type === type)?.id;
+const getAddons = (type) => props.offer.addons.filter(a => a.type === type);
 
 const form = useForm({
     client_id: props.offer.client_id,
     package_id: props.offer.package_id,
-    lines: [], // Se rellena en la inicialización abajo
-    internet_addon_id: null, // Se rellena abajo
-    additional_internet_lines: [], // Se rellena abajo
+    lines: [], // Se rellena abajo
+    internet_addon_id: getAddonId('internet'),
+    additional_internet_lines: getAddons('internet_additional').map(a => ({ id: a.id + Math.random(), addon_id: a.id })),
     centralita: {}, // Se rellena abajo
-    tv_addons: [], // Se rellena abajo
+    tv_addons: getAddons('tv').map(a => a.id),
+   is_ip_fija_selected: false,
     summary: {}, // Se recalcula
-    probability: props.offer.probability,           // <-- AÑADIDO
-    signing_date: formatDateForInput(props.offer.signing_date),       // <-- AÑADIDO (con formato)
-    processing_date: formatDateForInput(props.offer.processing_date), // <-- AÑADIDO (con formato)
+    probability: props.offer.probability,
+    signing_date: formatDateForInput(props.offer.signing_date),
+    processing_date: formatDateForInput(props.offer.processing_date),
 });
 
-const selectedPackageId = ref(props.offer.package_id);
-const findInitialTerminalData = (lineFromServer) => {
-    if (!lineFromServer.package_terminal_id) return { terminal_pivot: null, terminalInfo: null };
-    const pkg = props.packages.find(p => p.id === props.offer.package_id);
-    if (!pkg?.terminals) return { terminal_pivot: null, terminalInfo: null };
-    // Buscamos usando el 'pivot_id' que ahora viene del controlador en 'edit'
-    const terminalPivotEntry = pkg.terminals.find(t => t.pivot_id === lineFromServer.package_terminal_id);
-    if (!terminalPivotEntry) return { terminal_pivot: null, terminalInfo: null };
-    // Devolvemos el objeto 'pivot' directamente si lo encontramos
-    return { terminal_pivot: terminalPivotEntry.pivot || null, terminalInfo: terminalPivotEntry || null };
-};
-const lines = ref(props.offer.lines.map(line => {
-    // Usamos la información cargada desde el controlador (line.terminal_pivot)
-    const terminalPivotData = line.terminal_pivot; // Viene del controlador edit
-    const terminalInfo = terminalPivotData?.terminal; // El terminal está anidado dentro de pivotData
+const selectedPackageId = ref(props.offer.package_id); // Mantenemos este ref para reactividad del paquete
 
+// Inicializamos 'lines' como ref usando los datos de props.offer.lines
+const lines = ref(props.offer.lines.map(line => {
+    const terminalPivotData = line.terminal_pivot;
+    const terminalInfo = terminalPivotData?.terminal;
     return {
         ...line,
         id: line.id || Date.now() + Math.random(),
@@ -79,22 +71,25 @@ const lines = ref(props.offer.lines.map(line => {
         is_portability: !!line.is_portability,
         has_vap: !!line.has_vap,
         selected_brand: terminalInfo?.brand || null,
-        selected_model_id: terminalInfo?.id || null, // Usamos el ID del terminal
+        selected_model_id: terminalInfo?.id || null,
         selected_duration: terminalPivotData?.duration_months || null,
-        terminal_pivot: terminalPivotData, // Guardamos el objeto pivot completo
-        // initial_cost y monthly_cost ya vienen en la línea desde el backend
+        terminal_pivot: terminalPivotData,
+        package_terminal_id: line.package_terminal_id, // Aseguramos que el ID pivote se mantenga
+        // initial_cost y monthly_cost ya vienen de la línea
     };
 }));
-const getAddonId = (type) => props.offer.addons.find(a => a.type === type)?.id;
-const getAddons = (type) => props.offer.addons.filter(a => a.type === type);
-const selectedInternetAddonId = ref(getAddonId('internet'));
-const additionalInternetLines = ref(getAddons('internet_additional').map(a => ({ id: a.id + Math.random(), addon_id: a.id })));
-const selectedTvAddonIds = ref(getAddons('tv').map(a => a.id));
+
+// Refs para estado local (que no van directos al form pero afectan al cálculo)
+const selectedInternetAddonId = ref(form.internet_addon_id); // Inicializa con el valor del form
+const additionalInternetLines = ref(form.additional_internet_lines); // Inicializa con el valor del form
+const selectedTvAddonIds = ref(form.tv_addons); // Inicializa con el valor del form
 const isOperadoraAutomaticaSelected = ref(!!getAddonId('centralita_feature'));
 const initialOptionalCentralita = props.offer.addons.find(a => a.type === 'centralita' && !a.pivot.is_included);
 const selectedCentralitaId = ref(initialOptionalCentralita?.id || null);
+// const isIpFijaSelected = ref(/* ... */); // <-- ELIMINADO: Se mueve al 'form'
 const showCommissionDetails = ref(false);
 
+// Computeds (sin cambios aquí, usan los refs de arriba)
 const selectedPackage = computed(() => props.packages.find(p => p.id === selectedPackageId.value) || null);
 const mobileAddonInfo = computed(() => selectedPackage.value?.addons.find(a => a.type === 'mobile_line'));
 const internetAddonOptions = computed(() => selectedPackage.value?.addons.filter(a => a.type === 'internet') || []);
@@ -115,6 +110,7 @@ const availableO2oDiscounts = computed(() => selectedPackage.value?.o2o_discount
 const brandsForSelectedPackage = computed(() => [...new Set(availableTerminals.value.map(t => t.brand))]);
 const availableAdditionalExtensions = computed(() => props.centralitaExtensions);
 
+// Inicialización de cantidades de extensiones (sin cambios aquí)
 const initialExtensionQuantities = {};
 const savedExtensions = getAddons('centralita_extension');
 const includedExtensionIds = includedCentralitaExtensions.value.map(ext => ext.id);
@@ -126,22 +122,22 @@ additionalSavedExtensions.forEach(ext => {
 });
 const centralitaExtensionQuantities = ref(initialExtensionQuantities);
 
+// Pasamos form.is_ip_fija_selected al composable
 const { calculationSummary } = useOfferCalculations(
     props, selectedPackageId, lines, selectedInternetAddonId, additionalInternetLines,
-    selectedCentralitaId, centralitaExtensionQuantities, isOperadoraAutomaticaSelected, selectedTvAddonIds
+    selectedCentralitaId, centralitaExtensionQuantities, isOperadoraAutomaticaSelected, selectedTvAddonIds,
+    form.is_ip_fija_selected // <-- MODIFICADO: Pasar el valor del form
 );
 
 const modelsByBrand = (brand) => availableTerminals.value.filter(t => t.brand === brand).filter((v, i, a) => a.findIndex(t => t.model === v.model) === i);
-// Ahora usamos pivot_id (el ID de la tabla package_terminal)
+// Buscamos el pivot usando el ID del terminal y la duración
 const findTerminalPivot = (line) => availableTerminals.value.find(t => t.id === line.selected_model_id && t.pivot.duration_months === line.selected_duration)?.pivot;
-
 const assignTerminalPrices = (line) => {
     const pivot = findTerminalPivot(line);
     line.initial_cost = parseFloat(pivot?.initial_cost || 0);
     line.monthly_cost = parseFloat(pivot?.monthly_cost || 0);
-    line.terminal_pivot = pivot; // Guardamos el objeto pivot completo
-    // Aseguramos que el pivot_id (package_terminal.id) se guarda para el envío
-    line.package_terminal_id = pivot?.id || null;
+    line.terminal_pivot = pivot;
+    line.package_terminal_id = pivot?.id || null; // Guardamos el ID de la tabla pivote
 };
 
 const copyPreviousLine = (line, index) => {
@@ -154,8 +150,7 @@ const copyPreviousLine = (line, index) => {
     line.selected_brand = prev.selected_brand;
     line.selected_model_id = prev.selected_model_id;
     line.selected_duration = prev.selected_duration;
-    // assignTerminalPrices se encargará de recalcular y asignar pivot y costs
-    assignTerminalPrices(line);
+    assignTerminalPrices(line); // Asigna pivot, costs y package_terminal_id
 };
 
 const addLine = () => {
@@ -168,7 +163,7 @@ const removeInternetLine = (index) => additionalInternetLines.value.splice(index
 const getDurationsForModel = (line) => [...new Set(availableTerminals.value.filter(t => t.id === line.selected_model_id).map(t => t.pivot.duration_months))].sort((a, b) => a - b);
 const getO2oDiscountsForLine = (line, index) => {
     if (!mobileAddonInfo.value) return availableO2oDiscounts.value;
-    const limit = mobileAddonInfo.value.pivot.line_limit ?? 0; // Usar ?? 0 por si no viene
+    const limit = mobileAddonInfo.value.pivot.line_limit ?? 0;
     const extrasBefore = lines.value.slice(0, index).filter(l => l.is_extra).length;
     return line.is_extra && extrasBefore < limit ? availableO2oDiscounts.value.filter(d => (parseFloat(d.total_discount_amount) / parseFloat(d.duration_months)) <= 1) : availableO2oDiscounts.value;
 };
@@ -187,7 +182,7 @@ const saveOffer = () => {
             source_operator: l.source_operator,
             has_vap: l.has_vap,
             o2o_discount_id: l.o2o_discount_id,
-            terminal_pivot_id: l.terminal_pivot?.id || null, // Usamos el ID del pivot
+            terminal_pivot_id: l.package_terminal_id, // Usamos el ID del pivot guardado en la línea
             initial_cost: l.initial_cost,
             monthly_cost: l.monthly_cost,
         }));
@@ -196,6 +191,7 @@ const saveOffer = () => {
         form.additional_internet_lines = additionalInternetLines.value.filter(l => l.addon_id).map(l => ({ addon_id: l.addon_id }));
         form.centralita = { id: selectedCentralitaId.value || includedCentralita.value?.id || null, operadora_automatica_selected: isOperadoraAutomaticaSelected.value, operadora_automatica_id: operadoraAutomaticaInfo.value?.id || null, extensions: finalExt };
         form.tv_addons = selectedTvAddonIds.value;
+        // is_ip_fija_selected ya está en el form
         form.summary = calculationSummary.value;
         // probability, signing_date, processing_date ya están en form.
 
@@ -208,21 +204,27 @@ const addWatchersToLine = (line) => {
     watch(() => line.has_vap, (hasVap, old) => { if (old && !hasVap) { line.selected_brand = null; line.selected_model_id = null; line.selected_duration = null; assignTerminalPrices(line); } });
     watch(() => [line.selected_model_id, line.selected_duration], () => assignTerminalPrices(line));
 };
-// Añadir watchers a las líneas cargadas inicialmente
-lines.value.forEach(addWatchersToLine);
+lines.value.forEach(addWatchersToLine); // Aplicar watchers a líneas iniciales
 
 watch(
     () => form.client_id,
     (newClientId) => {
         if (newClientId) {
             selectedClient.value = props.clients.find(c => c.id === Number(newClientId)) || null;
-            isReassigningClient.value = false; // Oculta el desplegable al seleccionar
+            isReassigningClient.value = false;
         } else {
             selectedClient.value = null;
         }
     },
-    { immediate: true } // Ejecuta al montar para cargar el cliente inicial
+    { immediate: true }
 );
+
+// Sincronizar refs locales con cambios en el form (si los hubiera, como internet_addon_id)
+watch(() => form.internet_addon_id, (newVal) => { selectedInternetAddonId.value = newVal; });
+watch(() => form.tv_addons, (newVal) => { selectedTvAddonIds.value = newVal; }, { deep: true });
+// No es necesario sincronizar additionalInternetLines porque se modifica directamente el ref
+// y luego se copia al form al guardar.
+
 </script>
 
 <template>
@@ -243,37 +245,37 @@ watch(
                 <div class="space-y-8">
 
                     <div class="bg-white shadow-sm sm:rounded-lg p-8">
-                         <div class="mb-8">
-                            <label class="block text-sm font-medium text-gray-700 mb-2">Cliente</label>
+                            <div class="mb-8">
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Cliente</label>
 
-                            <div v-if="!isReassigningClient && selectedClient">
-                                <div class="p-4 border rounded-md bg-gray-50 shadow-sm">
-                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1 text-sm">
-                                        <p><strong>Nombre:</strong> {{ selectedClient.name }}</p>
-                                        <p><strong>CIF/NIF:</strong> {{ selectedClient.cif_nif }}</p>
-                                        <p><strong>Email:</strong> {{ selectedClient.email || 'No disponible' }}</p>
-                                        <p><strong>Teléfono:</strong> {{ selectedClient.phone || 'No disponible' }}</p>
-                                        <p class="col-span-2"><strong>Dirección:</strong> {{ selectedClient.address || 'No disponible' }}</p>
+                                <div v-if="!isReassigningClient && selectedClient">
+                                    <div class="p-4 border rounded-md bg-gray-50 shadow-sm">
+                                        <div class="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1 text-sm">
+                                            <p><strong>Nombre:</strong> {{ selectedClient.name }}</p>
+                                            <p><strong>CIF/NIF:</strong> {{ selectedClient.cif_nif }}</p>
+                                            <p><strong>Email:</strong> {{ selectedClient.email || 'No disponible' }}</p>
+                                            <p><strong>Teléfono:</strong> {{ selectedClient.phone || 'No disponible' }}</p>
+                                            <p class="col-span-2"><strong>Dirección:</strong> {{ selectedClient.address || 'No disponible' }}</p>
+                                        </div>
+                                    </div>
+                                    <div class="mt-4">
+                                        <SecondaryButton type="button" @click="showReassignSelector">
+                                            Reasignar Cliente
+                                        </SecondaryButton>
                                     </div>
                                 </div>
-                                <div class="mt-4">
-                                    <SecondaryButton type="button" @click="showReassignSelector">
-                                        Reasignar Cliente
-                                    </SecondaryButton>
+
+                                <div v-else>
+                                    <select v-model="form.client_id" id="client" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                        <option v-for="client in clients" :key="client.id" :value="client.id">{{ client.name }} ({{ client.cif_nif }})</option>
+                                    </select>
+                                    <InputError class="mt-2" :message="form.errors.client_id" />
                                 </div>
                             </div>
-
-                            <div v-else>
-                                <select v-model="form.client_id" id="client" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
-                                    <option v-for="client in clients" :key="client.id" :value="client.id">{{ client.name }} ({{ client.cif_nif }})</option>
-                                </select>
-                                <InputError class="mt-2" :message="form.errors.client_id" />
+                            <div>
+                                <label for="package" class="block text-sm font-medium text-gray-700 mb-2">Paquete Base</label>
+                                <input type="text" :value="selectedPackage?.name" id="package" disabled class="mt-1 block w-full rounded-md border-gray-300 shadow-sm bg-gray-100 cursor-not-allowed">
                             </div>
-                        </div>
-                        <div>
-                            <label for="package" class="block text-sm font-medium text-gray-700 mb-2">Paquete Base</label>
-                            <input type="text" :value="selectedPackage?.name" id="package" disabled class="mt-1 block w-full rounded-md border-gray-300 shadow-sm bg-gray-100 cursor-not-allowed">
-                        </div>
                     </div>
 
                     <div v-if="selectedPackage" class="bg-white shadow-sm sm:rounded-lg p-8 space-y-6">
@@ -298,20 +300,32 @@ watch(
                                 <InputError class="mt-2" :message="form.errors.processing_date" />
                             </div>
                         </section>
-                        <div v-if="internetAddonOptions.length > 0" class="p-6 bg-slate-50 rounded-lg">
-                            <label class="block text-sm font-medium text-gray-700 mb-2">Fibra Principal</label>
-                            <div class="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-4 mt-1">
-                                <label v-for="addon in internetAddonOptions" :key="addon.id"
-                                    :class="['flex-1 text-center px-4 py-3 rounded-md border cursor-pointer transition', { 'bg-indigo-600 text-white border-indigo-600 shadow-lg': selectedInternetAddonId === addon.id, 'bg-white border-gray-300 hover:bg-gray-50': selectedInternetAddonId !== addon.id }]">
-                                    <input type="radio" :value="addon.id" v-model="selectedInternetAddonId" class="sr-only">
-                                    <span class="block font-semibold">{{ addon.name }}</span>
-                                    <span class="block text-xs mt-1" v-if="parseFloat(addon.pivot.price) > 0">+{{ parseFloat(addon.pivot.price).toFixed(2) }}€/mes</span>
-                                </label>
-                            </div>
-                        </div>
+
+                       <div v-if="internetAddonOptions.length > 0 || (props.fiberFeatures && props.fiberFeatures.length > 0)" class="p-6 bg-slate-50 rounded-lg">
+                           <label class="block text-sm font-medium text-gray-700 mb-2">Fibra Principal</label>
+                           <div v-if="internetAddonOptions.length > 0" class="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-4 mt-1">
+                               <label v-for="addon in internetAddonOptions" :key="addon.id"
+                                   :class="['flex-1 text-center px-4 py-3 rounded-md border cursor-pointer transition', { 'bg-indigo-600 text-white border-indigo-600 shadow-lg': selectedInternetAddonId === addon.id, 'bg-white border-gray-300 hover:bg-gray-50': selectedInternetAddonId !== addon.id }]">
+                                   <input type="radio" :value="addon.id" v-model="selectedInternetAddonId" @change="form.internet_addon_id = $event.target.value" class="sr-only">
+                                   <span class="block font-semibold">{{ addon.name }}</span>
+                                   <span class="block text-xs mt-1" v-if="parseFloat(addon.pivot.price) > 0">+{{ parseFloat(addon.pivot.price).toFixed(2) }}€/mes</span>
+                               </label>
+                           </div>
+                           <div v-if="props.fiberFeatures && props.fiberFeatures.length > 0" class="mt-4">
+                               <label class="flex items-center">
+                                   <Checkbox v-model:checked="form.is_ip_fija_selected" />
+                                   <span class="ml-2 text-sm text-gray-600">
+                                       Añadir IP Fija ({{ props.fiberFeatures[0].price }}€)
+                                   </span>
+                               </label>
+                               <p class="text-xs text-gray-500 ml-6">
+                                   Gratis si se incluye Centralita.
+                               </p>
+                           </div>
+                           </div>
+
 
                         <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-
                             <div v-if="tvAddonOptions.length > 0" class="space-y-4 p-6 bg-slate-50 rounded-lg h-full">
                                 <h3 class="text-lg font-semibold text-gray-800">Televisión</h3>
                                 <div class="space-y-2">
@@ -378,7 +392,8 @@ watch(
                                 </div>
                                 <PrimaryButton @click="addInternetLine" type="button" class="w-full justify-center">Añadir Internet</PrimaryButton>
                             </div>
-                        </div> </div>
+                        </div>
+                    </div>
 
                     <div v-if="selectedPackage" class="bg-white shadow-sm sm:rounded-lg p-8 space-y-6">
                         <h3 class="text-lg font-semibold text-gray-800 text-center">Líneas Móviles</h3>
@@ -388,29 +403,29 @@ watch(
                                     <span class="font-medium text-gray-700">
                                         {{ line.is_extra ? `Línea Adicional ${index + 1 - lines.filter(l => !l.is_extra).length}` : `Línea Principal ${index + 1}` }}
                                     </span>
-                                    <div class="flex space-x-2">
-                                        <button
-                                            v-if="index > 0"
-                                            @click="copyPreviousLine(line, index)"
-                                            type="button"
-                                            class="text-blue-600 hover:text-blue-800 p-1 rounded-full hover:bg-blue-100"
-                                            title="Copiar configuración de la línea anterior"
-                                        >
-                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                                            </svg>
-                                        </button>
-                                        <button
-                                            v-if="line.is_extra"
-                                            @click="removeLine(index)"
-                                            type="button"
-                                            class="text-red-500 hover:text-red-700 p-1 rounded-full hover:bg-red-100"
-                                        >
-                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-                                            </svg>
-                                        </button>
-                                    </div>
+                                     <div class="flex space-x-2">
+                                         <button
+                                             v-if="index > 0"
+                                             @click="copyPreviousLine(line, index)"
+                                             type="button"
+                                             class="text-blue-600 hover:text-blue-800 p-1 rounded-full hover:bg-blue-100"
+                                             title="Copiar configuración de la línea anterior"
+                                         >
+                                             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                             </svg>
+                                         </button>
+                                         <button
+                                             v-if="line.is_extra"
+                                             @click="removeLine(index)"
+                                             type="button"
+                                             class="text-red-500 hover:text-red-700 p-1 rounded-full hover:bg-red-100"
+                                         >
+                                              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                                  <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                              </svg>
+                                         </button>
+                                     </div>
                                 </div>
                                 <div class="md:col-span-4">
                                     <label class="block text-xs font-medium text-gray-500">Nº Teléfono</label>
@@ -478,12 +493,12 @@ watch(
                 <div class="sticky top-10 space-y-6">
                     <div class="p-6 bg-white rounded-lg shadow-sm space-y-3">
                         <h2 class="text-xl font-semibold text-gray-800 text-center">Resumen de la Oferta</h2>
-                        <div class="space-y-2 border-t pt-4 mt-4">
-                            <div v-for="(item, index) in calculationSummary.summaryBreakdown" :key="'sum-'+index" class="flex justify-between text-sm" :class="{'text-gray-700': item.price >= 0, 'text-red-600': item.price < 0}">
-                                <span>{{ item.description }}</span>
-                                <span class="font-medium">{{ item.price >= 0 ? '+' : '' }}{{ item.price.toFixed(2) }}€</span>
-                            </div>
-                        </div>
+                         <div v-if="calculationSummary.summaryBreakdown && calculationSummary.summaryBreakdown.length > 0" class="space-y-2 border-t pt-4 mt-4">
+                             <div v-for="(item, index) in calculationSummary.summaryBreakdown" :key="'sum-'+index" class="flex justify-between text-sm" :class="{'text-gray-700': item.price >= 0, 'text-red-600': item.price < 0}">
+                                 <span>{{ item.description }}</span>
+                                 <span class="font-medium">{{ item.price >= 0 ? '+' : '' }}{{ item.price.toFixed(2) }}€</span>
+                             </div>
+                         </div>
                         <div class="border-t pt-4 mt-4 space-y-3">
                             <div class="flex justify-between text-lg font-bold text-gray-800">
                                 <span>Pago Inicial Total:</span>
@@ -495,7 +510,7 @@ watch(
                             </div>
                         </div>
                     </div>
-                    <div class="p-6 bg-white rounded-lg shadow-sm space-y-3">
+                     <div class="p-6 bg-white rounded-lg shadow-sm space-y-3">
                         <h2 class="text-xl font-semibold text-gray-800 text-center">Resumen Comisión</h2>
                         <div class="border-t pt-4 mt-4 space-y-2">
                             <p v-if="$page.props.auth.user.role === 'admin' || $page.props.auth.user.role === 'team_lead'" class="text-md text-gray-500 text-center">

@@ -2,7 +2,7 @@ import { computed } from 'vue';
 
 // Recibe las props y refs necesarios *específicamente* para el cálculo.
 export function useOfferCalculations(
-    props, // Necesita: packages, discounts, portabilityCommission, auth, centralitaExtensions, additionalInternetAddons
+    props, // Necesita: packages, discounts, portabilityCommission, auth, centralitaExtensions, additionalInternetAddons, fiberFeatures
     selectedPackageId, // ref
     lines, // ref
     selectedInternetAddonId, // ref
@@ -10,7 +10,8 @@ export function useOfferCalculations(
     selectedCentralitaId, // ref
     centralitaExtensionQuantities, // ref
     isOperadoraAutomaticaSelected, // ref
-    selectedTvAddonIds // ref
+    selectedTvAddonIds, // ref
+    isIpFijaSelected // <-- AÑADIDO: Recibe el ref/valor reactivo
 ) {
 
     // --- Computeds auxiliares INTERNAS al cálculo ---
@@ -28,7 +29,7 @@ export function useOfferCalculations(
     const tvAddonOptions = computed(() => { // Necesario para cálculo TV
          if (!selectedPackage.value?.addons) return [];
          return selectedPackage.value.addons.filter(a => a.type === 'tv');
-      });
+       });
     const centralitaAddonOptions = computed(() => { // Necesario para cálculo Centralita
         if (!selectedPackage.value?.addons) return [];
         return selectedPackage.value.addons.filter(a => a.type === 'centralita' && !a.pivot.is_included);
@@ -37,7 +38,7 @@ export function useOfferCalculations(
         if (!selectedPackage.value?.addons) return null;
         return selectedPackage.value.addons.find(a => a.type === 'centralita' && a.pivot.is_included);
     });
-    const isCentralitaActive = computed(() => { // Necesario para cálculo Centralita/Extensiones/Operadora
+    const isCentralitaActive = computed(() => { // Necesario para cálculo Centralita/Extensiones/Operadora/IP Fija
         return !!includedCentralita.value || !!selectedCentralitaId.value;
     });
     const autoIncludedExtension = computed(() => { // Necesario para cálculo Extensiones
@@ -66,7 +67,15 @@ export function useOfferCalculations(
          if (!selectedPackage.value) return [];
          return selectedPackage.value.o2o_discounts || [];
     });
-    
+
+    // --- AÑADIDO: Computed para IP Fija ---
+    const ipFijaAddonInfo = computed(() => {
+        if (!props.fiberFeatures || props.fiberFeatures.length === 0) return null;
+        // Asumimos que solo hay una, la primera que encuentre
+        return props.fiberFeatures[0];
+    });
+    // --- FIN AÑADIDO ---
+
     // =================================================================
     // =========== LÓGICA DE DESCUENTOS (VERSIÓN CON DEBUG) ============
     // =================================================================
@@ -82,7 +91,7 @@ export function useOfferCalculations(
             const tvAddon = tvAddonOptions.value.find(a => a.id === id);
             return tvAddon && tvAddon.name.includes('Futbol Bares');
         });
-        
+
         console.clear(); // Limpia la consola en cada recálculo
         console.log("===== INICIO DEBUG DESCUENTOS =====");
         console.log(`Paquete: ${packageName}`);
@@ -100,7 +109,7 @@ export function useOfferCalculations(
                 const packageMatch = conditions.package_names.includes(packageName);
                 const portabilityMatch = conditions.requires_portability === principalLine.is_portability;
                 const vapMatch = conditions.requires_vap === principalLine.has_vap;
-                
+
                 if(packageMatch && portabilityMatch && vapMatch) {
                     console.log(`%c[MATCH] ${d.name}`, "color: green; font-weight: bold;");
                     return true;
@@ -109,8 +118,8 @@ export function useOfferCalculations(
             });
             console.log("===== FIN DEBUG =====");
             return matchingTvDiscount || null;
-        } 
-        
+        }
+
         // 2. Si NO se ha contratado TV Bares
         else {
             console.log("Modo: GENERAL. Buscando descuentos aplicables...");
@@ -126,12 +135,12 @@ export function useOfferCalculations(
                     console.log(` -> DESCARTADO: No aplica a este paquete.`);
                     return false;
                 }
-                
+
                 if (conditions.hasOwnProperty('requires_vap') && conditions.requires_vap !== principalLine.has_vap) {
                     console.log(` -> DESCARTADO: Condición de VAP no cumplida (Req: ${conditions.requires_vap}, Tiene: ${principalLine.has_vap})`);
                     return false;
                 }
-                
+
                 if (conditions.hasOwnProperty('requires_portability') && conditions.requires_portability !== principalLine.is_portability) {
                     console.log(` -> DESCARTADO: Condición de Portabilidad no cumplida (Req: ${conditions.requires_portability}, Es: ${principalLine.is_portability})`);
                     return false;
@@ -141,12 +150,12 @@ export function useOfferCalculations(
                     console.log(` -> DESCARTADO: Operador de origen no permitido (Req: ${conditions.source_operators.join(', ')}, Viene de: ${principalLine.source_operator})`);
                     return false;
                 }
-                
+
                 if (conditions.hasOwnProperty('excluded_operators') && conditions.excluded_operators.includes(principalLine.source_operator)) {
                     console.log(` -> DESCARTADO: Operador de origen EXCLUIDO (Excluye: ${conditions.excluded_operators.join(', ')}, Viene de: ${principalLine.source_operator})`);
                     return false;
                 }
-                
+
                 console.log(` -> CUMPLE TODAS LAS CONDICIONES`);
                 return true;
             });
@@ -207,6 +216,50 @@ export function useOfferCalculations(
             }
         });
 
+        // ===================================================
+        // --- INICIO BLOQUE AÑADIDO: LÓGICA DE IP FIJA ---
+        // ===================================================
+        if (isIpFijaSelected.value && ipFijaAddonInfo.value) {
+
+            // --- DEBUG ---
+            console.log("--- DEBUG IP FIJA ---");
+            console.log("¿IP Fija Seleccionada?", isIpFijaSelected.value);
+            console.log("Info Addon IP Fija:", ipFijaAddonInfo.value);
+            console.log("¿Centralita Activa?", isCentralitaActive.value);
+            console.log("Paquete Incluye Centralita?", !!includedCentralita.value);
+            console.log("ID Centralita Seleccionada:", selectedCentralitaId.value);
+            // --- FIN DEBUG ---
+
+            // ¡Esta es tu regla de negocio!
+            // Usamos 'isCentralitaActive' que ya existe (línea 64)
+            const isIncluded = isCentralitaActive.value;
+            const itemPrice = isIncluded ? 0 : (parseFloat(ipFijaAddonInfo.value.price) || 0);
+            const description = isIncluded ? 'IP Fija (Incluida por Centralita)' : 'IP Fija';
+
+            // --- DEBUG ---
+            console.log("Precio Calculado IP Fija:", itemPrice);
+            console.log("----------------------");
+            // --- FIN DEBUG ---
+
+            price += itemPrice;
+            summaryBreakdown.push({ description: description, price: itemPrice });
+
+            // Añadir comisión (si la definiste en el Seeder)
+            const commission = parseFloat(ipFijaAddonInfo.value.commission) || 0;
+            if (commission > 0) {
+                commissionDetails.Fibra.push({ description: 'IP Fija', amount: commission });
+            }
+        } else if (isIpFijaSelected.value) {
+             // --- DEBUG ---
+            console.log("--- DEBUG IP FIJA ---");
+            console.log("IP Fija seleccionada, pero ipFijaAddonInfo es null/undefined. Revisa props.fiberFeatures.");
+            console.log("----------------------");
+             // --- FIN DEBUG ---
+        }
+        // ===================================================
+        // --- FIN BLOQUE AÑADIDO ---
+        // ===================================================
+
         tvAddonOptions.value.forEach(addon => {
             if (selectedTvAddonIds.value.includes(addon.id)) {
                 const itemPrice = parseFloat(addon.pivot?.price ?? addon.price) || 0;
@@ -249,7 +302,7 @@ export function useOfferCalculations(
                 }
             });
 
-            if (autoIncludedExtension.value) {
+            if (autoIncludedExtension.value && !includedCentralita.value) { // Modificado para que no añada si ya está incluida la centralita
                 commissionDetails.Centralita.push({ description: `1x ${autoIncludedExtension.value.name} (Por Centralita)`, amount: 0 });
             }
 
@@ -271,11 +324,11 @@ export function useOfferCalculations(
         let totalTerminalFee = 0;
         let totalInitialPayment = 0;
         let extraLinesCost = 0;
-        
+
         if (mobileAddonInfo.value) {
-            const promoLimit = mobileAddonInfo.value.pivot.line_limit;
+            const promoLimit = mobileAddonInfo.value.pivot.line_limit ?? 0; // Añadido ?? 0
             const promoPrice = 8.22;
-            const standardPrice = mobileAddonInfo.value.pivot.price;
+            const standardPrice = mobileAddonInfo.value.pivot.price ?? 0; // Añadido ?? 0
             const includedCommission = parseFloat(mobileAddonInfo.value.pivot.included_line_commission) || 0;
             const additionalCommission = parseFloat(mobileAddonInfo.value.pivot.additional_line_commission) || 0;
             let extraLinesCounter = 0;
@@ -296,20 +349,14 @@ export function useOfferCalculations(
                 }
 
                 if (line.is_portability) {
-                    // Comprobamos si el operador de la línea está en la lista de excepciones
-                    // (Asumimos que props.portabilityExceptions es un array, 
-                    // lo inicializamos a [] si no llega por si acaso)
-                    const exceptions = props.portabilityExceptions || [];
-                    const isException = exceptions.includes(line.source_operator);
-
-                    // Si es una excepción, la comisión es 0. Si no, es la comisión normal.
-                    const commissionAmount = isException ? 0 : (parseFloat(props.portabilityCommission) || 0);
-                    
-                    commissionDetails["Líneas Móviles"].push({ 
-                        description: `Portabilidad ${lineName}`, 
-                        amount: commissionAmount 
-                    });
-                }
+                    const exceptions = props.portabilityExceptions || [];
+                    const isException = exceptions.includes(line.source_operator);
+                    const commissionAmount = isException ? 0 : (parseFloat(props.portabilityCommission) || 0);
+                    commissionDetails["Líneas Móviles"].push({
+                        description: `Portabilidad ${lineName}`,
+                        amount: commissionAmount
+                    });
+                }
 
                 if (line.terminal_pivot && line.selected_duration) {
                     const terminalTotalPrice = (parseFloat(line.initial_cost) || 0) + (parseFloat(line.monthly_cost || 0) * parseInt(line.selected_duration, 10));
@@ -327,9 +374,11 @@ export function useOfferCalculations(
                         price -= monthlyValue;
                         appliedO2oList.push({ line: index === 0 ? 'Línea Principal' : `Línea ${index + 1}`, name: o2o.name, value: monthlyValue.toFixed(2) });
                         summaryBreakdown.push({ description: `Subvención O2O (${o2o.name})`, price: -monthlyValue });
-                        if (o2o.pivot && o2o.pivot.dho_payment) {
-                            commissionDetails.Ajustes.push({ description: `Ajuste DHO ${lineName}`, amount: -parseFloat(o2o.pivot.dho_payment) });
-                        }
+                        // Ajuste DHO ahora se busca en la relación pivote de o2o_discount_package
+                        const packageO2oPivot = selectedPackage.value?.o2o_discounts?.find(d => d.id === o2o.id)?.pivot;
+                        if (packageO2oPivot && packageO2oPivot.dho_payment) {
+                             commissionDetails.Ajustes.push({ description: `Ajuste DHO ${lineName}`, amount: -parseFloat(packageO2oPivot.dho_payment) });
+                         }
                     }
                 }
             });
@@ -355,21 +404,21 @@ export function useOfferCalculations(
         if (currentUser.role === 'admin') {
             userCommission = totalCommission;
             teamCommission = totalCommission;
-        } 
+        }
         else if (currentUser.team) {
             const teamPercentage = currentUser.team.commission_percentage || 0;
             teamCommission = totalCommission * (parseFloat(teamPercentage) / 100);
             if (currentUser.role === 'user') {
                 const userPercentage = currentUser.commission_percentage || 0;
                 userCommission = teamCommission * (parseFloat(userPercentage) / 100);
-            } else { // team_lead
+            } else { // team_lead o jefe de ventas
                 userCommission = teamCommission;
             }
         }
         else { // user sin equipo
             const userPercentage = currentUser.commission_percentage || 0;
             userCommission = totalCommission * (parseFloat(userPercentage) / 100);
-            teamCommission = 0;
+            teamCommission = 0; // O quizás la comisión bruta si no hay equipo? Depende de reglas de negocio
         }
 
         return {
@@ -391,4 +440,3 @@ export function useOfferCalculations(
         calculationSummary,
     };
 }
-
