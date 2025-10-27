@@ -141,7 +141,7 @@ class OfferController extends Controller
 
                 // --- AÑADIDO: Lógica para IP Fija ---
                 if (!empty($validated['is_ip_fija_selected'])) {
-                    $ipFijaAddon = \App\Models\Addon::where('type', 'internet_feature')->first();
+                    $ipFijaAddon = \App\Models\Addon::where('name', 'IP Fija')->first();
                     if ($ipFijaAddon) {
                         $addonsToSync[$ipFijaAddon->id] = ['quantity' => 1];
                     }
@@ -328,7 +328,7 @@ class OfferController extends Controller
 
                 // --- AÑADIDO: Lógica para IP Fija ---
                 if (!empty($validated['is_ip_fija_selected'])) {
-                    $ipFijaAddon = \App\Models\Addon::where('type', 'internet_feature')->first();
+                    $ipFijaAddon = \App\Models\Addon::where('name', 'IP Fija')->first();
                     if ($ipFijaAddon) {
                         $addonsToSync[$ipFijaAddon->id] = ['quantity' => 1];
                     }

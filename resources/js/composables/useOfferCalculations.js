@@ -11,7 +11,7 @@ export function useOfferCalculations(
     centralitaExtensionQuantities, // ref
     isOperadoraAutomaticaSelected, // ref
     selectedTvAddonIds, // ref
-    isIpFijaSelected // <-- AÑADIDO: Recibe el ref/valor reactivo
+    form // <-- CORREGIDO: Recibe el objeto 'form' completo
 ) {
 
     // --- Computeds auxiliares INTERNAS al cálculo ---
@@ -27,9 +27,9 @@ export function useOfferCalculations(
         return internetAddonOptions.value.find(a => a.id === selectedInternetAddonId.value);
     });
     const tvAddonOptions = computed(() => { // Necesario para cálculo TV
-         if (!selectedPackage.value?.addons) return [];
-         return selectedPackage.value.addons.filter(a => a.type === 'tv');
-       });
+       if (!selectedPackage.value?.addons) return [];
+       return selectedPackage.value.addons.filter(a => a.type === 'tv');
+     });
     const centralitaAddonOptions = computed(() => { // Necesario para cálculo Centralita
         if (!selectedPackage.value?.addons) return [];
         return selectedPackage.value.addons.filter(a => a.type === 'centralita' && !a.pivot.is_included);
@@ -60,12 +60,12 @@ export function useOfferCalculations(
         return selectedPackage.value.addons.find(a => a.type === 'centralita_feature');
     });
       const mobileAddonInfo = computed(() => { // Necesario para cálculo Líneas Móviles
-         if (!selectedPackage.value?.addons) return null;
-         return selectedPackage.value.addons.find(a => a.type === 'mobile_line');
+       if (!selectedPackage.value?.addons) return null;
+       return selectedPackage.value.addons.find(a => a.type === 'mobile_line');
     });
       const availableO2oDiscounts = computed(() => { // Necesario para cálculo O2O
-         if (!selectedPackage.value) return [];
-         return selectedPackage.value.o2o_discounts || [];
+       if (!selectedPackage.value) return [];
+       return selectedPackage.value.o2o_discounts || [];
     });
 
     // --- AÑADIDO: Computed para IP Fija ---
@@ -92,7 +92,7 @@ export function useOfferCalculations(
             return tvAddon && tvAddon.name.includes('Futbol Bares');
         });
 
-        console.clear(); // Limpia la consola en cada recálculo
+        // console.clear(); // Limpia la consola en cada recálculo - Puedes descomentar si quieres
         console.log("===== INICIO DEBUG DESCUENTOS =====");
         console.log(`Paquete: ${packageName}`);
         console.log(`Línea Principal:`, { is_portability: principalLine.is_portability, has_vap: principalLine.has_vap, source_operator: principalLine.source_operator });
@@ -217,21 +217,21 @@ export function useOfferCalculations(
         });
 
         // ===================================================
-        // --- INICIO BLOQUE AÑADIDO: LÓGICA DE IP FIJA ---
+        // --- INICIO BLOQUE CORREGIDO: LÓGICA DE IP FIJA ---
         // ===================================================
-        if (isIpFijaSelected.value && ipFijaAddonInfo.value) {
+        // Accedemos a form.is_ip_fija_selected directamente
+        if (form.is_ip_fija_selected && ipFijaAddonInfo.value) {
 
             // --- DEBUG ---
             console.log("--- DEBUG IP FIJA ---");
-            console.log("¿IP Fija Seleccionada?", isIpFijaSelected.value);
+            // Accedemos directamente a form.is_ip_fija_selected
+            console.log("¿IP Fija Seleccionada?", form.is_ip_fija_selected);
             console.log("Info Addon IP Fija:", ipFijaAddonInfo.value);
             console.log("¿Centralita Activa?", isCentralitaActive.value);
             console.log("Paquete Incluye Centralita?", !!includedCentralita.value);
             console.log("ID Centralita Seleccionada:", selectedCentralitaId.value);
             // --- FIN DEBUG ---
 
-            // ¡Esta es tu regla de negocio!
-            // Usamos 'isCentralitaActive' que ya existe (línea 64)
             const isIncluded = isCentralitaActive.value;
             const itemPrice = isIncluded ? 0 : (parseFloat(ipFijaAddonInfo.value.price) || 0);
             const description = isIncluded ? 'IP Fija (Incluida por Centralita)' : 'IP Fija';
@@ -244,12 +244,12 @@ export function useOfferCalculations(
             price += itemPrice;
             summaryBreakdown.push({ description: description, price: itemPrice });
 
-            // Añadir comisión (si la definiste en el Seeder)
             const commission = parseFloat(ipFijaAddonInfo.value.commission) || 0;
             if (commission > 0) {
                 commissionDetails.Fibra.push({ description: 'IP Fija', amount: commission });
             }
-        } else if (isIpFijaSelected.value) {
+        // Accedemos a form.is_ip_fija_selected directamente
+        } else if (form.is_ip_fija_selected) {
              // --- DEBUG ---
             console.log("--- DEBUG IP FIJA ---");
             console.log("IP Fija seleccionada, pero ipFijaAddonInfo es null/undefined. Revisa props.fiberFeatures.");
@@ -257,7 +257,7 @@ export function useOfferCalculations(
              // --- FIN DEBUG ---
         }
         // ===================================================
-        // --- FIN BLOQUE AÑADIDO ---
+        // --- FIN BLOQUE CORREGIDO ---
         // ===================================================
 
         tvAddonOptions.value.forEach(addon => {
@@ -378,7 +378,7 @@ export function useOfferCalculations(
                         const packageO2oPivot = selectedPackage.value?.o2o_discounts?.find(d => d.id === o2o.id)?.pivot;
                         if (packageO2oPivot && packageO2oPivot.dho_payment) {
                              commissionDetails.Ajustes.push({ description: `Ajuste DHO ${lineName}`, amount: -parseFloat(packageO2oPivot.dho_payment) });
-                         }
+                        }
                     }
                 }
             });
@@ -388,7 +388,7 @@ export function useOfferCalculations(
         if(totalTerminalFee > 0) {
             summaryBreakdown.push({ description: 'Cuotas mensuales de Terminales', price: totalTerminalFee });
         }
-        price += extraLinesCost;
+        price += extraLinesCost; // Este ya estaba, ¡cuidado con duplicarlo!
 
         Object.keys(commissionDetails).forEach(key => {
             if (commissionDetails[key].length === 0) {
