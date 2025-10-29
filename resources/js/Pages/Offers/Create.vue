@@ -48,10 +48,12 @@ const form = useForm({
     package_id: null,
     lines: [],
     internet_addon_id: null,
-    additional_internet_lines: [],
+    // --- INICIO CÓDIGO MODIFICADO: Añadir has_ip_fija ---
+    additional_internet_lines: [], // Inicialmente vacío, se llena al añadir
+    // --- FIN CÓDIGO MODIFICADO ---
     centralita: null,
     tv_addons: [],
-    is_ip_fija_selected: false, // <-- Estado IP Fija en el form
+    is_ip_fija_selected: false, // <-- Estado IP Fija (línea principal)
     summary: null,
     probability: null,
     signing_date: '',
@@ -61,7 +63,9 @@ const form = useForm({
 const selectedPackageId = ref(null);
 const lines = ref([]);
 const selectedInternetAddonId = ref(null);
-const additionalInternetLines = ref([]);
+// --- INICIO CÓDIGO MODIFICADO: Usar el ref directamente ---
+const additionalInternetLines = ref([]); // Ref local para manejar las líneas adicionales
+// --- FIN CÓDIGO MODIFICADO ---
 const selectedCentralitaId = ref(null);
 const centralitaExtensionQuantities = ref({});
 const isOperadoraAutomaticaSelected = ref(false);
@@ -74,7 +78,7 @@ const mobileAddonInfo = computed(() => selectedPackage.value?.addons.find(a => a
 const internetAddonOptions = computed(() => selectedPackage.value?.addons.filter(a => a.type === 'internet') || []);
 const centralitaAddonOptions = computed(() => selectedPackage.value?.addons.filter(a => a.type === 'centralita' && !a.pivot.is_included) || []);
 const includedCentralita = computed(() => selectedPackage.value?.addons.find(a => a.type === 'centralita' && a.pivot.is_included));
-const isCentralitaActive = computed(() => !!includedCentralita.value || !!selectedCentralitaId.value); // <-- Clave para la lógica
+const isCentralitaActive = computed(() => !!includedCentralita.value || !!selectedCentralitaId.value);
 const autoIncludedExtension = computed(() => {
     if (!selectedCentralitaId.value) return null;
     const selected = centralitaAddonOptions.value.find(c => c.id === selectedCentralitaId.value);
@@ -90,14 +94,15 @@ const availableO2oDiscounts = computed(() => selectedPackage.value?.o2o_discount
 const brandsForSelectedPackage = computed(() => [...new Set(availableTerminals.value.map(t => t.brand))]);
 const availableAdditionalExtensions = computed(() => props.centralitaExtensions);
 
-// Pasamos el objeto 'form' completo al composable
+// Pasamos el objeto 'form' completo y el ref 'additionalInternetLines' al composable
 const { calculationSummary } = useOfferCalculations(
-    props, selectedPackageId, lines, selectedInternetAddonId, additionalInternetLines,
+    props, selectedPackageId, lines, selectedInternetAddonId, additionalInternetLines, // <-- Pasamos el ref actualizado
     selectedCentralitaId, centralitaExtensionQuantities, isOperadoraAutomaticaSelected, selectedTvAddonIds,
     form // <-- Pasar el objeto form completo
 );
 
 const modelsByBrand = (brand) => availableTerminals.value.filter(t => t.brand === brand).filter((v, i, a) => a.findIndex(t => t.model === v.model) === i);
+// Ahora usamos pivot.id (que viene de package_terminal.id)
 const findTerminalPivot = (line) => availableTerminals.value.find(t => t.id === line.selected_model_id && t.pivot.duration_months === line.selected_duration)?.pivot;
 const assignTerminalPrices = (line) => {
     const pivot = findTerminalPivot(line);
@@ -124,10 +129,13 @@ const copyPreviousLine = (line, index) => {
     line.selected_brand = prev.selected_brand;
     line.selected_model_id = prev.selected_model_id;
     line.selected_duration = prev.selected_duration;
+    // initial_cost y monthly_cost se asignan ahora con assignTerminalPrices
     assignTerminalPrices(line); // Asigna pivot, costs y package_terminal_id
 };
 
-const addInternetLine = () => additionalInternetLines.value.push({ id: Date.now(), addon_id: null });
+// --- INICIO CÓDIGO MODIFICADO: Añadir has_ip_fija al crear línea adicional ---
+const addInternetLine = () => additionalInternetLines.value.push({ id: Date.now(), addon_id: null, has_ip_fija: false });
+// --- FIN CÓDIGO MODIFICADO ---
 const removeInternetLine = (index) => additionalInternetLines.value.splice(index, 1);
 const getDurationsForModel = (line) => [...new Set(availableTerminals.value.filter(t => t.id === line.selected_model_id).map(t => t.pivot.duration_months))].sort((a, b) => a - b);
 const getO2oDiscountsForLine = (line, index) => {
@@ -160,7 +168,11 @@ const saveOffer = () => {
             initial_cost: line.initial_cost, monthly_cost: line.monthly_cost,
         }));
         form.internet_addon_id = selectedInternetAddonId.value;
-        form.additional_internet_lines = additionalInternetLines.value.filter(l => l.addon_id).map(l => ({ addon_id: l.addon_id }));
+        // --- INICIO CÓDIGO MODIFICADO: Enviar has_ip_fija ---
+        form.additional_internet_lines = additionalInternetLines.value
+            .filter(l => l.addon_id)
+            .map(l => ({ addon_id: l.addon_id, has_ip_fija: l.has_ip_fija })); // Incluimos has_ip_fija
+        // --- FIN CÓDIGO MODIFICADO ---
         form.centralita = {
             id: selectedCentralitaId.value || includedCentralita.value?.id || null,
             operadora_automatica_selected: isOperadoraAutomaticaSelected.value,
@@ -168,6 +180,7 @@ const saveOffer = () => {
         };
         form.tv_addons = selectedTvAddonIds.value;
         form.summary = calculationSummary.value;
+
         form.post(route('offers.store'), { onSuccess: () => alert('¡Oferta guardada!'), onError: (e) => { console.error(e); alert('Error al guardar.'); } });
     } catch (e) { console.error("Error preparing offer:", e); alert("Error inesperado."); }
 };
@@ -207,15 +220,14 @@ watch(
 );
 
 // --- INICIO CÓDIGO AÑADIDO ---
-// Watcher para marcar IP Fija si la centralita está activa
+// Watcher para marcar/desmarcar IP Fija según la centralita (para la línea PRINCIPAL)
 watch(isCentralitaActive, (isActive) => {
     if (isActive) {
         form.is_ip_fija_selected = true;
+    } else {
+        // Desmarcar si deja de estar activa
+        form.is_ip_fija_selected = false;
     }
-    // Opcional: Desmarcar si deja de estar activa (descomentar si es necesario)
-     else {
-         form.is_ip_fija_selected = false;
-     }
 }, { immediate: true }); // immediate: true para que se ejecute al cargar si ya hay centralita
 // --- FIN CÓDIGO AÑADIDO ---
 
@@ -378,7 +390,7 @@ watch(isCentralitaActive, (isActive) => {
 
                             <div class="space-y-4 p-6 bg-slate-50 rounded-lg h-full">
                                 <h3 class="text-lg font-semibold text-gray-800">6. Internet Adicional</h3>
-                                <div v-for="(line, index) in additionalInternetLines" :key="line.id" class="p-3 border rounded-lg bg-blue-50 border-blue-200">
+                                <div v-for="(line, index) in additionalInternetLines" :key="line.id" class="p-3 border rounded-lg bg-blue-50 border-blue-200 space-y-2"> {/* <-- Añadido space-y-2 */}
                                     <div class="flex-1">
                                         <div class="flex justify-between items-center mb-1">
                                             <label class="block text-xs font-medium text-gray-500">Línea Adicional {{ index + 1 }}</label>
@@ -389,6 +401,16 @@ watch(isCentralitaActive, (isActive) => {
                                             <option v-for="addon in additionalInternetAddons" :key="addon.id" :value="addon.id">{{ addon.name }} (+{{ parseFloat(addon.price).toFixed(2) }}€)</option>
                                         </select>
                                     </div>
+                                    <!-- --- INICIO CÓDIGO AÑADIDO: Checkbox IP Fija Adicional --- -->
+                                    <div v-if="line.addon_id && props.fiberFeatures && props.fiberFeatures.length > 0">
+                                         <label class="flex items-center">
+                                             <Checkbox v-model:checked="line.has_ip_fija" />
+                                             <span class="ml-2 text-xs text-gray-600">
+                                                 Añadir IP Fija (+{{ props.fiberFeatures[0].price }}€)
+                                             </span>
+                                         </label>
+                                    </div>
+                                    <!-- --- FIN CÓDIGO AÑADIDO --- -->
                                 </div>
                                 <PrimaryButton @click="addInternetLine" type="button" class="w-full justify-center">Añadir Internet</PrimaryButton>
                             </div>
@@ -513,40 +535,40 @@ watch(isCentralitaActive, (isActive) => {
                             </div>
                         </div>
                     </div>
-                    <div class="p-6 bg-white rounded-lg shadow-sm space-y-3">
-                        <h2 class="text-xl font-semibold text-gray-800 text-center">Resumen Comisión</h2>
-                        <div class="border-t pt-4 mt-4 space-y-2">
-                            <p v-if="$page.props.auth.user.role === 'admin' || $page.props.auth.user.role === 'team_lead'" class="text-md text-gray-500 text-center">
-                                Comisión Bruta (100%): {{ calculationSummary.totalCommission }}€
-                            </p>
-                            <p v-if="$page.props.auth.user.role === 'team_lead'" class="text-lg text-gray-600 text-center">
-                                Comisión Equipo ({{ auth.user?.team?.commission_percentage || 0 }}%): {{ calculationSummary.teamCommission }}€
-                            </p>
-                            <p class="text-xl font-bold text-emerald-600 text-center mt-2">
-                                Tu Comisión: {{ calculationSummary.userCommission }}€
-                            </p>
-                            <div class="text-center pt-2">
-                                <SecondaryButton @click="showCommissionDetails = !showCommissionDetails">
-                                    {{ showCommissionDetails ? 'Ocultar Detalle' : 'Ver Detalle' }}
-                                </SecondaryButton>
-                            </div>
-                            <div v-if="showCommissionDetails" class="mt-4 border-t pt-4 text-left">
-                                <h4 class="text-md font-semibold text-gray-700 mb-2">Desglose de Comisiones</h4>
-                                <div v-for="(items, category) in calculationSummary.commissionDetails" :key="'com-'+category" class="mb-3">
-                                    <h5 class="font-bold text-sm text-gray-600">{{ category }}</h5>
-                                    <ul class="list-disc list-inside text-xs text-gray-600 space-y-1 mt-1">
-                                        <li v-for="(item, index) in items" :key="'com-item-'+index" class="flex justify-between">
-                                            <span>{{ item.description }}</span>
-                                            <span class="font-mono" :class="{'text-red-500': item.amount < 0}">{{ item.amount.toFixed(2) }}€</span>
-                                        </li>
-                                    </ul>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+                     <div class="p-6 bg-white rounded-lg shadow-sm space-y-3">
+                         <h2 class="text-xl font-semibold text-gray-800 text-center">Resumen Comisión</h2>
+                         <div class="border-t pt-4 mt-4 space-y-2">
+                             <p v-if="$page.props.auth.user.role === 'admin' || $page.props.auth.user.role === 'team_lead'" class="text-md text-gray-500 text-center">
+                                 Comisión Bruta (100%): {{ calculationSummary.totalCommission }}€
+                             </p>
+                             <p v-if="$page.props.auth.user.role === 'team_lead'" class="text-lg text-gray-600 text-center">
+                                 Comisión Equipo ({{ auth.user?.team?.commission_percentage || 0 }}%): {{ calculationSummary.teamCommission }}€
+                             </p>
+                             <p class="text-xl font-bold text-emerald-600 text-center mt-2">
+                                 Tu Comisión: {{ calculationSummary.userCommission }}€
+                             </p>
+                             <div class="text-center pt-2">
+                                 <SecondaryButton @click="showCommissionDetails = !showCommissionDetails">
+                                     {{ showCommissionDetails ? 'Ocultar Detalle' : 'Ver Detalle' }}
+                                 </SecondaryButton>
+                             </div>
+                             <div v-if="showCommissionDetails" class="mt-4 border-t pt-4 text-left">
+                                 <h4 class="text-md font-semibold text-gray-700 mb-2">Desglose de Comisiones</h4>
+                                 <div v-for="(items, category) in calculationSummary.commissionDetails" :key="'com-'+category" class="mb-3">
+                                     <h5 class="font-bold text-sm text-gray-600">{{ category }}</h5>
+                                     <ul class="list-disc list-inside text-xs text-gray-600 space-y-1 mt-1">
+                                         <li v-for="(item, index) in items" :key="'com-item-'+index" class="flex justify-between">
+                                             <span>{{ item.description }}</span>
+                                             <span class="font-mono" :class="{'text-red-500': item.amount < 0}">{{ item.amount.toFixed(2) }}€</span>
+                                         </li>
+                                     </ul>
+                                 </div>
+                             </div>
+                         </div>
+                     </div>
+                 </div>
+             </div>
 
-        </div>
-    </AuthenticatedLayout>
-</template>
+         </div>
+     </AuthenticatedLayout>
+ </template>

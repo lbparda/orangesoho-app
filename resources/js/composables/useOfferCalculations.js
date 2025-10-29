@@ -6,12 +6,12 @@ export function useOfferCalculations(
     selectedPackageId, // ref
     lines, // ref
     selectedInternetAddonId, // ref
-    additionalInternetLines, // ref
+    additionalInternetLines, // ref <-- Ahora contiene objetos con { addon_id, has_ip_fija }
     selectedCentralitaId, // ref
     centralitaExtensionQuantities, // ref
     isOperadoraAutomaticaSelected, // ref
     selectedTvAddonIds, // ref
-    form // <-- CORREGIDO: Recibe el objeto 'form' completo
+    form // <-- Recibe el objeto 'form' completo (incluye form.is_ip_fija_selected para línea principal)
 ) {
 
     // --- Computeds auxiliares INTERNAS al cálculo ---
@@ -68,23 +68,28 @@ export function useOfferCalculations(
        return selectedPackage.value.o2o_discounts || [];
     });
 
-    // --- AÑADIDO: Computed para IP Fija ---
+    // --- Computed para IP Fija (Addon principal) ---
     const ipFijaAddonInfo = computed(() => {
         if (!props.fiberFeatures || props.fiberFeatures.length === 0) return null;
-        // Asumimos que solo hay una, la primera que encuentre
-        return props.fiberFeatures[0];
+        // Asumimos que solo hay una, la primera que encuentre con el nombre exacto
+        return props.fiberFeatures.find(f => f.name === 'IP Fija'); // Más seguro buscar por nombre
     });
-    // --- FIN AÑADIDO ---
+    // --- FIN ---
 
     // =================================================================
     // =========== LÓGICA DE DESCUENTOS (VERSIÓN CON DEBUG) ============
     // =================================================================
     const appliedDiscount = computed(() => {
-        if (lines.value.length === 0 || !selectedPackage.value) {
+        // --- INICIO CÓDIGO RESTAURADO ---
+        if (!lines.value || lines.value.length === 0 || !selectedPackage.value) { // Añadida comprobación para lines.value
             return null;
         }
 
         const principalLine = lines.value[0];
+        // Comprobar si principalLine existe antes de acceder a sus propiedades
+        if (!principalLine) return null;
+        // --- FIN CÓDIGO RESTAURADO ---
+
         const packageName = selectedPackage.value.name;
 
         const hasTVBares = selectedTvAddonIds.value.some(id => {
@@ -146,15 +151,18 @@ export function useOfferCalculations(
                     return false;
                 }
 
-                if (conditions.hasOwnProperty('source_operators') && !conditions.source_operators.includes(principalLine.source_operator)) {
+                // --- INICIO CÓDIGO RESTAURADO ---
+                if (conditions.hasOwnProperty('source_operators') && conditions.source_operators && !conditions.source_operators.includes(principalLine.source_operator)) {
                     console.log(` -> DESCARTADO: Operador de origen no permitido (Req: ${conditions.source_operators.join(', ')}, Viene de: ${principalLine.source_operator})`);
                     return false;
                 }
 
-                if (conditions.hasOwnProperty('excluded_operators') && conditions.excluded_operators.includes(principalLine.source_operator)) {
+                if (conditions.hasOwnProperty('excluded_operators') && conditions.excluded_operators && conditions.excluded_operators.includes(principalLine.source_operator)) {
                     console.log(` -> DESCARTADO: Operador de origen EXCLUIDO (Excluye: ${conditions.excluded_operators.join(', ')}, Viene de: ${principalLine.source_operator})`);
                     return false;
                 }
+                // --- FIN CÓDIGO RESTAURADO ---
+
 
                 console.log(` -> CUMPLE TODAS LAS CONDICIONES`);
                 return true;
@@ -175,7 +183,7 @@ export function useOfferCalculations(
         return null;
     });
     // =================================================================
-    // ======================= FIN DEL CÓDIGO MODIFICADO ===============
+    // ======================= FIN LÓGICA DESCUENTOS ===================
     // =================================================================
 
     // --- Fin Computeds auxiliares INTERNAS ---
@@ -204,60 +212,55 @@ export function useOfferCalculations(
             commissionDetails.Fibra.push({ description: `Fibra Principal (${selectedInternetAddonInfo.value.name})`, amount: parseFloat(selectedInternetAddonInfo.value.pivot.included_line_commission) || 0 });
         }
 
+        // --- INICIO CÓDIGO MODIFICADO: Añadir cálculo IP Fija adicional ---
         additionalInternetLines.value.forEach((line, index) => {
             if (line.addon_id) {
                 const addonInfo = props.additionalInternetAddons.find(a => a.id === line.addon_id);
                 if (addonInfo) {
-                    const itemPrice = parseFloat(addonInfo.price) || 0;
-                    price += itemPrice;
-                    summaryBreakdown.push({ description: `Internet Adicional ${index + 1} (${addonInfo.name})`, price: itemPrice });
+                    // Precio de la línea adicional
+                    const linePrice = parseFloat(addonInfo.price) || 0;
+                    price += linePrice;
+                    summaryBreakdown.push({ description: `Internet Adicional ${index + 1} (${addonInfo.name})`, price: linePrice });
                     commissionDetails.Fibra.push({ description: `Internet Adicional ${index + 1} (${addonInfo.name})`, amount: parseFloat(addonInfo.commission) || 0 });
+
+                    // Precio/Comisión de la IP Fija para esta línea adicional
+                    if (line.has_ip_fija && ipFijaAddonInfo.value) {
+                        const ipFijaPrice = parseFloat(ipFijaAddonInfo.value.price) || 0;
+                        const ipFijaCommission = parseFloat(ipFijaAddonInfo.value.commission) || 0;
+                        price += ipFijaPrice;
+                        summaryBreakdown.push({ description: `IP Fija Adicional ${index + 1}`, price: ipFijaPrice });
+                        if (ipFijaCommission > 0) { // Solo añadir si hay comisión definida
+                            commissionDetails.Fibra.push({ description: `IP Fija Adicional ${index + 1}`, amount: ipFijaCommission });
+                        }
+                    }
                 }
             }
         });
+        // --- FIN CÓDIGO MODIFICADO ---
 
         // ===================================================
-        // --- INICIO BLOQUE CORREGIDO: LÓGICA DE IP FIJA ---
+        // --- LÓGICA DE IP FIJA (Línea Principal) ---
         // ===================================================
         // Accedemos a form.is_ip_fija_selected directamente
         if (form.is_ip_fija_selected && ipFijaAddonInfo.value) {
-
-            // --- DEBUG ---
-            console.log("--- DEBUG IP FIJA ---");
-            // Accedemos directamente a form.is_ip_fija_selected
-            console.log("¿IP Fija Seleccionada?", form.is_ip_fija_selected);
-            console.log("Info Addon IP Fija:", ipFijaAddonInfo.value);
-            console.log("¿Centralita Activa?", isCentralitaActive.value);
-            console.log("Paquete Incluye Centralita?", !!includedCentralita.value);
-            console.log("ID Centralita Seleccionada:", selectedCentralitaId.value);
-            // --- FIN DEBUG ---
-
             const isIncluded = isCentralitaActive.value;
             const itemPrice = isIncluded ? 0 : (parseFloat(ipFijaAddonInfo.value.price) || 0);
-            const description = isIncluded ? 'IP Fija (Incluida por Centralita)' : 'IP Fija';
-
-            // --- DEBUG ---
-            console.log("Precio Calculado IP Fija:", itemPrice);
-            console.log("----------------------");
-            // --- FIN DEBUG ---
+            const description = isIncluded ? 'IP Fija Principal (Incluida por Centralita)' : 'IP Fija Principal'; // Añadido 'Principal'
+            const commission = parseFloat(ipFijaAddonInfo.value.commission) || 0;
 
             price += itemPrice;
             summaryBreakdown.push({ description: description, price: itemPrice });
 
-            const commission = parseFloat(ipFijaAddonInfo.value.commission) || 0;
             if (commission > 0) {
-                commissionDetails.Fibra.push({ description: 'IP Fija', amount: commission });
+                 // Añadir comisión (si la definiste en el Seeder)
+                commissionDetails.Fibra.push({ description: 'IP Fija Principal', amount: commission });
             }
         // Accedemos a form.is_ip_fija_selected directamente
         } else if (form.is_ip_fija_selected) {
-             // --- DEBUG ---
-            console.log("--- DEBUG IP FIJA ---");
-            console.log("IP Fija seleccionada, pero ipFijaAddonInfo es null/undefined. Revisa props.fiberFeatures.");
-            console.log("----------------------");
-             // --- FIN DEBUG ---
+             console.log("IP Fija principal seleccionada, pero ipFijaAddonInfo es null/undefined.");
         }
         // ===================================================
-        // --- FIN BLOQUE CORREGIDO ---
+        // --- FIN LÓGICA IP FIJA PRINCIPAL ---
         // ===================================================
 
         tvAddonOptions.value.forEach(addon => {
@@ -378,7 +381,7 @@ export function useOfferCalculations(
                         const packageO2oPivot = selectedPackage.value?.o2o_discounts?.find(d => d.id === o2o.id)?.pivot;
                         if (packageO2oPivot && packageO2oPivot.dho_payment) {
                              commissionDetails.Ajustes.push({ description: `Ajuste DHO ${lineName}`, amount: -parseFloat(packageO2oPivot.dho_payment) });
-                        }
+                         }
                     }
                 }
             });
@@ -388,7 +391,7 @@ export function useOfferCalculations(
         if(totalTerminalFee > 0) {
             summaryBreakdown.push({ description: 'Cuotas mensuales de Terminales', price: totalTerminalFee });
         }
-        price += extraLinesCost; // Este ya estaba, ¡cuidado con duplicarlo!
+        price += extraLinesCost; // Este ya estaba
 
         Object.keys(commissionDetails).forEach(key => {
             if (commissionDetails[key].length === 0) {
