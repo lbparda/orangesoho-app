@@ -390,7 +390,7 @@ watch(isCentralitaActive, (isActive) => {
 
                             <div class="space-y-4 p-6 bg-slate-50 rounded-lg h-full">
                                 <h3 class="text-lg font-semibold text-gray-800">6. Internet Adicional</h3>
-                                <div v-for="(line, index) in additionalInternetLines" :key="line.id" class="p-3 border rounded-lg bg-blue-50 border-blue-200 space-y-2"> {/* <-- Añadido space-y-2 */}
+                                <div v-for="(line, index) in additionalInternetLines" :key="line.id" class="p-3 border rounded-lg bg-blue-50 border-blue-200 space-y-2">  <!-- Añadido space-y-2 -->
                                     <div class="flex-1">
                                         <div class="flex justify-between items-center mb-1">
                                             <label class="block text-xs font-medium text-gray-500">Línea Adicional {{ index + 1 }}</label>
