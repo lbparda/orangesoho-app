@@ -6,7 +6,7 @@ export function useOfferCalculations(
     selectedPackageId, // ref
     lines, // ref
     selectedInternetAddonId, // ref
-    additionalInternetLines, // ref <-- Ahora contiene objetos con { addon_id, has_ip_fija }
+    additionalInternetLines, // ref <-- Ahora contiene objetos con { addon_id, has_ip_fija, selected_centralita_id }
     selectedCentralitaId, // ref
     centralitaExtensionQuantities, // ref
     isOperadoraAutomaticaSelected, // ref
@@ -212,7 +212,7 @@ export function useOfferCalculations(
             commissionDetails.Fibra.push({ description: `Fibra Principal (${selectedInternetAddonInfo.value.name})`, amount: parseFloat(selectedInternetAddonInfo.value.pivot.included_line_commission) || 0 });
         }
 
-        // --- INICIO CÓDIGO MODIFICADO: Añadir cálculo IP Fija adicional ---
+        // --- INICIO CÓDIGO MODIFICADO: Añadir cálculo IP Fija adicional y Centralita Multisede ---
         additionalInternetLines.value.forEach((line, index) => {
             if (line.addon_id) {
                 const addonInfo = props.additionalInternetAddons.find(a => a.id === line.addon_id);
@@ -223,16 +223,58 @@ export function useOfferCalculations(
                     summaryBreakdown.push({ description: `Internet Adicional ${index + 1} (${addonInfo.name})`, price: linePrice });
                     commissionDetails.Fibra.push({ description: `Internet Adicional ${index + 1} (${addonInfo.name})`, amount: parseFloat(addonInfo.commission) || 0 });
 
+                    // --- INICIO LÓGICA MODIFICADA: IP Fija gratis si hay centralita multisede ---
                     // Precio/Comisión de la IP Fija para esta línea adicional
                     if (line.has_ip_fija && ipFijaAddonInfo.value) {
-                        const ipFijaPrice = parseFloat(ipFijaAddonInfo.value.price) || 0;
+                        const isIncluded = !!line.selected_centralita_id; // <-- Gratis si hay centralita en ESTA línea
+                        const ipFijaPrice = isIncluded ? 0 : (parseFloat(ipFijaAddonInfo.value.price) || 0); // <-- Precio 0 si está incluida
+                        const description = isIncluded ? `IP Fija Adicional ${index + 1} (Incluida por Centralita)` : `IP Fija Adicional ${index + 1}`; // <-- Descripción dinámica
+                        
                         const ipFijaCommission = parseFloat(ipFijaAddonInfo.value.commission) || 0;
                         price += ipFijaPrice;
-                        summaryBreakdown.push({ description: `IP Fija Adicional ${index + 1}`, price: ipFijaPrice });
+                        summaryBreakdown.push({ description: description, price: ipFijaPrice });
+                        
                         if (ipFijaCommission > 0) { // Solo añadir si hay comisión definida
                             commissionDetails.Fibra.push({ description: `IP Fija Adicional ${index + 1}`, amount: ipFijaCommission });
                         }
                     }
+                    // --- FIN LÓGICA MODIFICADA ---
+
+                    // --- INICIO CÓDIGO NUEVO: Cálculo Centralita Multisede ---
+                    if (line.selected_centralita_id) {
+                        const centralitaInfo = centralitaAddonOptions.value.find(c => c.id === line.selected_centralita_id);
+                        if (centralitaInfo) {
+                            // 1. Añadir precio y comisión de la centralita en sí
+                            const itemPrice = parseFloat(centralitaInfo.pivot.price) || 0;
+                            const commission = parseFloat(centralitaInfo.commission) || 0;
+                            const decommission = parseFloat(centralitaInfo.decommission) || 0;
+                            const totalAmount = commission + decommission;
+                            
+                            price += itemPrice;
+                            summaryBreakdown.push({ description: `Centralita Multisede ${index + 1} (${centralitaInfo.name})`, price: itemPrice });
+                            
+                            commissionDetails.Centralita.push({ 
+                                description: `Centralita Multisede ${index + 1} (${centralitaInfo.name})`, 
+                                amount: totalAmount 
+                            });
+
+                            // 2. Añadir comisión de la extensión auto-incluida (precio 0)
+                            const centralitaType = centralitaInfo.name.split(' ')[1]; // 'Básica', 'Inalámbrica', 'Avanzada'
+                            if (centralitaType) {
+                                const autoExt = props.centralitaExtensions.find(ext => ext.name.includes(centralitaType));
+                                if (autoExt) {
+                                    const extCommission = parseFloat(autoExt.commission) || 0;
+                                    if (extCommission > 0) { // Solo añadir si hay comisión
+                                        commissionDetails.Centralita.push({ 
+                                            description: `1x ${autoExt.name} (Por Multisede ${index + 1})`, 
+                                            amount: extCommission 
+                                        });
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    // --- FIN CÓDIGO NUEVO ---
                 }
             }
         });
@@ -282,7 +324,8 @@ export function useOfferCalculations(
             // 3. Los sumamos para obtener el total
             const totalAmount = commission + decommission;
 
-            commissionDetails.Centralita.push({ 
+  //_MODIFIED       
+             commissionDetails.Centralita.push({ 
                 description: `Centralita Incluida (${includedCentralita.value.name})`, 
                 amount: totalAmount // <-- Usamos el total
             });

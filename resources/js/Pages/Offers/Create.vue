@@ -48,7 +48,7 @@ const form = useForm({
     package_id: null,
     lines: [],
     internet_addon_id: null,
-    // --- INICIO CÓDIGO MODIFICADO: Añadir has_ip_fija ---
+    // --- INICIO CÓDIGO MODIFICADO: Añadir campos ---
     additional_internet_lines: [], // Inicialmente vacío, se llena al añadir
     // --- FIN CÓDIGO MODIFICADO ---
     centralita: null,
@@ -111,12 +111,17 @@ const assignTerminalPrices = (line) => {
     line.terminal_pivot = pivot;
     line.package_terminal_id = pivot?.id || null; // Guardamos el ID de la tabla pivote
 };
+
+// --- INICIO CÓDIGO CORREGIDO ---
 const addLine = () => {
     if (!canAddLine.value) return;
     const newLine = createNewLine(true);
     lines.value.push(newLine);
-    addWatchersToLine(newLine);
+    // ¡LA CORRECCIÓN! Apuntar al objeto reactivo DENTRO del array
+    addWatchersToLine(lines.value[lines.value.length - 1]);
 };
+// --- FIN CÓDIGO CORREGIDO ---
+
 const removeLine = (index) => { if (lines.value[index]?.is_extra) lines.value.splice(index, 1); };
 
 const copyPreviousLine = (line, index) => {
@@ -133,9 +138,32 @@ const copyPreviousLine = (line, index) => {
     assignTerminalPrices(line); // Asigna pivot, costs y package_terminal_id
 };
 
-// --- INICIO CÓDIGO MODIFICADO: Añadir has_ip_fija al crear línea adicional ---
-const addInternetLine = () => additionalInternetLines.value.push({ id: Date.now(), addon_id: null, has_ip_fija: false });
-// --- FIN CÓDIGO MODIFICADO ---
+// --- INICIO CÓDIGO NUEVO: Watcher para líneas de internet adicionales ---
+const addWatchersToAdditionalLine = (line) => {
+    watch(() => line.selected_centralita_id, (isCentralita) => {
+        if (isCentralita) { // Si hay ID de centralita, marcar IP Fija
+            line.has_ip_fija = true;
+        } else { // Si se quita la centralita, desmarcar IP Fija
+            line.has_ip_fija = false;
+        }
+    });
+};
+// --- FIN CÓDIGO NUEVO ---
+
+// --- INICIO CÓDIGO MODIFICADO Y CORREGIDO ---
+const addInternetLine = () => {
+    const newLine = {
+        id: Date.now(),
+        addon_id: null,
+        has_ip_fija: false,
+        selected_centralita_id: null
+    };
+    additionalInternetLines.value.push(newLine);
+    // ¡LA CORRECCIÓN! Apuntar al objeto reactivo DENTRO del array
+    addWatchersToAdditionalLine(additionalInternetLines.value[additionalInternetLines.value.length - 1]);
+};
+// --- FIN CÓDIGO MODIFICADO Y CORREGIDO ---
+
 const removeInternetLine = (index) => additionalInternetLines.value.splice(index, 1);
 const getDurationsForModel = (line) => [...new Set(availableTerminals.value.filter(t => t.id === line.selected_model_id).map(t => t.pivot.duration_months))].sort((a, b) => a - b);
 const getO2oDiscountsForLine = (line, index) => {
@@ -168,10 +196,14 @@ const saveOffer = () => {
             initial_cost: line.initial_cost, monthly_cost: line.monthly_cost,
         }));
         form.internet_addon_id = selectedInternetAddonId.value;
-        // --- INICIO CÓDIGO MODIFICADO: Enviar has_ip_fija ---
+        // --- INICIO CÓDIGO MODIFICADO: Enviar has_ip_fija y centralita ---
         form.additional_internet_lines = additionalInternetLines.value
             .filter(l => l.addon_id)
-            .map(l => ({ addon_id: l.addon_id, has_ip_fija: l.has_ip_fija })); // Incluimos has_ip_fija
+            .map(l => ({
+                addon_id: l.addon_id,
+                has_ip_fija: l.has_ip_fija,
+                selected_centralita_id: l.selected_centralita_id // <-- AÑADIDO
+            }));
         // --- FIN CÓDIGO MODIFICADO ---
         form.centralita = {
             id: selectedCentralitaId.value || includedCentralita.value?.id || null,
@@ -203,7 +235,8 @@ watch(selectedPackageId, (newPackageId) => {
     for (let i = 0; i < quantity; i++) {
         const newLine = createNewLine(false);
         lines.value.push(newLine);
-        addWatchersToLine(newLine);
+        // ¡LA CORRECCIÓN! Apuntar al objeto reactivo DENTRO del array
+        addWatchersToLine(lines.value[lines.value.length - 1]);
     }
 });
 
@@ -390,8 +423,7 @@ watch(isCentralitaActive, (isActive) => {
 
                             <div class="space-y-4 p-6 bg-slate-50 rounded-lg h-full">
                                 <h3 class="text-lg font-semibold text-gray-800">6. Internet Adicional</h3>
-                                <div v-for="(line, index) in additionalInternetLines" :key="line.id" class="p-3 border rounded-lg bg-blue-50 border-blue-200 space-y-2">  <!-- Añadido space-y-2 -->
-                                    <div class="flex-1">
+                                <div v-for="(line, index) in additionalInternetLines" :key="line.id" class="p-3 border rounded-lg bg-blue-50 border-blue-200 space-y-2">  <div class="flex-1">
                                         <div class="flex justify-between items-center mb-1">
                                             <label class="block text-xs font-medium text-gray-500">Línea Adicional {{ index + 1 }}</label>
                                             <button @click="removeInternetLine(index)" type="button" class="text-red-500 hover:text-red-700"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
@@ -401,7 +433,16 @@ watch(isCentralitaActive, (isActive) => {
                                             <option v-for="addon in additionalInternetAddons" :key="addon.id" :value="addon.id">{{ addon.name }} (+{{ parseFloat(addon.price).toFixed(2) }}€)</option>
                                         </select>
                                     </div>
-                                    <!-- --- INICIO CÓDIGO AÑADIDO: Checkbox IP Fija Adicional --- -->
+
+                                    <div v-if="line.addon_id && centralitaAddonOptions.length > 0">
+                                         <label :for="`multi_centralita_${line.id}`" class="block text-xs font-medium text-gray-500">Centralita Multisede</label>
+                                         <select v-model="line.selected_centralita_id" :id="`multi_centralita_${line.id}`" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                             <option :value="null">-- Sin Centralita Multisede --</option>
+                                             <option v-for="centralita in centralitaAddonOptions" :key="centralita.id" :value="centralita.id">
+                                                 {{ centralita.name }} (+{{ parseFloat(centralita.pivot.price).toFixed(2) }}€)
+                                             </option>
+                                         </select>
+                                    </div>
                                     <div v-if="line.addon_id && props.fiberFeatures && props.fiberFeatures.length > 0">
                                          <label class="flex items-center">
                                              <Checkbox v-model:checked="line.has_ip_fija" />
@@ -410,8 +451,7 @@ watch(isCentralitaActive, (isActive) => {
                                              </span>
                                          </label>
                                     </div>
-                                    <!-- --- FIN CÓDIGO AÑADIDO --- -->
-                                </div>
+                                    </div>
                                 <PrimaryButton @click="addInternetLine" type="button" class="w-full justify-center">Añadir Internet</PrimaryButton>
                             </div>
                         </div>
@@ -496,7 +536,7 @@ watch(isCentralitaActive, (isActive) => {
                                    </div>
                                </div>
                            </div>
-                        </div>
+                         </div>
                         <div class="flex justify-center pt-4">
                             <PrimaryButton @click="addLine" type="button">Añadir Línea Móvil Adicional</PrimaryButton>
                         </div>

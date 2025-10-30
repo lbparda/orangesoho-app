@@ -8,33 +8,41 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 
 const props = defineProps({
     offer: Object, // La oferta con relaciones cargadas
+    centralitaExtensions: Array, // <-- ¡AÑADIDO!
 });
 
 const page = usePage();
 
-// --- LÓGICA VISIBILIDAD COMISIONES (Tu lógica original) ---
+// --- LÓGICA VISIBILIDAD COMISIONES ---
 const canViewCommissions = computed(() => {
     const userRole = page.props.auth.user?.role;
     // Asumiendo que is_manager se pasa correctamente
     return userRole === 'admin' || page.props.auth.user?.is_manager;
 });
 
-// --- LÓGICA CENTRALITA (Tu lógica original) ---
+// --- LÓGICA CENTRALITA (Principal) ---
 const centralitaInfo = computed(() => {
     if (!props.offer) return null;
+
+    // Busca la centralita principal (la que no está asociada a una línea adicional)
     const savedCentralita = props.offer.addons?.find(a => a.type === 'centralita');
     const savedOperadora = props.offer.addons?.find(a => a.type === 'centralita_feature');
     const contractedExtensions = props.offer.addons?.filter(a => a.type === 'centralita_extension') || [];
+    
     const includedCentralita = props.offer.package?.addons?.find(a => a.type === 'centralita' && a.pivot.is_included);
     const includedOperadora = props.offer.package?.addons?.find(a => a.type === 'centralita_feature' && a.pivot.is_included);
+    
     const finalCentralita = savedCentralita || includedCentralita;
     const finalOperadora = savedOperadora || includedOperadora;
+    
     const packageIncludedExtensions = props.offer.package?.addons?.filter(a =>
         a.type === 'centralita_extension' && a.pivot.is_included && a.pivot.included_quantity > 0
     ) || [];
+
     if (!finalCentralita && !finalOperadora && contractedExtensions.length === 0 && packageIncludedExtensions.length === 0) {
-        return null;
+        return null; // No hay centralita principal
     }
+    
     return {
         centralita: finalCentralita,
         operadora: finalOperadora,
@@ -43,12 +51,68 @@ const centralitaInfo = computed(() => {
     };
 });
 
-// --- LÓGICA INTERNET Y TV (Corregida) ---
-const baseInternetAddon = computed(() => props.offer.addons?.find(a => a.type === 'internet'));
-const additionalInternetAddons = computed(() => props.offer.addons?.filter(a => a.type === 'internet_additional') || []);
-const tvAddons = computed(() => props.offer.addons?.filter(a => a.type === 'tv' || a.type === 'tv_base' || a.type === 'tv_premium') || []);
+// --- LÓGICA INTERNET, TV Y MULTISEDE ---
+const allAddons = computed(() => props.offer.addons || []);
+const allPackageAddons = computed(() => props.offer.package?.addons || []);
 
-// --- FUNCIONES FORMATO (Tu lógica original) ---
+const baseInternetAddon = computed(() => allAddons.value.find(a => a.type === 'internet'));
+const ipFijaPrincipal = computed(() => allAddons.value.find(a => a.type === 'internet_feature'));
+const additionalInternetAddons = computed(() => allAddons.value.filter(a => a.type === 'internet_additional') || []);
+const tvAddons = computed(() => allAddons.value.filter(a => a.type === 'tv' || a.type === 'tv_base' || a.type === 'tv_premium') || []);
+
+/**
+ * Busca los detalles de una centralita (por su ID) dentro de los addons
+ * disponibles en el PAQUETE (ya que de ahí se saca el nombre y precio).
+ */
+const getPackageCentralitaDetails = (centralitaId) => {
+    if (!centralitaId) return null;
+    // Busca en los addons del paquete el nombre de la centralita
+    return allPackageAddons.value.find(a => a.type === 'centralita' && a.id === centralitaId);
+};
+
+/**
+ * Busca la extensión auto-incluida que corresponde a un tipo de centralita.
+ * (Replicando la lógica de useOfferCalculations)
+ */
+const findAutoIncludedExtension = (centralitaAddon) => {
+    if (!centralitaAddon) return null;
+    // Extrae el tipo del nombre, ej: "Centralita Básica" -> "Básica"
+    const type = centralitaAddon.name.split(' ')[1]; 
+    if (!type) return null;
+    
+    // --- ¡CORREGIDO! ---
+    // Buscar en la prop 'centralitaExtensions' (la lista completa)
+    // en lugar de 'props.offer.package.addons' (solo los del paquete)
+    return props.centralitaExtensions.find(a => 
+        a.type === 'centralita_extension' && a.name.includes(type)
+    );
+};
+
+// Computed para Centralitas Multisede (con sus extensiones)
+const centralitasMultisede = computed(() => {
+    // --- ¡CORREGIDO! ---
+    // Usar la nueva prop 'centralitaExtensions' como guarda
+    if (!props.centralitaExtensions) return [];
+
+    return additionalInternetAddons.value
+        .filter(addon => !!addon.pivot.selected_centralita_id) // Filtra las que SÍ tienen centralita
+        .map(addon => {
+            const centralitaDetails = getPackageCentralitaDetails(addon.pivot.selected_centralita_id);
+            const includedExtension = findAutoIncludedExtension(centralitaDetails); // Busca la extensión incluida
+
+            return {
+                id: addon.id, // ID único del addon de internet
+                lineName: addon.name, // El nombre de la línea de internet (Fibra Adicional 600Mb, etc.)
+                centralitaName: centralitaDetails?.name || `ID ${addon.pivot.selected_centralita_id}`,
+                has_ip_fija: addon.pivot.has_ip_fija,
+                extensionName: includedExtension?.name || null // Nombre de la extensión incluida
+            };
+        });
+});
+// --- FIN LÓGICA INTERNET/CENTRALITA ---
+
+
+// --- FUNCIONES FORMATO ---
 const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
     try {
@@ -75,7 +139,7 @@ const sendOfferByEmail = () => { sendEmailForm.post(route('offers.send', props.o
 const openDetails = ref({
     lines: false, // Por defecto, líneas plegadas
     internetTv: false, // Combinamos internet y TV
-    centralita: false,
+    centralita: false, // Por defecto, centralita plegada
     commissionBreakdown: false, // Por defecto, desglose plegado
 });
 
@@ -97,16 +161,16 @@ const openDetails = ref({
                      </PrimaryButton>
                      <a :href="route('offers.pdf', offer.id)" target="_blank" download class="inline-flex items-center px-4 py-2 bg-gray-800 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-gray-700 active:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition ease-in-out duration-150">PDF</a>
                  </div>
-            </div>
+             </div>
         </template>
 
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 mt-6">
            <div v-if="$page.props.flash.success" class="p-4 mb-4 bg-green-100 border border-green-300 text-green-800 rounded-md shadow-sm transition duration-300 ease-in-out">
                 {{ $page.props.flash.success }}
-            </div>
-            <div v-if="$page.props.flash.error" class="p-4 mb-4 bg-red-100 border border-red-300 text-red-800 rounded-md shadow-sm transition duration-300 ease-in-out">
+           </div>
+           <div v-if="$page.props.flash.error" class="p-4 mb-4 bg-red-100 border border-red-300 text-red-800 rounded-md shadow-sm transition duration-300 ease-in-out">
                 {{ $page.props.flash.error }}
-            </div>
+           </div>
         </div>
 
         <div class="py-12">
@@ -155,7 +219,7 @@ const openDetails = ref({
                                 </summary>
                                 <div class="mt-4 space-y-4 border-t pt-4">
                                      <div v-if="offer.lines && offer.lines.length > 0" class="space-y-4">
-                                        <div v-for="(line, index) in offer.lines" :key="line.id || index" class="p-4 border rounded-lg bg-white shadow-sm hover:shadow-md transition-shadow duration-200">
+                                         <div v-for="(line, index) in offer.lines" :key="line.id || index" class="p-4 border rounded-lg bg-white shadow-sm hover:shadow-md transition-shadow duration-200">
                                              <p class="font-bold text-gray-800 mb-2">Línea {{ index + 1 }}: <span class="font-mono">{{ line.phone_number || 'Número no especificado' }}</span></p>
                                             <div class="grid grid-cols-1 md:grid-cols-3 gap-x-4 text-sm text-gray-600">
                                                 <div><span class="font-semibold block text-gray-500">Tipo</span> {{ line.is_extra ? 'Adicional' : 'Principal' }}</div>
@@ -172,7 +236,7 @@ const openDetails = ref({
                                             </div>
                                         </div>
                                     </div>
-                                    <p v-else class="italic text-gray-500">No se añadieron líneas móviles.</p>
+                                     <p v-else class="italic text-gray-500">No se añadieron líneas móviles.</p>
                                 </div>
                             </details>
                         </section>
@@ -186,65 +250,107 @@ const openDetails = ref({
                                     </span>
                                 </summary>
                                 <div class="mt-4 space-y-4 border-t pt-4">
+                                    
                                     <div class="text-sm bg-blue-50 p-3 rounded shadow-sm">
                                         <span class="font-semibold text-blue-800">Fibra Base:</span>
                                         <span v-if="baseInternetAddon" class="ml-2">{{ baseInternetAddon.name }}</span>
                                         <span v-else class="italic text-gray-500 ml-2">(No especificada o no contratada)</span>
-                                    </div>
-                                    <div v-if="additionalInternetAddons.length > 0">
-                                        <div v-for="addon in additionalInternetAddons" :key="addon.id" class="text-sm bg-blue-50 p-3 rounded mt-2 shadow-sm">
-                                            <span class="font-semibold text-blue-800">Internet Adicional:</span>
-                                            <span class="ml-2">{{ addon.name }}</span>
-                                            <span v-if="addon.pivot.quantity > 1" class="ml-1 text-xs text-blue-600">(x{{ addon.pivot.quantity }})</span>
+                                        
+                                        <div v-if="ipFijaPrincipal" class="mt-2 pt-2 border-t border-blue-200 ml-4">
+                                            <span class="text-xs font-semibold text-gray-700">IP Fija Principal:</span>
+                                            <span class="ml-1 text-xs">
+                                                Incluida
+                                                <span v-if="centralitaInfo">(Gratis por Centralita)</span>
+                                            </span>
                                         </div>
                                     </div>
+                                    
+                                    <div v-if="additionalInternetAddons.length > 0">
+                                        <div v-for="(addon, index) in additionalInternetAddons" :key="addon.id + '-' + index" class="text-sm bg-blue-50 p-3 rounded mt-2 shadow-sm">
+                                            <span class="font-semibold text-blue-800">Internet Adicional:</span>
+                                            <span class="ml-2">{{ addon.name }}</span>
+
+                                            <div v-if="addon.pivot.has_ip_fija && !addon.pivot.selected_centralita_id" class="mt-2 pt-2 border-t border-blue-200 ml-4 space-y-1">
+                                                <span class="text-xs font-semibold text-gray-700">IP Fija:</span>
+                                                <span class="ml-1 text-xs">Incluida</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
                                     <div v-if="tvAddons.length > 0" class="text-sm bg-purple-50 p-3 rounded mt-2 shadow-sm">
                                         <span class="font-semibold block mb-1 text-purple-800">Televisión:</span>
                                         <ul class="list-disc list-inside ml-4 space-y-1">
                                             <li v-for="tv in tvAddons" :key="tv.id">{{ tv.name }}</li>
                                         </ul>
                                     </div>
-                                     <div v-else class="text-sm text-gray-500 italic mt-2">
+                                    <div v-else class="text-sm text-gray-500 italic mt-2">
                                         Sin addons de TV contratados.
                                     </div>
                                 </div>
                             </details>
                         </section>
-
-                        <section v-if="centralitaInfo" class="bg-white p-6 shadow-sm sm:rounded-lg">
-                            <details class="group" :open="openDetails.centralita" @toggle="openDetails.centralita = $event.target.open">
+                        <section v-if="centralitaInfo || centralitasMultisede.length > 0" class="bg-white p-6 shadow-sm sm:rounded-lg">
+                             <details class="group" :open="openDetails.centralita" @toggle="openDetails.centralita = $event.target.open">
                                 <summary class="flex justify-between items-center font-medium cursor-pointer list-none">
-                                    <h3 class="text-lg leading-6 text-gray-900">📞 Centralita Virtual</h3>
+                                    <h3 class="text-lg leading-6 text-gray-900">📞 Centralita Virtual y Multisede</h3>
                                     <span class="transition group-open:rotate-180">
                                         <svg fill="none" height="20" shape-rendering="geometricPrecision" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" viewBox="0 0 24 24" width="20"><path d="M6 9l6 6 6-6"></path></svg>
                                     </span>
                                 </summary>
-                                <div class="mt-4 space-y-3 text-sm bg-indigo-50 p-4 rounded shadow-sm border-t pt-4">
-                                    <p v-if="centralitaInfo.centralita"><span class="font-semibold text-indigo-800">Base:</span> {{ centralitaInfo.centralita.name }}</p>
-                                    <p v-if="centralitaInfo.operadora"><span class="font-semibold text-indigo-800">Operadora Automática:</span> {{ centralitaInfo.operadora.name }}</p>
-                                    <div>
-                                        <span class="font-semibold block text-indigo-800 mb-1">Extensiones:</span>
-                                         <ul v-if="centralitaInfo.contractedExtensions.length > 0" class="list-disc list-inside ml-4 space-y-1">
-                                            <li v-for="ext in centralitaInfo.contractedExtensions" :key="ext.id">
-                                                {{ ext.name }} (x{{ ext.pivot.quantity }})
-                                            </li>
-                                        </ul>
-                                         <ul v-else-if="centralitaInfo.packageIncludedExtensions.length > 0" class="list-disc list-inside ml-4 text-gray-500 space-y-1">
-                                             <li v-for="ext in centralitaInfo.packageIncludedExtensions" :key="ext.id">
-                                                {{ ext.name }} (x{{ ext.pivot.included_quantity }} incluidas en paquete)
-                                            </li>
-                                        </ul>
-                                        <p v-else class="ml-4 italic text-gray-500">Sin extensiones adicionales contratadas o incluidas.</p>
+                                
+                                <div class="mt-4 space-y-4 border-t pt-4">
+                                    
+                                    <div v-if="centralitaInfo" class="text-sm bg-indigo-50 p-4 rounded shadow-sm">
+                                        <p class="font-medium text-indigo-900 mb-2">Centralita Principal</p>
+                                        <p v-if="centralitaInfo.centralita"><span class="font-semibold text-indigo-800">Base:</span> {{ centralitaInfo.centralita.name }}</p>
+                                        <p v-if="centralitaInfo.operadora" class="mt-1"><span class="font-semibold text-indigo-800">Operadora Automática:</span> {{ centralitaInfo.operadora.name }}</p>
+                                        <div class="mt-2 pt-2 border-t border-indigo-200">
+                                            <span class="font-semibold block text-indigo-800 mb-1">Extensiones (Principal):</span>
+                                            <ul v-if="centralitaInfo.contractedExtensions.length > 0" class="list-disc list-inside ml-4 space-y-1">
+                                                <li v-for="ext in centralitaInfo.contractedExtensions" :key="ext.id">
+                                                    {{ ext.name }} (x{{ ext.pivot.quantity }})
+                                                </li>
+                                            </ul>
+                                            <ul v-else-if="centralitaInfo.packageIncludedExtensions.length > 0" class="list-disc list-inside ml-4 text-gray-500 space-y-1">
+                                                <li v-for="ext in centralitaInfo.packageIncludedExtensions" :key="ext.id">
+                                                    {{ ext.name }} (x{{ ext.pivot.included_quantity }} incluidas)
+                                                </li>
+                                            </ul>
+                                            <p v-else class="ml-4 italic text-gray-500">Sin extensiones adicionales.</p>
+                                        </div>
                                     </div>
+                                    
+                                    <div v-if="centralitasMultisede.length > 0" class="space-y-3">
+                                        <div v-for="multi in centralitasMultisede" :key="multi.id" class="text-sm bg-indigo-50 p-4 rounded shadow-sm">
+                                            <p class="font-medium text-indigo-900 mb-2">Centralita Multisede (en {{ multi.lineName }})</p>
+                                            <p><span class="font-semibold text-indigo-800">Base:</span> {{ multi.centralitaName }}</p>
+                                            
+                                            <div v-if="multi.extensionName" class="mt-2 pt-2 border-t border-indigo-200">
+                                                <span class="font-semibold block text-indigo-800 mb-1">Extensiones (Multisede):</span>
+                                                <ul class="list-disc list-inside ml-4 space-y-1">
+                                                    <li>{{ multi.extensionName }} (x1 Incluida)</li>
+                                                </ul>
+                                            </div>
+
+                                            <div v-if="multi.has_ip_fija" class="mt-2 pt-2 border-t border-indigo-200">
+                                                <span class="text-xs font-semibold text-gray-700">IP Fija:</span>
+                                                <span class="ml-1 text-xs">Incluida (Gratis por Centralita)</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
                                 </div>
                             </details>
                         </section>
-                        <section v-else class="bg-white p-6 shadow-sm sm:rounded-lg italic text-gray-500">
-                             No se incluyó centralita en esta oferta.
+                        
+                        <section v-if="!centralitaInfo && centralitasMultisede.length === 0" class="bg-white p-6 shadow-sm sm:rounded-lg italic text-gray-500">
+                             No se incluyó ninguna centralita en esta oferta.
                         </section>
-
-                    </div> <div class="lg:col-span-1 space-y-8">
-                         <div class="sticky top-8 space-y-8"> <section class="bg-white p-6 shadow-sm sm:rounded-lg">
+                         </div> 
+                    
+                    <div class="lg:col-span-1 space-y-8">
+                         <div class="sticky top-8 space-y-8"> 
+                             <section class="bg-white p-6 shadow-sm sm:rounded-lg">
                                 <h3 class="text-lg font-medium leading-6 text-gray-900 border-b pb-2 mb-4">💰 Resumen Económico</h3>
                                 <div class="p-4 bg-gray-100 rounded-lg shadow-inner">
                                     <h4 class="font-semibold text-gray-800 text-center mb-3">Resumen Precios</h4>
@@ -265,7 +371,7 @@ const openDetails = ref({
                                          <p v-if="!offer.summary?.summaryBreakdown || offer.summary.summaryBreakdown.length === 0" class="italic text-gray-400 text-xs">No hay desglose de precios.</p>
                                     </div>
                                 </div>
-                             </section>
+                            </section>
 
                              <section v-if="canViewCommissions" class="bg-white p-6 shadow-sm sm:rounded-lg">
                                 <h3 class="text-lg font-medium leading-6 text-gray-900 border-b pb-2 mb-4">📊 Comisiones</h3>
@@ -305,9 +411,14 @@ const openDetails = ref({
                                     </div>
                                 </div>
                             </section>
-                            <section v-else class="bg-white p-6 shadow-sm sm:rounded-lg italic text-sm text-gray-500">
+                             <section v-else class="bg-white p-6 shadow-sm sm:rounded-lg italic text-sm text-gray-500">
                                 El desglose de comisiones no está visible para tu rol.
                             </section>
 
-                        </div> </div> </div> </div> </div> </AuthenticatedLayout>
+                        </div> 
+                    </div> 
+                </div> 
+            </div> 
+        </div> 
+    </AuthenticatedLayout>
 </template>

@@ -46,7 +46,7 @@ class Offer extends Model
 
     public function addons(): BelongsToMany
     {
-        return $this->belongsToMany(Addon::class)->withPivot('quantity');
+        return $this->belongsToMany(Addon::class)->withPivot('quantity','has_ip_fija', 'selected_centralita_id');
     }
     // --- NUEVA FUNCIÓN AÑADIDA ---
     public function client(): BelongsTo

@@ -8,6 +8,7 @@ import InputError from '@/Components/InputError.vue';
 import Checkbox from '@/Components/Checkbox.vue'; // Asegúrate que la ruta sea correcta
 import { useOfferCalculations } from '@/composables/useOfferCalculations.js';
 
+// --- 1. MODIFICACIÓN: Aceptar las nuevas props del controlador ---
 const props = defineProps({
     offer: Object,
     packages: Array,
@@ -20,7 +21,9 @@ const props = defineProps({
     clients: Array,
     probabilityOptions: Array,
     portabilityExceptions: Array,
-    fiberFeatures: Array, // <-- Prop para IP Fija
+    fiberFeatures: Array,
+    initialAdditionalInternetLines: Array, // <-- ¡AÑADIDO!
+    initialMainIpFijaSelected: Boolean,  // <-- ¡AÑADIDO!
 });
 
 const selectedClient = ref(null);
@@ -42,29 +45,20 @@ const formatDateForInput = (dateString) => {
 // --- Funciones auxiliares para inicializar el estado del form ---
 const getAddonId = (type) => props.offer.addons.find(a => a.type === type)?.id;
 const getAddons = (type) => props.offer.addons.filter(a => a.type === type);
-const hasAddon = (type) => props.offer.addons.some(a => a.type === type);
-// --- INICIO CÓDIGO MODIFICADO: Helper para comprobar si addon específico está asociado a una línea adicional ---
-// Asumimos que no podemos saber esto directamente de la carga inicial,
-// así que inicializaremos has_ip_fija en false para líneas existentes.
-// Si tuvieras una forma de saberlo (p.ej., una relación diferente), se podría ajustar aquí.
-// --- FIN CÓDIGO MODIFICADO ---
+// hasAddon ya no se usa para la IP Fija principal
 
-
+// --- 2. MODIFICACIÓN: Inicializar 'useForm' con las nuevas props ---
 const form = useForm({
     client_id: props.offer.client_id,
     package_id: props.offer.package_id,
     lines: [], // Se rellena abajo
     internet_addon_id: getAddonId('internet'),
-    // --- INICIO CÓDIGO MODIFICADO: Añadir has_ip_fija a líneas adicionales ---
-    additional_internet_lines: getAddons('internet_additional').map(a => ({
-        id: a.id + Math.random(), // ID temporal para Vue
-        addon_id: a.id,
-        has_ip_fija: false // Inicializamos en false, ajustar si tienes info
-    })),
-    // --- FIN CÓDIGO MODIFICADO ---
+    // Usar la prop del controlador en lugar de 'getAddons'
+    additional_internet_lines: props.initialAdditionalInternetLines, // <-- ¡CORREGIDO!
     centralita: {}, // Se rellena abajo
     tv_addons: getAddons('tv').map(a => a.id),
-    is_ip_fija_selected: hasAddon('internet_feature'), // Para la línea principal
+    // Usar la prop del controlador
+    is_ip_fija_selected: props.initialMainIpFijaSelected, // <-- ¡CORREGIDO!
     summary: {}, // Se recalcula
     probability: props.offer.probability,
     signing_date: formatDateForInput(props.offer.signing_date),
@@ -92,14 +86,16 @@ const lines = ref(props.offer.lines.map(line => {
     };
 }));
 
-// Refs para estado local (que no van directos al form pero afectan al cálculo)
-const selectedInternetAddonId = ref(form.internet_addon_id); // Inicializa con el valor del form
-// --- INICIO CÓDIGO MODIFICADO: Usar el ref directamente ---
-const additionalInternetLines = ref(form.additional_internet_lines); // Usamos la estructura del form
-// --- FIN CÓDIGO MODIFICADO ---
-const selectedTvAddonIds = ref(form.tv_addons); // Inicializa con el valor del form
+// --- 3. MODIFICACIÓN: Inicializar los 'ref' locales con las nuevas props ---
+const selectedInternetAddonId = ref(form.internet_addon_id); 
+// Usar la prop del controlador
+const additionalInternetLines = ref(props.initialAdditionalInternetLines); // <-- ¡CORREGIDO!
+const selectedTvAddonIds = ref(form.tv_addons); 
+// --- FIN MODIFICACIÓN ---
+
 const isOperadoraAutomaticaSelected = ref(!!getAddonId('centralita_feature'));
-const initialOptionalCentralita = props.offer.addons.find(a => a.type === 'centralita' && !a.pivot.is_included);
+// Modificado para ignorar las centralitas multisede
+const initialOptionalCentralita = props.offer.addons.find(a => a.type === 'centralita' && !a.pivot.selected_centralita_id);
 const selectedCentralitaId = ref(initialOptionalCentralita?.id || null);
 const showCommissionDetails = ref(false);
 
@@ -168,14 +164,37 @@ const copyPreviousLine = (line, index) => {
     assignTerminalPrices(line); // Asigna pivot, costs y package_terminal_id
 };
 
+// --- INICIO CÓDIGO CORREGIDO (Reactividad) ---
 const addLine = () => {
     const newLine = { id: Date.now(), is_extra: true, is_portability: false, phone_number: '', source_operator: null, has_vap: false, o2o_discount_id: null, selected_brand: null, selected_model_id: null, selected_duration: null, terminal_pivot: null, package_terminal_id: null, initial_cost: 0, monthly_cost: 0 };
-    lines.value.push(newLine); addWatchersToLine(newLine);
+    lines.value.push(newLine); 
+    addWatchersToLine(lines.value[lines.value.length - 1]); // Apuntar al objeto reactivo
 };
 const removeLine = (index) => { if (lines.value[index]?.is_extra) lines.value.splice(index, 1); };
-// --- INICIO CÓDIGO MODIFICADO: Añadir has_ip_fija al crear línea adicional ---
-const addInternetLine = () => additionalInternetLines.value.push({ id: Date.now(), addon_id: null, has_ip_fija: false });
-// --- FIN CÓDIGO MODIFICADO ---
+
+// Watcher para líneas de internet adicionales
+const addWatchersToAdditionalLine = (line) => {
+    watch(() => line.selected_centralita_id, (isCentralita) => {
+        if (isCentralita) { // Si hay ID de centralita, marcar IP Fija
+            line.has_ip_fija = true;
+        } else { // Si se quita la centralita, desmarcar IP Fija
+            line.has_ip_fija = false;
+        }
+    });
+};
+
+const addInternetLine = () => {
+    const newLine = {
+        id: Date.now(),
+        addon_id: null,
+        has_ip_fija: false,
+        selected_centralita_id: null
+    };
+    additionalInternetLines.value.push(newLine);
+    addWatchersToAdditionalLine(additionalInternetLines.value[additionalInternetLines.value.length - 1]); // Apuntar al objeto reactivo
+};
+// --- FIN CÓDIGO CORREGIDO ---
+
 const removeInternetLine = (index) => additionalInternetLines.value.splice(index, 1);
 const getDurationsForModel = (line) => [...new Set(availableTerminals.value.filter(t => t.id === line.selected_model_id).map(t => t.pivot.duration_months))].sort((a, b) => a - b);
 const getO2oDiscountsForLine = (line, index) => {
@@ -191,7 +210,6 @@ const saveOffer = () => {
         for (const [id, qty] of Object.entries(centralitaExtensionQuantities.value)) if (qty > 0) finalExt.push({ addon_id: parseInt(id), quantity: qty });
         if (!includedCentralita.value && autoIncludedExtension.value) { const e = finalExt.find(x => x.addon_id == autoIncludedExtension.value.id); if (e) e.quantity++; else finalExt.push({ addon_id: autoIncludedExtension.value.id, quantity: 1 }); }
 
-        // Mapeamos las líneas asegurándonos de enviar 'terminal_pivot_id' correctamente
         form.lines = lines.value.map(l => ({
             is_extra: l.is_extra,
             is_portability: l.is_portability,
@@ -199,17 +217,21 @@ const saveOffer = () => {
             source_operator: l.source_operator,
             has_vap: l.has_vap,
             o2o_discount_id: l.o2o_discount_id,
-            terminal_pivot_id: l.package_terminal_id, // Usamos el ID del pivot guardado en la línea
+            terminal_pivot_id: l.package_terminal_id, 
             initial_cost: l.initial_cost,
             monthly_cost: l.monthly_cost,
         }));
 
         form.internet_addon_id = selectedInternetAddonId.value;
-        // --- INICIO CÓDIGO MODIFICADO: Enviar has_ip_fija ---
-        form.additional_internet_lines = additionalInternetLines.value
+        // --- 4. MODIFICACIÓN: Usar el ref local para guardar ---
+        form.additional_internet_lines = additionalInternetLines.value // <-- ¡CORREGIDO!
             .filter(l => l.addon_id)
-            .map(l => ({ addon_id: l.addon_id, has_ip_fija: l.has_ip_fija })); // Incluimos has_ip_fija
-        // --- FIN CÓDIGO MODIFICADO ---
+            .map(l => ({ 
+                addon_id: l.addon_id, 
+                has_ip_fija: l.has_ip_fija,
+                selected_centralita_id: l.selected_centralita_id 
+            }));
+        // --- FIN MODIFICACIÓN ---
         form.centralita = { id: selectedCentralitaId.value || includedCentralita.value?.id || null, operadora_automatica_selected: isOperadoraAutomaticaSelected.value, operadora_automatica_id: operadoraAutomaticaInfo.value?.id || null, extensions: finalExt };
         form.tv_addons = selectedTvAddonIds.value;
         form.summary = calculationSummary.value;
@@ -223,7 +245,12 @@ const addWatchersToLine = (line) => {
     watch(() => line.has_vap, (hasVap, old) => { if (old && !hasVap) { line.selected_brand = null; line.selected_model_id = null; line.selected_duration = null; assignTerminalPrices(line); } });
     watch(() => [line.selected_model_id, line.selected_duration], () => assignTerminalPrices(line));
 };
-lines.value.forEach(addWatchersToLine); // Aplicar watchers a líneas iniciales
+
+// --- APLICAR WATCHERS A LÍNEAS CARGADAS ---
+// Esto aplica los watchers a los datos que SÍ se cargaron de las props
+additionalInternetLines.value.forEach(addWatchersToAdditionalLine);
+lines.value.forEach(addWatchersToLine);
+// --- FIN ---
 
 watch(
     () => form.client_id,
@@ -238,23 +265,22 @@ watch(
     { immediate: true }
 );
 
-// Sincronizar refs locales con cambios en el form (si los hubiera, como internet_addon_id)
+// Sincronizar refs locales con cambios en el form
 watch(() => form.internet_addon_id, (newVal) => { selectedInternetAddonId.value = newVal; });
 watch(() => form.tv_addons, (newVal) => { selectedTvAddonIds.value = newVal; }, { deep: true });
-// Sincronizar el ref local additionalInternetLines si el form cambia (menos probable pero por seguridad)
-watch(() => form.additional_internet_lines, (newVal) => { additionalInternetLines.value = newVal; }, { deep: true });
+// Sincronizar el ref local con el form (si cambia por otra razón)
+watch(() => form.additional_internet_lines, (newVal) => { 
+    additionalInternetLines.value = newVal; 
+}, { deep: true });
 
-// --- INICIO CÓDIGO MODIFICADO ---
 // Watcher para marcar/desmarcar IP Fija según la centralita (para la línea PRINCIPAL)
 watch(isCentralitaActive, (isActive) => {
     if (isActive) {
         form.is_ip_fija_selected = true;
     } else {
-        // Desmarcar si deja de estar activa
         form.is_ip_fija_selected = false;
     }
-}, { immediate: true }); // immediate: true para que se ejecute al cargar si ya hay centralita
-// --- FIN CÓDIGO MODIFICADO ---
+}, { immediate: true }); 
 
 </script>
 
@@ -409,7 +435,7 @@ watch(isCentralitaActive, (isActive) => {
 
                             <div class="space-y-4 p-6 bg-slate-50 rounded-lg h-full">
                                 <h3 class="text-lg font-semibold text-gray-800">Internet Adicional</h3>
-                                <div v-for="(line, index) in additionalInternetLines" :key="line.id" class="p-3 border rounded-lg bg-blue-50 border-blue-200 space-y-2">  <!-- Añadido space-y-2 -->
+                                <div v-for="(line, index) in additionalInternetLines" :key="line.id" class="p-3 border rounded-lg bg-blue-50 border-blue-200 space-y-2">  
                                     <div class="flex-1">
                                         <div class="flex justify-between items-center mb-1">
                                             <label class="block text-xs font-medium text-gray-500">Línea Adicional {{ index + 1 }}</label>
@@ -420,7 +446,16 @@ watch(isCentralitaActive, (isActive) => {
                                             <option v-for="addon in additionalInternetAddons" :key="addon.id" :value="addon.id">{{ addon.name }} (+{{ parseFloat(addon.price).toFixed(2) }}€)</option>
                                         </select>
                                     </div>
-                                    <!--- INICIO CÓDIGO AÑADIDO: Checkbox IP Fija Adicional --->
+
+                                    <div v-if="line.addon_id && centralitaAddonOptions.length > 0">
+                                         <label :for="`multi_centralita_${line.id}`" class="block text-xs font-medium text-gray-500">Centralita Multisede</label>
+                                         <select v-model="line.selected_centralita_id" :id="`multi_centralita_${line.id}`" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                             <option :value="null">-- Sin Centralita Multisede --</option>
+                                             <option v-for="centralita in centralitaAddonOptions" :key="centralita.id" :value="centralita.id">
+                                                 {{ centralita.name }} (+{{ parseFloat(centralita.pivot.price).toFixed(2) }}€)
+                                             </option>
+                                         </select>
+                                    </div>
                                     <div v-if="line.addon_id && props.fiberFeatures && props.fiberFeatures.length > 0">
                                          <label class="flex items-center">
                                              <Checkbox v-model:checked="line.has_ip_fija" />
@@ -429,8 +464,7 @@ watch(isCentralitaActive, (isActive) => {
                                              </span>
                                          </label>
                                     </div>
-                                   <!--- FIN CÓDIGO AÑADIDO --->
-                                </div>
+                                   </div>
                                 <PrimaryButton @click="addInternetLine" type="button" class="w-full justify-center">Añadir Internet</PrimaryButton>
                             </div>
                         </div>

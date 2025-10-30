@@ -22,6 +22,7 @@ class Addon extends Model
         'description',
         'price',
         'commission',
+        'decommission',
     ];
 
     public function packages(): BelongsToMany
