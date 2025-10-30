@@ -65,7 +65,7 @@ class RelationshipSeeder extends Seeder
                     $packages[$nombrePaquete]->addons()->attach($operadoraAutomatica->id, [
                         'is_included' => false,
                         'price' => 10.00,
-                        'included_line_commission' => 10.00
+                        'included_line_commission' => $operadoraAutomatica->commission
                     ]);
                 }
             }
@@ -75,13 +75,13 @@ class RelationshipSeeder extends Seeder
         foreach($paquetesGrandes as $nombrePaquete) {
             if (isset($packages[$nombrePaquete])) {
                 if ($centralitaAvanzadaIncluida) {
-                       $packages[$nombrePaquete]->addons()->attach($centralitaAvanzadaIncluida->id, ['is_included' => true, 'price' => 0, 'included_line_commission' => 75]);
+                       $packages[$nombrePaquete]->addons()->attach($centralitaAvanzadaIncluida->id, ['is_included' => true, 'price' => 0, 'included_line_commission'=> $centralitaAvanzadaIncluida->commission,'included_line_decommission'=>$centralitaAvanzadaIncluida->decommission]);
                 }
                 if ($operadoraAutomatica) {
                     $packages[$nombrePaquete]->addons()->attach($operadoraAutomatica->id, [
                         'is_included' => true,
                         'price' => 0.00,
-                        'included_line_commission' => 10.00
+                        'included_line_commission' => $operadoraAutomatica->commission
                     ]);
                 }
                 if ($extensionAvanzada) {

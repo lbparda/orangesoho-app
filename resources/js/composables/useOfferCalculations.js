@@ -273,14 +273,29 @@ export function useOfferCalculations(
         });
 
         if (includedCentralita.value) {
-            commissionDetails.Centralita.push({ description: `Centralita Incluida (${includedCentralita.value.name})`, amount: parseFloat(includedCentralita.value.pivot.included_line_commission) || 0 });
+            // 1. Obtenemos la comisión normal
+            const commission = parseFloat(includedCentralita.value.pivot.included_line_commission) || 0;
+            
+            // 2. Obtenemos la NUEVA decomisión (que vendrá en negativo)
+            const decommission = parseFloat(includedCentralita.value.pivot.included_line_decommission) || 0; // <-- ¡AQUÍ!
+
+            // 3. Los sumamos para obtener el total
+            const totalAmount = commission + decommission;
+
+            commissionDetails.Centralita.push({ 
+                description: `Centralita Incluida (${includedCentralita.value.name})`, 
+                amount: totalAmount // <-- Usamos el total
+            });
         } else if (selectedCentralitaId.value) {
             const selectedCentralita = centralitaAddonOptions.value.find(c => c.id === selectedCentralitaId.value);
             if (selectedCentralita) {
                 const itemPrice = parseFloat(selectedCentralita.pivot.price) || 0;
                 price += itemPrice;
                 summaryBreakdown.push({ description: `Centralita: ${selectedCentralita.name}`, price: itemPrice });
-                commissionDetails.Centralita.push({ description: `Centralita Contratada (${selectedCentralita.name})`, amount: parseFloat(selectedCentralita.commission) || 0 });
+                const commission = parseFloat(selectedCentralita.commission) || 0;
+                const decommission = parseFloat(selectedCentralita.decommission) || 0;
+                const totalAmount = commission+decommission;
+                commissionDetails.Centralita.push({ description: `Centralita Contratada (${selectedCentralita.name})`, amount: totalAmount  });
             }
         }
 
@@ -306,7 +321,10 @@ export function useOfferCalculations(
             });
 
             if (autoIncludedExtension.value && !includedCentralita.value) { // Modificado para que no añada si ya está incluida la centralita
-                commissionDetails.Centralita.push({ description: `1x ${autoIncludedExtension.value.name} (Por Centralita)`, amount: 0 });
+                const commission = parseFloat(autoIncludedExtension.value.commission) || 0;
+
+
+                commissionDetails.Centralita.push({ description: `1x ${autoIncludedExtension.value.name} (Por Centralita)`, amount: commission });
             }
 
             for (const addonId in centralitaExtensionQuantities.value) {

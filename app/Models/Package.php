@@ -20,7 +20,7 @@ class Package extends Model
     }
     public function addons(): BelongsToMany
     {
-        return $this->belongsToMany(Addon::class, 'addon_package')->withPivot('price', 'is_included', 'included_quantity', 'line_limit','included_line_commission', 'additional_line_commission')->withTimestamps();
+        return $this->belongsToMany(Addon::class, 'addon_package')->withPivot('price', 'is_included', 'included_quantity', 'line_limit','included_line_commission', 'additional_line_commission','included_line_decommission')->withTimestamps();
     }
 
     public function discounts(): BelongsToMany

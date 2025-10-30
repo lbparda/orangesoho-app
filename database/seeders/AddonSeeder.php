@@ -41,21 +41,21 @@ class AddonSeeder extends Seeder
         // El usuario elegirá UNA de estas para los paquetes 1, 3, 5.
         Addon::updateOrCreate(
             ['name' => 'Centralita Básica'],
-            ['type' => 'centralita', 'price' => 5.00, 'commission' => 100.00, 'description' => 'Servicio principal de Centralita Básica.']
+            ['type' => 'centralita', 'price' => 5.00, 'commission' => 100.00,'decommission' => -25.00, 'description' => 'Servicio principal de Centralita Básica.']
         );
         Addon::updateOrCreate(
             ['name' => 'Centralita Inalámbrica'],
-            ['type' => 'centralita', 'price' => 7.00, 'commission' => 100.00, 'description' => 'Servicio principal de Centralita Inalámbrica.']
+            ['type' => 'centralita', 'price' => 7.00, 'commission' => 100.00,'decommission' => -25.00, 'description' => 'Servicio principal de Centralita Inalámbrica.']
         );
         Addon::updateOrCreate(
             ['name' => 'Centralita Avanzada'],
-            ['type' => 'centralita', 'price' => 14.00, 'commission' => 120.00, 'description' => 'Servicio principal de Centralita Avanzada.']
+            ['type' => 'centralita', 'price' => 14.00, 'commission' => 120.00,'decommission' => -25.00, 'description' => 'Servicio principal de Centralita Avanzada.']
         );
         
         // LA CENTRALITA INCLUIDA (Para paquetes grandes)
         Addon::updateOrCreate(
             ['name' => 'Centralita Avanzada Incluida'],
-            ['type' => 'centralita', 'price' => 0.00, 'commission' => 75.00, 'description' => 'Centralita Avanzada incluida en paquetes superiores.']
+            ['type' => 'centralita', 'price' => 0.00, 'commission' => 100.00, 'decommission' => -25.00,'description' => 'Centralita Avanzada incluida en paquetes superiores.']
         );
 
         // 2. LAS EXTENSIONES (Puestos adicionales)
