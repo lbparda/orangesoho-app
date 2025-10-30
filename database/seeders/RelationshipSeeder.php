@@ -75,7 +75,7 @@ class RelationshipSeeder extends Seeder
         foreach($paquetesGrandes as $nombrePaquete) {
             if (isset($packages[$nombrePaquete])) {
                 if ($centralitaAvanzadaIncluida) {
-                       $packages[$nombrePaquete]->addons()->attach($centralitaAvanzadaIncluida->id, ['is_included' => true, 'price' => 0, 'included_line_commission' => 120]);
+                       $packages[$nombrePaquete]->addons()->attach($centralitaAvanzadaIncluida->id, ['is_included' => true, 'price' => 0, 'included_line_commission' => 75]);
                 }
                 if ($operadoraAutomatica) {
                     $packages[$nombrePaquete]->addons()->attach($operadoraAutomatica->id, [

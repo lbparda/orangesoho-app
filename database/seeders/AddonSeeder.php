@@ -55,7 +55,7 @@ class AddonSeeder extends Seeder
         // LA CENTRALITA INCLUIDA (Para paquetes grandes)
         Addon::updateOrCreate(
             ['name' => 'Centralita Avanzada Incluida'],
-            ['type' => 'centralita', 'price' => 0.00, 'commission' => 120.00, 'description' => 'Centralita Avanzada incluida en paquetes superiores.']
+            ['type' => 'centralita', 'price' => 0.00, 'commission' => 75.00, 'description' => 'Centralita Avanzada incluida en paquetes superiores.']
         );
 
         // 2. LAS EXTENSIONES (Puestos adicionales)
