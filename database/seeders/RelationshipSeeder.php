@@ -88,6 +88,17 @@ class RelationshipSeeder extends Seeder
                     $qty = ($nombrePaquete === 'NEGOCIO Extra 10') ? 1 : 2;
                     $packages[$nombrePaquete]->addons()->attach($extensionAvanzada->id, ['is_included' => true, 'included_quantity' => $qty, 'price' => 0, 'included_line_commission' => 45]);
                 }
+                // --- INICIO DEL CÓDIGO AÑADIDO ---
+                // Adjuntamos también las centralitas opcionales (como no incluidas)
+                // para que estén disponibles en el desplegable de multisede.
+                foreach($centralitasOpcionales as $centralita) { // $centralitasOpcionales se definió en la línea 45
+                    if ($centralita) {
+                        $packages[$nombrePaquete]->addons()->attach($centralita->id, [
+                            'is_included' => false,
+                            'price' => $centralita->price
+                        ]);
+                    }
+                 }
             }
         }
         
