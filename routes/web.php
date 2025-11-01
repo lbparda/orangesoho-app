@@ -8,8 +8,11 @@ use App\Http\Controllers\OfferController;
 use App\Http\Controllers\ImportController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\TeamController;
+// --- INICIO: IMPORTACIÓN AÑADIDA ---
+use App\Http\Controllers\Admin\PackageController; 
+// --- FIN: IMPORTACIÓN AÑADIDA ---
 use App\Http\Controllers\TeamLead\ManagementController;
-use App\Http\Controllers\ClientController; // <-- SOLUCIÓN: IMPORTACIÓN AÑADIDA
+use App\Http\Controllers\ClientController;
 
 /*
 |--------------------------------------------------------------------------
@@ -36,55 +39,50 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // Gestión de Ofertas
     Route::resource('offers', OfferController::class);
+    Route::get('/offers/{offer}/pdf', [OfferController::class, 'generatePDF'])->name('offers.pdf');
+    Route::post('offers/{offer}/lock', [OfferController::class, 'lock'])->name('offers.lock');
+    // NOTA: La ruta exportFunnel de mi mensaje anterior no está aquí, 
+    // pero si la necesitas, puedes volver a añadirla.
 
     // Importación de Terminales
     Route::get('/terminals/import', [ImportController::class, 'create'])->name('terminals.import.create');
     Route::post('/terminals/import', [ImportController::class, 'store'])->name('terminals.import.store');
 
     // Gestión de Clientes
-    Route::resource('clients', ClientController::class); // <-- CORREGIDO: Usamos el nombre corto
-    Route::get('/clients/{client}/offers', [ClientController::class, 'showOffers'])->name('clients.offers'); // <-- ESTA LÍNEA AHORA FUNCIONARÁ
-    // RUTA NUEVA PARA EL PDF
-    Route::get('/offers/{offer}/pdf', [OfferController::class, 'generatePDF'])->name('offers.pdf');
-
-    Route::post('offers/{offer}/lock', [OfferController::class, 'lock'])->name('offers.lock');
+    Route::resource('clients', ClientController::class);
+    Route::get('/clients/{client}/offers', [ClientController::class, 'showOffers'])->name('clients.offers');
 });
 
 // --- GRUPO DE RUTAS DE ADMINISTRACIÓN ---
 Route::prefix('admin')
-    ->middleware(['auth', 'is_admin'])
+    ->middleware(['auth', 'is_admin']) // Uso 'is_admin' como en tu archivo
     ->name('admin.')
     ->group(function () {
         Route::resource('users', UserController::class);
         Route::resource('teams', TeamController::class);
+        
+        // --- INICIO: RUTAS DE PAQUETES AÑADIDAS ---
+        Route::get('packages', [PackageController::class, 'index'])->name('packages.index');
+        Route::get('packages/{package}/edit', [PackageController::class, 'edit'])->name('packages.edit');
+        Route::put('packages/{package}', [PackageController::class, 'update'])->name('packages.update');
+        // --- FIN: RUTAS DE PAQUETES AÑADIDAS ---
 });
 
-// --- GRUPO DE RUTAS DE JEFE DE EQUIPO ---
+// --- GRUPO DE RUTAS DE JEFE DE EQUIPO (Fusionado) ---
 Route::prefix('team-lead')
-    ->middleware(['auth'])
+    ->middleware(['auth', 'isTeamLead']) // Uso 'isTeamLead' como en tu archivo
     ->name('team-lead.')
     ->group(function () {
+        // Rutas de ManagementController
         Route::get('users', [ManagementController::class, 'index'])->name('users.index');
         Route::get('users/{user}/edit', [ManagementController::class, 'edit'])->name('users.edit');
         Route::put('users/{user}', [ManagementController::class, 'update'])->name('users.update');
+        
+        // Rutas de TeamLead\UserController
+        Route::get('/users/create', [App\Http\Controllers\TeamLead\UserController::class, 'create'])->name('users.create');
+        Route::post('/users', [App\Http\Controllers\TeamLead\UserController::class, 'store'])->name('users.store');
 });
-
-// --- GRUPO DE RUTAS DE JEFE DE EQUIPO ---
-Route::middleware(['auth', 'isTeamLead'])->prefix('team-lead')->name('team-lead.')->group(function () {
-    Route::get('/users/create', [App\Http\Controllers\TeamLead\UserController::class, 'create'])->name('users.create');
-    Route::post('/users', [App\Http\Controllers\TeamLead\UserController::class, 'store'])->name('users.store');
-});
-
-
-
-
-
-
-// --- GRUPO DE RUTAS DE EDICION DE OFERTA ---
-// Estas rutas ya están cubiertas por Route::resource('offers', ...), puedes borrarlas si quieres.
-// Las dejo por si las necesitas para algo específico.
-Route::get('/offers/{offer}/edit', [OfferController::class, 'edit'])->name('offers.edit');
-Route::put('/offers/{offer}', [OfferController::class, 'update'])->name('offers.update');
 
 // Carga las rutas de autenticación
 require __DIR__.'/auth.php';
+

@@ -54,6 +54,9 @@ const showingNavigationDropdown = ref(false);
                                                 <DropdownLink :href="route('admin.users.index')"> Gestionar Usuarios </DropdownLink>
                                                 <DropdownLink :href="route('admin.teams.index')"> Gestionar Equipos </DropdownLink>
                                                 <DropdownLink :href="route('terminals.import.create')"> Importar Terminales </DropdownLink>
+                                                <!-- INICIO: LÍNEA AÑADIDA -->
+                                                <DropdownLink :href="route('admin.packages.index')"> Gestionar Paquetes </DropdownLink>
+                                                <!-- FIN: LÍNEA AÑADIDA -->
                                             </template>
                                         </Dropdown>
                                     </div>
@@ -109,6 +112,9 @@ const showingNavigationDropdown = ref(false);
                             <ResponsiveNavLink :href="route('admin.users.index')"> Gestionar Usuarios </ResponsiveNavLink>
                             <ResponsiveNavLink :href="route('admin.teams.index')"> Gestionar Equipos </ResponsiveNavLink>
                             <ResponsiveNavLink :href="route('terminals.import.create')"> Importar Terminales </ResponsiveNavLink>
+                            <!-- INICIO: LÍNEA AÑADIDA -->
+                            <ResponsiveNavLink :href="route('admin.packages.index')"> Gestionar Paquetes </ResponsiveNavLink>
+                            <!-- FIN: LÍNEA AÑADIDA -->
                         </div>
                     </div>
 
