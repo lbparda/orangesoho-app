@@ -1,18 +1,22 @@
 <script setup>
-import { Head, Link, useForm, usePage } from '@inertiajs/vue3'; // <-- usePage ya estaba
+import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import DangerButton from '@/Components/DangerButton.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
-import ConfirmationModal from '@/Components/ConfirmationModal.vue'; // <-- Tu Modal
-import { ref, computed } from 'vue'; // <-- computed añadido
+import ConfirmationModal from '@/Components/ConfirmationModal.vue';
+import { ref, computed } from 'vue';
 
 defineProps({
     offers: Object,
 });
 
-// Acceder a $page props
-const page = usePage(); // <-- Correcto
+const page = usePage();
+
+// --- INICIO: LÓGICA DE ROL AÑADIDA ---
+// Comprobación simple para saber si el usuario es Admin
+const isAdmin = computed(() => page.props.auth.user?.role === 'admin');
+// --- FIN: LÓGICA DE ROL AÑADIDA ---
 
 // --- LÓGICA PARA ELIMINAR ---
 const confirmingOfferDeletion = ref(false);
@@ -37,12 +41,7 @@ const deleteOffer = () => {
         onSuccess: () => closeModal(),
         onError: (errors) => {
             console.error("Error al eliminar la oferta:", errors);
-            // Podrías mostrar un mensaje de error al usuario aquí
             closeModal();
-        },
-        onFinish: () => {
-            // Ya no es necesario resetear offerToDelete aquí si se hace en closeModal
-            // offerToDelete.value = null;
         },
     });
 };
@@ -53,10 +52,8 @@ const formatDate = (dateString) => { // Formato para Fecha Creación
     if (!dateString) return '-';
     try {
         const date = new Date(dateString);
-         if (isNaN(date.getTime())) return 'Inválida'; // Comprobar si la fecha es válida
+         if (isNaN(date.getTime())) return 'Inválida';
         return date.toLocaleDateString('es-ES', { year: 'numeric', month: '2-digit', day: '2-digit' });
-        // Si quisieras hora:
-        // return date.toLocaleString('es-ES', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
     } catch (e) { return 'Error Fecha'; }
 };
 
@@ -90,7 +87,7 @@ const formatCurrency = (summary) => {
     const finalPrice = summary?.finalPrice;
     if (finalPrice === null || finalPrice === undefined || isNaN(parseFloat(finalPrice))) return '-';
      try {
-        return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(parseFloat(finalPrice));
+         return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(parseFloat(finalPrice));
     } catch (e) { return 'Error €'; }
 };
 
@@ -101,23 +98,12 @@ const deletionMessage = computed(() => {
     return `¿Estás seguro de que quieres eliminar la oferta #${offerToDelete.value.id} para el cliente ${offerToDelete.value.client?.name || 'N/A'}? Esta acción no se puede deshacer.`;
 });
 
-// <-- COMPUTED PROPERTY 'canExport' MODIFICADA -->
 const canExport = computed(() => {
-    // Acceso seguro al rol y conversión a minúsculas para comparación insensible
     const userRole = page.props.auth?.user?.role?.toLowerCase();
-
-    // --- LÍNEA DE DEPURACIÓN AÑADIDA ---
     console.log('[DEBUG] Rol del usuario para exportación:', userRole);
-    // ------------------------------------
-
-    // Lista de roles permitidos (en minúsculas)
-    // ¡¡¡ASEGÚRATE DE QUE ESTOS NOMBRES COINCIDAN CON LOS ROLES EN TU BD (convertidos a minúsculas)!!!
-    const allowedRoles = ['admin', 'jefe de ventas', 'team_lead']; // <-- Incluye todos los roles permitidos
-
-    // Comprueba si el rol del usuario (en minúsculas) está en la lista
+    const allowedRoles = ['admin', 'jefe de ventas', 'team_lead'];
     return allowedRoles.includes(userRole);
 });
-// <-- FIN MODIFICACIÓN -->
 
 </script>
 
@@ -132,7 +118,7 @@ const canExport = computed(() => {
                  <div class="flex space-x-2">
 
                      <a v-if="canExport" :href="route('offers.exportFunnel')"
-                        class="inline-flex items-center px-4 py-2 bg-emerald-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-emerald-500 active:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 transition ease-in-out duration-150">
+                         class="inline-flex items-center px-4 py-2 bg-emerald-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-emerald-500 active:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 transition ease-in-out duration-150">
                          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                              <path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                          </svg>
@@ -172,6 +158,9 @@ const canExport = computed(() => {
                                     <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">F. Firma</th>
                                     <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">F. Tramit.</th>
                                     <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">F. Creación</th>
+                                    <!-- INICIO: COLUMNA ESTADO AÑADIDA -->
+                                    <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
+                                    <!-- FIN: COLUMNA ESTADO -->
                                     <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
                                 </tr>
                             </thead>
@@ -180,28 +169,52 @@ const canExport = computed(() => {
                                     <td class="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">#{{ offer.id }}</td>
                                     <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500">{{ offer.client?.name || 'N/A' }}</td>
                                     <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500">{{ offer.user?.name || 'N/A' }}</td>
-                                    <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500">{{ offer.package?.name || 'N/A' }}</td>
+                                    <!-- INICIO: CAMBIO A SNAPSHOT -->
+                                    <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500">{{ offer.package_name || 'N/A' }}</td>
+                                    <!-- FIN: CAMBIO A SNAPSHOT -->
                                     <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500 text-right">{{ formatCurrency(offer.summary) }}</td>
                                     <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500 text-center">{{ offer.probability ?? '-' }}</td>
                                     <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500 text-center">{{ formatSimpleDate(offer.signing_date) }}</td>
                                     <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500 text-center">{{ formatSimpleDate(offer.processing_date) }}</td>
                                     <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500 text-center">{{ formatDate(offer.created_at) }}</td>
+                                    
+                                    <!-- INICIO: CELDA ESTADO AÑADIDA -->
+                                    <td class="px-4 py-4 whitespace-nowrap text-sm text-center">
+                                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full capitalize"
+                                              :class="{
+                                                  'bg-blue-100 text-blue-800': offer.status === 'borrador' || !offer.status,
+                                                  'bg-green-100 text-green-800': offer.status === 'finalizada',
+                                              }">
+                                            {{ offer.status || 'borrador' }}
+                                        </span>
+                                    </td>
+                                    <!-- FIN: CELDA ESTADO -->
+
                                     <td class="px-4 py-4 whitespace-nowrap text-center text-sm font-medium space-x-2">
                                         <Link :href="route('offers.show', offer.id)" class="text-indigo-600 hover:text-indigo-800">Ver</Link>
-                                        <Link :href="route('offers.edit', offer.id)" class="text-green-600 hover:text-green-800">Editar</Link>
+                                        
+                                        <!-- INICIO: LÓGICA DE BLOQUEO AÑADIDA -->
+                                        <Link v-if="offer.status === 'borrador' || isAdmin" :href="route('offers.edit', offer.id)" class="text-green-600 hover:text-green-800">Editar</Link>
+                                        <!-- FIN: LÓGICA DE BLOQUEO -->
+                                        
                                         <a
                                             :href="route('offers.pdf', offer.id)"
                                             class="inline-flex items-center px-3 py-1 bg-gray-700 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-gray-600 focus:bg-gray-600 active:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition ease-in-out duration-150"
                                             target="_blank"
                                             download
                                         >PDF</a>
-                                        <DangerButton @click="confirmDeletion(offer)" class="text-xs px-2 py-1">
+                                        
+                                        <!-- INICIO: LÓGICA DE BLOQUEO AÑADIDA -->
+                                        <DangerButton v-if="offer.status === 'borrador' || isAdmin" @click="confirmDeletion(offer)" class="text-xs px-2 py-1">
                                             Eliminar
                                         </DangerButton>
+                                        <!-- FIN: LÓGICA DE BLOQUEO -->
                                     </td>
                                 </tr>
                                 <tr v-if="offers.data.length === 0">
-                                    <td colspan="10" class="px-6 py-10 text-center text-sm text-gray-500 italic">No hay ofertas guardadas todavía.</td>
+                                    <!-- INICIO: CAMBIO COLSPAN -->
+                                    <td colspan="11" class="px-6 py-10 text-center text-sm text-gray-500 italic">No hay ofertas guardadas todavía.</td>
+                                    <!-- FIN: CAMBIO COLSPAN -->
                                 </tr>
                             </tbody>
                         </table>

@@ -12,43 +12,93 @@ class Offer extends Model
 {
     use HasFactory;
 
+    /**
+     * The attributes that are mass assignable.
+     *
+     * @var array<int, string>
+     */
     protected $fillable = [
         'package_id',
         'client_id',
         'summary',
         'user_id',
-        'probability',      // <-- Añadido
-        'signing_date',     // <-- Añadido
-        'processing_date',  // <-- Añadido
+        'probability',
+        'signing_date',
+        'processing_date',
+
+        // --- INICIO CAMPOS SNAPSHOT AÑADIDOS ---
+        'package_name',
+        'package_price',
+        'package_commission',
+        'status',
+        // --- FIN CAMPOS SNAPSHOT ---
     ];
 
+    /**
+     * The attributes that should be cast.
+     *
+     * @var array<string, string>
+     */
     protected $casts = [
         'summary' => 'array',
-        'signing_date' => 'date',     // <-- Añadido para castear a objeto Date
-        'processing_date' => 'date',  // <-- Añadido para castear a objeto Date
+        'signing_date' => 'date',
+        'processing_date' => 'date',
+
+        // --- INICIO CASTS AÑADIDOS ---
+        'package_price' => 'decimal:2',
+        'package_commission' => 'decimal:2',
+        // --- FIN CASTS ---
     ];
 
-    // ... (resto de relaciones y métodos)
-     public function package(): BelongsTo
+    /**
+     * Get the package associated with the offer.
+     * Mantenemos esta relación para referencia, aunque los datos principales
+     * se leen ahora desde los campos snapshot (ej. package_name).
+     */
+    public function package(): BelongsTo
     {
         return $this->belongsTo(Package::class);
     }
-     // 👇 AÑADIMOS ESTA FUNCIÓN PARA LA RELACIÓN 👇
+
+    /**
+     * Get the user who created the offer.
+     */
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
     }
 
+    /**
+     * Get the lines for the offer.
+     */
     public function lines(): HasMany
     {
         return $this->hasMany(OfferLine::class);
     }
 
+    /**
+     * The addons that belong to the offer.
+     */
     public function addons(): BelongsToMany
     {
-        return $this->belongsToMany(Addon::class)->withPivot('quantity','has_ip_fija', 'selected_centralita_id');
+        return $this->belongsToMany(Addon::class)
+            ->withPivot([
+                'quantity',
+                'has_ip_fija',
+                'selected_centralita_id',
+                
+                // --- INICIO CAMPOS SNAPSHOT PIVOTE AÑADIDOS ---
+                'addon_name',
+                'addon_price',
+                'addon_commission',
+                // --- FIN CAMPOS SNAPSHOT PIVOTE ---
+            ])
+            ->withTimestamps(); // Buena práctica si tu tabla pivote tiene timestamps
     }
-    // --- NUEVA FUNCIÓN AÑADIDA ---
+
+    /**
+     * Get the client associated with the offer.
+     */
     public function client(): BelongsTo
     {
         return $this->belongsTo(Client::class);

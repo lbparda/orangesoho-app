@@ -159,10 +159,18 @@
                     <td>{{ $loop->iteration }}</td>
                     <td>{{ $line->phone_number ?: 'Nuevo' }}</td>
                     <td>{{ $line->is_portability ? 'Portabilidad' : 'Nuevo' }}</td>
-                    <td>{{ $line->terminal_details ? $line->terminal_details->brand . ' ' . $line->terminal_details->model : 'Sin terminal' }}</td>
+                    {{-- INICIO CAMBIO: Leer del campo snapshot 'terminal_name' --}}
+                    <td>{{ $line->terminal_name ?: 'Sin terminal' }}</td>
+                    {{-- FIN CAMBIO --}}
+                    
                     <td class="text-right">{{ number_format($line->initial_cost, 2, ',', '.') }}</td>
                     <td class="text-right">{{ number_format($line->monthly_cost, 2, ',', '.') }}</td>
-                    <td class="text-right">{{ $line->terminal_details ? $line->terminal_details->duration_months : '-' }}</td>
+
+                    {{-- INICIO CAMBIO: La duración ya no se lee de la relación --}}
+                    <td class="text-right">-</td> 
+                    {{-- NOTA: Si quieres guardar la duración, añade 'terminal_duration' a la migración de 'offer_lines' 
+                         y guárdalo en el OfferController, igual que 'terminal_name'. --}}
+                    {{-- FIN CAMBIO --}}
                 </tr>
             @empty
                 <tr><td colspan="7" style="text-align: center;">No hay líneas móviles configuradas.</td></tr>
@@ -171,40 +179,14 @@
     </table>
 
     {{-- ================================================================ --}}
-    {{-- LÓGICA DEFINITIVA PARA LA CENTRALITA Y SUS COMPONENTES --}}
+    {{-- INICIO CAMBIO: LÓGICA DE CENTRALITA SIMPLIFICADA (USANDO SNAPSHOT) --}}
     {{-- ================================================================ --}}
     @php
-        $centralitaServices = collect();
-
-        // 1. Añadimos los contratados explícitamente, que tienen prioridad
-        if ($offer->addons) {
-            foreach ($offer->addons->whereIn('type', ['centralita', 'centralita_feature', 'centralita_extension']) as $addon) {
-                $centralitaServices->put($addon->id, [
-                    'name' => $addon->name,
-                    'type' => $addon->type,
-                    'quantity' => $addon->pivot->quantity,
-                    'origin' => 'Contratado'
-                ]);
-            }
-        }
-
-        // 2. Añadimos los incluidos en el paquete que no estén ya en la lista
-        if ($offer->package && $offer->package->addons) {
-            foreach ($offer->package->addons->where('pivot.is_included', true)->whereIn('type', ['centralita', 'centralita_feature', 'centralita_extension']) as $includedAddon) {
-                if (!$centralitaServices->has($includedAddon->id)) {
-                    // *** ESTA ES LA CORRECCIÓN CLAVE ***
-                    // Si la cantidad es 0 o nula, la forzamos a 1 porque el servicio SÍ está incluido.
-                    $quantity = $includedAddon->pivot->included_quantity > 0 ? $includedAddon->pivot->included_quantity : 1;
-                    
-                     $centralitaServices->put($includedAddon->id, [
-                        'name' => $includedAddon->name,
-                        'type' => $includedAddon->type,
-                        'quantity' => $quantity,
-                        'origin' => 'Incluido en Paquete'
-                    ]);
-                }
-            }
-        }
+        // Ya no es necesario mezclar con 'package->addons'.
+        // Todos los addons (incluidos o contratados) están guardados en '$offer->addons'
+        // con sus nombres y precios "congelados" en el pivote.
+        $centralitaServices = $offer->addons
+            ->whereIn('type', ['centralita', 'centralita_feature', 'centralita_extension']);
     @endphp
 
     @if($centralitaServices->isNotEmpty())
@@ -223,14 +205,20 @@
             <tbody>
                 @foreach($centralitaServices as $service)
                     <tr>
-                        <td><b>{{ ucfirst(str_replace('_', ' ', $service['type'])) }}</b></td>
-                        <td>{{ $service['name'] }} ({{ $service['origin'] }})</td>
-                        <td class="text-right">{{ $service['quantity'] }}</td>
+                        {{-- Leer datos del addon (type) --}}
+                        <td><b>{{ ucfirst(str_replace('_', ' ', $service->type)) }}</b></td>
+                        
+                        {{-- Leer datos del SNAPSHOT en el PIVOTE --}}
+                        <td>{{ $service->pivot->addon_name }}</td>
+                        <td class="text-right">{{ $service->pivot->quantity }}</td>
                     </tr>
                 @endforeach
             </tbody>
         </table>
     @endif
+    {{-- ================================================================ --}}
+    {{-- FIN CAMBIO: LÓGICA DE CENTRALITA --}}
+    {{-- ================================================================ --}}
     
 </body>
 </html>

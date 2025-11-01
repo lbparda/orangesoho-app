@@ -46,6 +46,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/clients/{client}/offers', [ClientController::class, 'showOffers'])->name('clients.offers'); // <-- ESTA LÍNEA AHORA FUNCIONARÁ
     // RUTA NUEVA PARA EL PDF
     Route::get('/offers/{offer}/pdf', [OfferController::class, 'generatePDF'])->name('offers.pdf');
+
+    Route::post('offers/{offer}/lock', [OfferController::class, 'lock'])->name('offers.lock');
 });
 
 // --- GRUPO DE RUTAS DE ADMINISTRACIÓN ---

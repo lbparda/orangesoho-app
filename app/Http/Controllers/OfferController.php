@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers; // <-- Asegúrate que esta línea esté correcta
+namespace App\Http\Controllers;
 
 use App\Models\Addon;
 use App\Models\Discount;
@@ -12,11 +12,17 @@ use Barryvdh\DomPDF\Facade\Pdf;
 use App\Models\Client;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Auth; // <-- Importante
+use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
-use Illuminate\Support\Str; // <-- Importante
-use Illuminate\Support\Facades\Response; // <-- AÑADE ESTA LÍNEA
-use Illuminate\Validation\Rule; // <-- AÑADIDO: Para reglas de validación más complejas
+use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Response;
+use Illuminate\Validation\Rule;
+
+// --- INICIO: IMPORTACIONES AÑADIDAS ---
+// Necesitamos estos modelos para buscar los datos antes de copiarlos
+use App\Models\O2oDiscount;
+// Nota: Package, Addon, Terminal y User ya estaban importados.
+// --- FIN: IMPORTACIONES AÑADIDAS ---
 
 class OfferController extends Controller
 {
@@ -25,9 +31,9 @@ class OfferController extends Controller
         $user = $request->user();
 
         // Usamos isManager() para simplificar
-        // Los nuevos campos (probability, signing_date, processing_date)
+        // Los nuevos campos (probability, signing_date, processing_date, status)
         // se cargarán automáticamente aquí, ya que son parte del modelo Offer.
-        $query = Offer::with(['package', 'user.team','client'])->latest();
+        $query = Offer::with(['package', 'user.team','client'])->latest(); // package se mantiene para referencia
 
         if ($user->isManager()) { // Comprueba 'team_lead' y 'jefe de ventas'
             if ($user->team_id) {
@@ -74,7 +80,7 @@ class OfferController extends Controller
                                  ->get();
         // --- FIN LÓGICA DE FILTRADO ---
 
-        $probabilityOptions = [0, 25, 50, 75, 90, 100]; // <-- AÑADIDO
+        $probabilityOptions = [0, 25, 50, 75, 90, 100];
 
         $newClientId = $request->get('new_client_id');
 
@@ -88,15 +94,14 @@ class OfferController extends Controller
             'centralitaExtensions' => $centralitaExtensions,
             'fiberFeatures' => $fiberFeatures,
             'auth' => ['user' => auth()->user()->load('team')],
-            'clients' => $clients, // Pasamos clientes filtrados
-            'initialClientId' => $newClientId ? (int)$newClientId : null, // Asegurar que sea int o null
-            'probabilityOptions' => $probabilityOptions, // <-- AÑADIDO
+            'clients' => $clients,
+            'initialClientId' => $newClientId ? (int)$newClientId : null,
+            'probabilityOptions' => $probabilityOptions,
         ]);
     }
 
     public function store(Request $request)
     {
-        // --- INICIO CÓDIGO MODIFICADO: Validación ---
         $validated = $request->validate([
             'client_id' => 'required|exists:clients,id',
             'package_id' => 'required|exists:packages,id',
@@ -104,14 +109,14 @@ class OfferController extends Controller
             'lines' => 'present|array',
             'internet_addon_id' => 'nullable|exists:addons,id',
             'additional_internet_lines' => 'present|array',
-            'additional_internet_lines.*.addon_id' => [ // Validar cada objeto en el array
-                'required', // El addon_id es requerido si el objeto existe
+            'additional_internet_lines.*.addon_id' => [
+                'required',
                 Rule::exists('addons', 'id')->where(function ($query) {
-                    $query->where('type', 'internet_additional'); // Asegurar que sea del tipo correcto
+                    $query->where('type', 'internet_additional');
                 }),
             ],
-            'additional_internet_lines.*.has_ip_fija' => 'required|boolean', // Validar el nuevo campo
-            'additional_internet_lines.*.selected_centralita_id' => 'nullable|exists:addons,id', // <-- AÑADIDO
+            'additional_internet_lines.*.has_ip_fija' => 'required|boolean',
+            'additional_internet_lines.*.selected_centralita_id' => 'nullable|exists:addons,id',
             'centralita' => 'present|array',
             'tv_addons' => 'nullable|array',
             'tv_addons.*' => 'exists:addons,id',
@@ -120,62 +125,120 @@ class OfferController extends Controller
             'signing_date' => 'nullable|date',
             'processing_date' => 'nullable|date',
         ]);
-        // --- FIN CÓDIGO MODIFICADO ---
 
 
         try {
             DB::transaction(function () use ($validated, $request) {
+                
+                // --- INICIO LÓGICA SNAPSHOT (Paso 1: Paquete) ---
+                $package = Package::find($validated['package_id']);
+                // --- FIN LÓGICA SNAPSHOT ---
+
                 $offer = Offer::create([
-                    'package_id' => $validated['package_id'],
+                    'package_id' => $validated['package_id'], // Guardamos la referencia
                     'client_id' => $validated['client_id'],
                     'summary' => $validated['summary'],
                     'user_id' => $request->user()->id,
                     'probability' => $validated['probability'] ?? null,
                     'signing_date' => $validated['signing_date'] ?? null,
                     'processing_date' => $validated['processing_date'] ?? null,
+
+                    // --- INICIO CAMPOS SNAPSHOT (Paquete) ---
+                    'package_name' => $package->name ?? 'Paquete no encontrado',
+                    'package_price' => $package->price ?? 0,
+                    'package_commission' => $package->commission_amount ?? 0, // Ajusta 'commission_amount' al nombre real de tu columna en 'packages'
+                    'status' => 'borrador', // Estado inicial
+                    // --- FIN CAMPOS SNAPSHOT ---
                 ]);
 
                 foreach ($validated['lines'] as $lineData) {
+
+                    // --- INICIO LÓGICA SNAPSHOT (Paso 2: Líneas) ---
+                    $o2oDiscount = null;
+                    if (!empty($lineData['o2o_discount_id'])) {
+                        $o2oDiscount = O2oDiscount::find($lineData['o2o_discount_id']);
+                    }
+
+                    $terminalPivot = null;
+                    $terminalName = null;
+                    if (!empty($lineData['terminal_pivot_id'])) {
+                        $terminalPivot = DB::table('package_terminal')
+                            ->join('terminals', 'package_terminal.terminal_id', '=', 'terminals.id')
+                            ->where('package_terminal.id', $lineData['terminal_pivot_id'])
+                            ->select('terminals.brand', 'terminals.model')
+                            ->first();
+                        
+                        if ($terminalPivot) {
+                            $terminalName = $terminalPivot->brand . ' ' . $terminalPivot->model;
+                        }
+                    }
+                    // --- FIN LÓGICA SNAPSHOT ---
+
                     $offer->lines()->create([
                         'is_extra' => $lineData['is_extra'],
                         'is_portability' => $lineData['is_portability'],
                         'phone_number' => $lineData['phone_number'],
                         'source_operator' => $lineData['source_operator'],
                         'has_vap' => $lineData['has_vap'],
-                        'o2o_discount_id' => $lineData['o2o_discount_id'],
-                        'package_terminal_id' => $lineData['terminal_pivot_id'] ?? null,
-                        'initial_cost' => $lineData['initial_cost'],
-                        'monthly_cost' => $lineData['monthly_cost'],
+                        'o2o_discount_id' => $lineData['o2o_discount_id'], // Referencia
+                        'package_terminal_id' => $lineData['terminal_pivot_id'] ?? null, // Referencia
+                        'initial_cost' => $lineData['initial_cost'], // Coste final calculado
+                        'monthly_cost' => $lineData['monthly_cost'], // Coste final calculado
+
+                        // --- INICIO CAMPOS SNAPSHOT (Líneas) ---
+                        'o2o_discount_name' => $o2oDiscount->name ?? null,
+                        'o2o_discount_amount' => $o2oDiscount->discount_amount ?? null, // Ajusta 'discount_amount' al nombre real
+                        'terminal_name' => $terminalName,
+                        // --- FIN CAMPOS SNAPSHOT ---
                     ]);
                 }
 
-                // --- INICIO CÓDIGO MODIFICADO: Lógica de guardado de Addons ---
-                // Usamos attach() individualmente porque sync() agrupa por ID
-                // y perderíamos los datos de pivote de líneas duplicadas.
+                // --- INICIO LÓGICA SNAPSHOT (Paso 3: Addons) ---
                 
                 // 1. IP Fija Principal
                 if (!empty($validated['is_ip_fija_selected'])) {
                     $ipFijaAddon = Addon::where('type', 'internet_feature')->first();
                     if ($ipFijaAddon) {
-                        $offer->addons()->attach($ipFijaAddon->id, ['quantity' => 1]);
+                        $offer->addons()->attach($ipFijaAddon->id, [
+                            'quantity' => 1,
+                            // Snapshot
+                            'addon_name' => $ipFijaAddon->name,
+                            'addon_price' => $ipFijaAddon->price,
+                            'addon_commission' => $ipFijaAddon->commission, // Ajusta 'commission' al nombre real
+                        ]);
                     }
                 }
 
                 // 2. Internet Principal
                 if (!empty($validated['internet_addon_id'])) {
-                    $offer->addons()->attach($validated['internet_addon_id'], ['quantity' => 1]);
+                    $internetAddon = Addon::find($validated['internet_addon_id']);
+                    if ($internetAddon) {
+                        $offer->addons()->attach($internetAddon->id, [
+                            'quantity' => 1,
+                            // Snapshot
+                            'addon_name' => $internetAddon->name,
+                            'addon_price' => $internetAddon->price,
+                            'addon_commission' => $internetAddon->commission,
+                        ]);
+                    }
                 }
                 
-                // 3. Internet Adicional (¡El núcleo del problema!)
+                // 3. Internet Adicional
                 if (!empty($validated['additional_internet_lines'])) {
                     foreach ($validated['additional_internet_lines'] as $internetLine) {
                         if (!empty($internetLine['addon_id'])) {
-                            // Guardamos cada línea como un registro pivote individual
-                            $offer->addons()->attach($internetLine['addon_id'], [
-                                'quantity' => 1,
-                                'has_ip_fija' => $internetLine['has_ip_fija'],
-                                'selected_centralita_id' => $internetLine['selected_centralita_id']
-                            ]);
+                            $additionalAddon = Addon::find($internetLine['addon_id']); // ¡Buscar el addon!
+                            if ($additionalAddon) {
+                                $offer->addons()->attach($additionalAddon->id, [
+                                    'quantity' => 1,
+                                    'has_ip_fija' => $internetLine['has_ip_fija'],
+                                    'selected_centralita_id' => $internetLine['selected_centralita_id'],
+                                    // Snapshot
+                                    'addon_name' => $additionalAddon->name,
+                                    'addon_price' => $additionalAddon->price,
+                                    'addon_commission' => $additionalAddon->commission,
+                                ]);
+                            }
                         }
                     }
                 }
@@ -183,46 +246,91 @@ class OfferController extends Controller
                 // 4. Centralita Principal
                 $centralitaData = $validated['centralita'];
                 if (!empty($centralitaData['id'])) {
-                    $offer->addons()->attach($centralitaData['id'], ['quantity' => 1]);
+                    $centralitaAddon = Addon::find($centralitaData['id']);
+                    if ($centralitaAddon) {
+                        $offer->addons()->attach($centralitaAddon->id, [
+                            'quantity' => 1,
+                            // Snapshot
+                            'addon_name' => $centralitaAddon->name,
+                            'addon_price' => $centralitaAddon->price,
+                            'addon_commission' => $centralitaAddon->commission,
+                        ]);
+                    }
                 }
                 if (!empty($centralitaData['operadora_automatica_selected']) && !empty($centralitaData['operadora_automatica_id'])) {
-                    $offer->addons()->attach($centralitaData['operadora_automatica_id'], ['quantity' => 1]);
+                    $operadoraAddon = Addon::find($centralitaData['operadora_automatica_id']);
+                     if ($operadoraAddon) {
+                        $offer->addons()->attach($operadoraAddon->id, [
+                            'quantity' => 1,
+                            // Snapshot
+                            'addon_name' => $operadoraAddon->name,
+                            'addon_price' => $operadoraAddon->price,
+                            'addon_commission' => $operadoraAddon->commission,
+                        ]);
+                    }
                 }
                 
-                // 5. Extensiones (Estas SÍ se pueden agrupar por cantidad)
+                // 5. Extensiones
                 $extensionSyncData = [];
                 if (!empty($centralitaData['extensions'])) {
                     foreach ($centralitaData['extensions'] as $ext) {
                         if (!empty($ext['addon_id']) && !empty($ext['quantity']) && $ext['quantity'] > 0) {
-                            // Sumamos las cantidades para un único registro pivote
-                            $extensionSyncData[$ext['addon_id']] = ['quantity' => ($extensionSyncData[$ext['addon_id']]['quantity'] ?? 0) + $ext['quantity']];
+                            $extensionAddon = Addon::find($ext['addon_id']); // ¡Buscar el addon!
+                            if ($extensionAddon) {
+                                // Usamos el ID como clave para agrupar
+                                $id = $extensionAddon->id;
+                                if (!isset($extensionSyncData[$id])) {
+                                    $extensionSyncData[$id] = [
+                                        'quantity' => 0,
+                                        'addon_name' => $extensionAddon->name,
+                                        'addon_price' => $extensionAddon->price,
+                                        'addon_commission' => $extensionAddon->commission,
+                                    ];
+                                }
+                                $extensionSyncData[$id]['quantity'] += $ext['quantity'];
+                            }
                         }
                     }
                 }
                 foreach ($extensionSyncData as $id => $pivot) {
-                    $offer->addons()->attach($id, $pivot); // Adjuntamos las extensiones agrupadas
+                    $offer->addons()->attach($id, $pivot); // Adjuntamos las extensiones agrupadas CON snapshot
                 }
 
                 // 6. TV Addons
                 if (!empty($validated['tv_addons'])) {
                     foreach ($validated['tv_addons'] as $tvAddonId) {
-                        $offer->addons()->attach($tvAddonId, ['quantity' => 1]);
+                        $tvAddon = Addon::find($tvAddonId);
+                        if ($tvAddon) {
+                             $offer->addons()->attach($tvAddon->id, [
+                                'quantity' => 1,
+                                // Snapshot
+                                'addon_name' => $tvAddon->name,
+                                'addon_price' => $tvAddon->price,
+                                'addon_commission' => $tvAddon->commission,
+                            ]);
+                        }
                     }
                 }
-                // --- FIN CÓDIGO MODIFICADO ---
+                // --- FIN LÓGICA SNAPSHOT ---
             });
 
             return redirect()->route('offers.index')->with('success', 'Oferta guardada correctamente.');
 
         } catch (\Exception $e) {
-             \Log::error('Error storing offer: '.$e->getMessage().' at '.$e->getFile().':'.$e->getLine()); // Loguear error con más detalle
-             // Considerar mostrar un error más específico en desarrollo
+             \Log::error('Error storing offer: '.$e->getMessage().' at '.$e->getFile().':'.$e->getLine());
              return back()->withInput()->with('error', 'Error al guardar la oferta. Revisa los datos e inténtalo de nuevo.');
         }
     }
 
     public function edit(Offer $offer)
     {
+        // --- INICIO: LÓGICA DE BLOQUEO ---
+        if ($offer->status === 'finalizada' && Auth::user()->role !== 'admin') { // Permitir a admin editar siempre
+             return redirect()->route('offers.show', $offer)->with('warning', 'Esta oferta está finalizada y no se puede editar.');
+        }
+        // --- FIN: LÓGICA DE BLOQUEO ---
+
+
         $packages = Package::with([
             'addons',
             'o2oDiscounts',
@@ -250,10 +358,12 @@ class OfferController extends Controller
 
         $probabilityOptions = [0, 25, 50, 75, 90, 100];
 
-        // --- INICIO CÓDIGO MODIFICADO: Cargar pivotes ---
-        // Cargar relaciones necesarias para la edición
+        // --- INICIO CÓDIGO MODIFICADO: Cargar pivotes (¡CON CAMPOS SNAPSHOT!) ---
         $offer->load(['lines', 'client', 'addons' => function ($query) {
-                $query->withPivot('quantity', 'has_ip_fija', 'selected_centralita_id');
+                $query->withPivot(
+                    'quantity', 'has_ip_fija', 'selected_centralita_id',
+                    'addon_name', 'addon_price', 'addon_commission' // Cargar nuevos campos
+                );
             }
         ]);
         // --- FIN CÓDIGO MODIFICADO ---
@@ -264,10 +374,10 @@ class OfferController extends Controller
                 $pivotData = DB::table('package_terminal')->find($line->package_terminal_id);
                 if ($pivotData) {
                     $pivotData->terminal = Terminal::find($pivotData->terminal_id);
-                    // Usamos 'terminal_pivot' para consistencia con tu Vue
                     $line->terminal_pivot = $pivotData;
                 } else {
-                     $line->terminal_pivot = null; // Asegurar que sea null si no se encuentra
+                     // El terminal ya no existe, pero los datos snapshot están en la línea
+                     $line->terminal_pivot = null; 
                 }
             } else {
                 $line->terminal_pivot = null;
@@ -276,8 +386,7 @@ class OfferController extends Controller
 
 
         // --- INICIO CÓDIGO MODIFICADO: Preparar datos para Vue ---
-        // Ya no necesitamos la lógica compleja de contar IP Fijas.
-        // Ahora podemos leer los pivotes directamente.
+        // (Esta lógica sigue igual, ya que lee los pivotes que acabamos de cargar)
         
         // 1. IP Fija Principal
         $mainIpFijaSelected = $offer->addons()->where('type', 'internet_feature')->exists();
@@ -290,8 +399,8 @@ class OfferController extends Controller
                 return [
                     'id' => $addon->id + microtime(true) + $index, // ID único para Vue
                     'addon_id' => $addon->id,
-                    'has_ip_fija' => (bool) $addon->pivot->has_ip_fija, // Leer del pivote
-                    'selected_centralita_id' => $addon->pivot->selected_centralita_id, // Leer del pivote
+                    'has_ip_fija' => (bool) $addon->pivot->has_ip_fija,
+                    'selected_centralita_id' => $addon->pivot->selected_centralita_id,
                 ];
             })->toArray();
         // --- FIN CÓDIGO MODIFICADO ---
@@ -310,20 +419,24 @@ class OfferController extends Controller
             'auth' => ['user' => auth()->user()->load('team')],
             'clients' => $clients,
             'probabilityOptions' => $probabilityOptions,
-             // --- INICIO CÓDIGO MODIFICADO: Pasar datos preparados ---
-            'initialAdditionalInternetLines' => $additionalInternetLinesData, // Datos preparados
-            'initialMainIpFijaSelected' => $mainIpFijaSelected,            // Estado de la IP Fija principal
-             // --- FIN CÓDIGO MODIFICADO ---
+            'initialAdditionalInternetLines' => $additionalInternetLinesData,
+            'initialMainIpFijaSelected' => $mainIpFijaSelected,
         ]);
     }
 
 
     public function update(Request $request, Offer $offer)
     {
+        // --- INICIO: LÓGICA DE BLOQUEO ---
+        if ($offer->status === 'finalizada' && Auth::user()->role !== 'admin') {
+             return back()->with('error', 'Esta oferta está finalizada y no se puede editar.');
+        }
+        // --- FIN: LÓGICA DE BLOQUEO ---
+
          $user = Auth::user();
          $clientId = $request->input('client_id');
          $canAccessClient = false;
-         // Comprobación de seguridad: ¿puede el usuario actual usar este cliente?
+         
          if ($user->role === 'admin') {
              $canAccessClient = true;
          } elseif ($user->isManager()) {
@@ -340,7 +453,6 @@ class OfferController extends Controller
              return back()->with('error', 'No tienes permiso para asignar esta oferta a ese cliente.');
          }
 
-        // --- INICIO CÓDIGO MODIFICADO: Validación ---
          $validated = $request->validate([
              'client_id' => 'required|exists:clients,id',
              'package_id' => 'required|exists:packages,id',
@@ -355,7 +467,7 @@ class OfferController extends Controller
                  }),
              ],
              'additional_internet_lines.*.has_ip_fija' => 'required|boolean',
-             'additional_internet_lines.*.selected_centralita_id' => 'nullable|exists:addons,id', // <-- AÑADIDO
+             'additional_internet_lines.*.selected_centralita_id' => 'nullable|exists:addons,id',
              'centralita' => 'present|array',
              'tv_addons' => 'nullable|array',
              'tv_addons.*' => 'exists:addons,id',
@@ -364,24 +476,56 @@ class OfferController extends Controller
              'signing_date' => 'nullable|date',
              'processing_date' => 'nullable|date',
          ]);
-        // --- FIN CÓDIGO MODIFICADO ---
 
 
         try {
             DB::transaction(function () use ($validated, $offer) {
+
+                // --- INICIO LÓGICA SNAPSHOT (Paso 1: Paquete) ---
+                $package = Package::find($validated['package_id']);
+                // --- FIN LÓGICA SNAPSHOT ---
+
                 $offer->update([
-                    'package_id' => $validated['package_id'],
+                    'package_id' => $validated['package_id'], // Actualizar referencia
                     'client_id' => $validated['client_id'],
                     'summary' => $validated['summary'],
                     'probability' => $validated['probability'] ?? null,
                     'signing_date' => $validated['signing_date'] ?? null,
                     'processing_date' => $validated['processing_date'] ?? null,
-                    // user_id no se actualiza
+                    
+                    // --- INICIO CAMPOS SNAPSHOT (Paquete) ---
+                    'package_name' => $package->name ?? 'Paquete no encontrado',
+                    'package_price' => $package->price ?? 0,
+                    'package_commission' => $package->commission_amount ?? 0, // Ajusta 'commission_amount'
+                    // No actualizamos el 'status' aquí
+                    // --- FIN CAMPOS SNAPSHOT ---
                 ]);
 
-                // Borrar y recrear líneas
+                // Borrar y recrear líneas (Lógica idéntica a store)
                 $offer->lines()->delete();
                 foreach ($validated['lines'] as $lineData) {
+                    
+                    // --- INICIO LÓGICA SNAPSHOT (Paso 2: Líneas) ---
+                    $o2oDiscount = null;
+                    if (!empty($lineData['o2o_discount_id'])) {
+                        $o2oDiscount = O2oDiscount::find($lineData['o2o_discount_id']);
+                    }
+
+                    $terminalPivot = null;
+                    $terminalName = null;
+                    if (!empty($lineData['terminal_pivot_id'])) {
+                        $terminalPivot = DB::table('package_terminal')
+                            ->join('terminals', 'package_terminal.terminal_id', '=', 'terminals.id')
+                            ->where('package_terminal.id', $lineData['terminal_pivot_id'])
+                            ->select('terminals.brand', 'terminals.model')
+                            ->first();
+                        
+                        if ($terminalPivot) {
+                            $terminalName = $terminalPivot->brand . ' ' . $terminalPivot->model;
+                        }
+                    }
+                    // --- FIN LÓGICA SNAPSHOT ---
+
                     $offer->lines()->create([
                         'is_extra' => $lineData['is_extra'],
                         'is_portability' => $lineData['is_portability'],
@@ -392,35 +536,59 @@ class OfferController extends Controller
                         'package_terminal_id' => $lineData['terminal_pivot_id'] ?? null,
                         'initial_cost' => $lineData['initial_cost'],
                         'monthly_cost' => $lineData['monthly_cost'],
+
+                        // --- INICIO CAMPOS SNAPSHOT (Líneas) ---
+                        'o2o_discount_name' => $o2oDiscount->name ?? null,
+                        'o2o_discount_amount' => $o2oDiscount->discount_amount ?? null,
+                        'terminal_name' => $terminalName,
+                        // --- FIN CAMPOS SNAPSHOT ---
                     ]);
                 }
 
-                // --- INICIO CÓDIGO MODIFICADO: Lógica de guardado de Addons (igual que store) ---
-                // Borrar todos los addons anteriores y volver a adjuntarlos
+                // --- INICIO LÓGICA SNAPSHOT (Paso 3: Addons - Lógica idéntica a store) ---
                 $offer->addons()->detach();
 
                 // 1. IP Fija Principal
                 if (!empty($validated['is_ip_fija_selected'])) {
                     $ipFijaAddon = Addon::where('type', 'internet_feature')->first();
                     if ($ipFijaAddon) {
-                        $offer->addons()->attach($ipFijaAddon->id, ['quantity' => 1]);
+                        $offer->addons()->attach($ipFijaAddon->id, [
+                            'quantity' => 1,
+                            'addon_name' => $ipFijaAddon->name,
+                            'addon_price' => $ipFijaAddon->price,
+                            'addon_commission' => $ipFijaAddon->commission,
+                        ]);
                     }
                 }
 
                 // 2. Internet Principal
                 if (!empty($validated['internet_addon_id'])) {
-                    $offer->addons()->attach($validated['internet_addon_id'], ['quantity' => 1]);
+                    $internetAddon = Addon::find($validated['internet_addon_id']);
+                    if ($internetAddon) {
+                        $offer->addons()->attach($internetAddon->id, [
+                            'quantity' => 1,
+                            'addon_name' => $internetAddon->name,
+                            'addon_price' => $internetAddon->price,
+                            'addon_commission' => $internetAddon->commission,
+                        ]);
+                    }
                 }
                 
                 // 3. Internet Adicional
                 if (!empty($validated['additional_internet_lines'])) {
                     foreach ($validated['additional_internet_lines'] as $internetLine) {
                         if (!empty($internetLine['addon_id'])) {
-                            $offer->addons()->attach($internetLine['addon_id'], [
-                                'quantity' => 1,
-                                'has_ip_fija' => $internetLine['has_ip_fija'],
-                                'selected_centralita_id' => $internetLine['selected_centralita_id']
-                            ]);
+                            $additionalAddon = Addon::find($internetLine['addon_id']);
+                            if ($additionalAddon) {
+                                $offer->addons()->attach($additionalAddon->id, [
+                                    'quantity' => 1,
+                                    'has_ip_fija' => $internetLine['has_ip_fija'],
+                                    'selected_centralita_id' => $internetLine['selected_centralita_id'],
+                                    'addon_name' => $additionalAddon->name,
+                                    'addon_price' => $additionalAddon->price,
+                                    'addon_commission' => $additionalAddon->commission,
+                                ]);
+                            }
                         }
                     }
                 }
@@ -428,18 +596,46 @@ class OfferController extends Controller
                 // 4. Centralita Principal
                 $centralitaData = $validated['centralita'];
                 if (!empty($centralitaData['id'])) {
-                    $offer->addons()->attach($centralitaData['id'], ['quantity' => 1]);
+                    $centralitaAddon = Addon::find($centralitaData['id']);
+                    if ($centralitaAddon) {
+                        $offer->addons()->attach($centralitaAddon->id, [
+                            'quantity' => 1,
+                            'addon_name' => $centralitaAddon->name,
+                            'addon_price' => $centralitaAddon->price,
+                            'addon_commission' => $centralitaAddon->commission,
+                        ]);
+                    }
                 }
                 if (!empty($centralitaData['operadora_automatica_selected']) && !empty($centralitaData['operadora_automatica_id'])) {
-                    $offer->addons()->attach($centralitaData['operadora_automatica_id'], ['quantity' => 1]);
+                    $operadoraAddon = Addon::find($centralitaData['operadora_automatica_id']);
+                     if ($operadoraAddon) {
+                        $offer->addons()->attach($operadoraAddon->id, [
+                            'quantity' => 1,
+                            'addon_name' => $operadoraAddon->name,
+                            'addon_price' => $operadoraAddon->price,
+                            'addon_commission' => $operadoraAddon->commission,
+                        ]);
+                    }
                 }
                 
-                // 5. Extensiones (Agrupadas por cantidad)
+                // 5. Extensiones
                 $extensionSyncData = [];
                 if (!empty($centralitaData['extensions'])) {
                     foreach ($centralitaData['extensions'] as $ext) {
                         if (!empty($ext['addon_id']) && !empty($ext['quantity']) && $ext['quantity'] > 0) {
-                            $extensionSyncData[$ext['addon_id']] = ['quantity' => ($extensionSyncData[$ext['addon_id']]['quantity'] ?? 0) + $ext['quantity']];
+                            $extensionAddon = Addon::find($ext['addon_id']);
+                            if ($extensionAddon) {
+                                $id = $extensionAddon->id;
+                                if (!isset($extensionSyncData[$id])) {
+                                    $extensionSyncData[$id] = [
+                                        'quantity' => 0,
+                                        'addon_name' => $extensionAddon->name,
+                                        'addon_price' => $extensionAddon->price,
+                                        'addon_commission' => $extensionAddon->commission,
+                                    ];
+                                }
+                                $extensionSyncData[$id]['quantity'] += $ext['quantity'];
+                            }
                         }
                     }
                 }
@@ -450,10 +646,18 @@ class OfferController extends Controller
                 // 6. TV Addons
                 if (!empty($validated['tv_addons'])) {
                     foreach ($validated['tv_addons'] as $tvAddonId) {
-                        $offer->addons()->attach($tvAddonId, ['quantity' => 1]);
+                        $tvAddon = Addon::find($tvAddonId);
+                        if ($tvAddon) {
+                             $offer->addons()->attach($tvAddon->id, [
+                                'quantity' => 1,
+                                'addon_name' => $tvAddon->name,
+                                'addon_price' => $tvAddon->price,
+                                'addon_commission' => $tvAddon->commission,
+                            ]);
+                        }
                     }
                 }
-                // --- FIN CÓDIGO MODIFICADO ---
+                // --- FIN LÓGICA SNAPSHOT (UPDATE) ---
 
             });
 
@@ -468,34 +672,36 @@ class OfferController extends Controller
 
     public function show(Offer $offer)
     {
-        // --- INICIO CÓDIGO MODIFICADO: Cargar pivotes ---
-        // Cargar todas las relaciones necesarias
+        // --- INICIO CÓDIGO MODIFICADO: Cargar pivotes (¡CON CAMPOS SNAPSHOT!) ---
         $offer->load([
-            'package.addons', // Necesario para obtener nombres de addons (ej. Centralita)
+            'package.addons',
             'user.team', 
-            'lines', 
+            'lines', // lines ya tiene los campos snapshot
             'client',
             'addons' => function ($query) {
-                // ¡Importante! Cargar los datos del pivote
-                $query->withPivot('quantity', 'has_ip_fija', 'selected_centralita_id');
+                $query->withPivot(
+                    'quantity', 'has_ip_fija', 'selected_centralita_id',
+                    'addon_name', 'addon_price', 'addon_commission' // Cargar nuevos campos
+                );
             }
         ]);
         // --- FIN CÓDIGO MODIFICADO ---
 
-        // Cargar detalles del terminal para cada línea
+        // Cargar detalles del terminal (Esta lógica se puede simplificar)
         $offer->lines->each(function ($line) {
-            if ($line->package_terminal_id) {
-                // Usamos una consulta directa a la tabla pivote y al terminal
-                $terminalData = DB::table('package_terminal')
-                    ->join('terminals', 'package_terminal.terminal_id', '=', 'terminals.id')
-                    ->where('package_terminal.id', $line->package_terminal_id)
-                    ->select('terminals.brand', 'terminals.model', 'package_terminal.duration_months')
-                    ->first();
-                $line->terminal_details = $terminalData; // Añadimos como propiedad dinámica
+            // Ya no necesitamos buscar en la BD, ¡usamos el snapshot!
+            if ($line->terminal_name) {
+                 // Creamos un objeto 'terminal_details' falso para consistencia
+                 $line->terminal_details = (object) [
+                    'brand' => Str::before($line->terminal_name, ' ') ?? 'Terminal',
+                    'model' => Str::after($line->terminal_name, ' ') ?? $line->terminal_name,
+                    'duration_months' => 'N/A' // Este dato no lo guardamos, podríamos añadirlo
+                 ];
             } else {
                 $line->terminal_details = null;
             }
         });
+
         $centralitaExtensions = Addon::where('type', 'centralita_extension')->get();
         return Inertia::render('Offers/Show', [
             'offer' => $offer,
@@ -506,59 +712,56 @@ class OfferController extends Controller
 
     public function generatePDF(Offer $offer)
     {
-        // Aumentar tiempo de ejecución
         set_time_limit(300);
 
-        // --- INICIO CÓDIGO MODIFICADO: Cargar pivotes ---
+        // --- INICIO CÓDIGO MODIFICADO: Cargar pivotes (¡CON CAMPOS SNAPSHOT!) ---
         $offer->load([
             'package.addons', 
             'user', 
             'lines', 
             'client',
             'addons' => function ($query) {
-                $query->withPivot('quantity', 'has_ip_fija', 'selected_centralita_id');
+                $query->withPivot(
+                    'quantity', 'has_ip_fija', 'selected_centralita_id',
+                    'addon_name', 'addon_price', 'addon_commission' // Cargar nuevos campos
+                );
             }
         ]);
         // --- FIN CÓDIGO MODIFICADO ---
 
-        // Cargar detalles del terminal
+        // Cargar detalles del terminal (Lógica de Show, basada en snapshot)
         $offer->lines->each(function ($line) {
-            if ($line->package_terminal_id) {
-                $terminalData = DB::table('package_terminal')
-                    ->join('terminals', 'package_terminal.terminal_id', '=', 'terminals.id')
-                    ->where('package_terminal.id', $line->package_terminal_id)
-                    ->select('terminals.brand', 'terminals.model', 'package_terminal.duration_months')
-                    ->first();
-                $line->terminal_details = $terminalData;
+             if ($line->terminal_name) {
+                 $line->terminal_details = (object) [
+                    'brand' => Str::before($line->terminal_name, ' ') ?? 'Terminal',
+                    'model' => Str::after($line->terminal_name, ' ') ?? $line->terminal_name,
+                    'duration_months' => 'N/A'
+                 ];
             } else {
                 $line->terminal_details = null;
             }
         });
 
-        // Cargar la vista y generar el PDF
         $pdf = PDF::loadView('pdfs.offer_pdf', compact('offer'));
 
-        // Generar nombre de archivo
         $clientName = $offer->client ? Str::slug($offer->client->name) : 'sin-cliente';
         $fileName = 'oferta-' . $offer->id . '-' . $clientName . '.pdf';
 
-        // Descargar el PDF
         return $pdf->download($fileName);
     }
 
     public function destroy(Offer $offer)
     {
-         // OPCIONAL: Añadir autorización
-         // if (Auth::user()->cannot('delete', $offer)) {
-         //     abort(403);
+         // --- INICIO: LÓGICA DE BLOQUEO (Opcional) ---
+         // if ($offer->status === 'finalizada' && Auth::user()->role !== 'admin') {
+         //    return back()->with('error', 'No se puede eliminar una oferta finalizada.');
          // }
+         // --- FIN: LÓGICA DE BLOQUEO ---
 
         try {
             DB::transaction(function () use ($offer) {
-                 // Eliminar relaciones dependientes
                  $offer->lines()->delete();
                  $offer->addons()->detach();
-                 // Borrar la oferta principal
                  $offer->delete();
             });
             return redirect()->route('offers.index')->with('success', 'Oferta eliminada correctamente.');
@@ -567,20 +770,40 @@ class OfferController extends Controller
              return redirect()->route('offers.index')->with('error', 'No se pudo eliminar la oferta. Puede tener elementos asociados.');
         }
     }
- public function exportFunnel(Request $request)
+
+    // --- INICIO: NUEVO MÉTODO PARA BLOQUEAR OFERTAS ---
+    /**
+     * Bloquea una oferta para que no se pueda editar.
+     */
+    public function lock(Request $request, Offer $offer)
+    {
+        // Opcional: Añadir autorización
+        // if (Auth::user()->cannot('lock', $offer)) {
+        //     abort(403);
+        // }
+
+        try {
+            $offer->update(['status' => 'finalizada']);
+            return back()->with('success', 'Oferta finalizada y bloqueada para edición.');
+        } catch (\Exception $e) {
+            \Log::error('Error locking offer '.$offer->id.': '.$e->getMessage());
+            return back()->with('error', 'No se pudo bloquear la oferta.');
+        }
+    }
+    // --- FIN: NUEVO MÉTODO ---
+
+
+    public function exportFunnel(Request $request)
     {
         $user = Auth::user();
 
-        // --- Paso 1: Comprobación de Permiso MÁS FLEXIBLE ---
         $allowedRoles = ['admin', 'jefe de ventas', 'team_lead'];
         if (!in_array($user->role, $allowedRoles)) {
             abort(403, 'No tienes permiso para realizar esta exportación.');
         }
-        // --- Fin Comprobación de Permiso ---
-
-
-        // --- Paso 2: Lógica de Consulta Ajustada ---
-        $query = Offer::with(['package', 'user.team','client'])
+        
+        // La consulta funciona igual, pero ahora usamos el 'package_name' de la oferta
+        $query = Offer::with(['user.team','client']) // 'package' ya no es necesario aquí
                         ->withCount('lines')
                         ->latest();
 
@@ -590,17 +813,12 @@ class OfferController extends Controller
                  $teamMemberIds->push($user->id);
                  $query->whereIn('user_id', $teamMemberIds->unique());
              } else {
-                  // Jefe/Lead sin equipo, solo ve los suyos
                   $query->where('user_id', $user->id);
              }
         }
-        // Admin ve todo
 
         $offersToExport = $query->get();
-        // --- Fin Lógica de Consulta ---
-
-
-        // --- Generación del CSV ---
+        
         $filename = "funnel_ofertas_" . date('Ymd_His') . ".csv";
         $headers = [
             'Content-Type'        => 'text/csv; charset=utf-8',
@@ -616,8 +834,8 @@ class OfferController extends Controller
 
             fputcsv($file, [
                 'ID Oferta', 'Cliente', 'CIF/NIF', 'Vendedor', 'Equipo Vendedor',
-                'Paquete', 'Precio Final (€)', 'Probabilidad (%)', 'Fecha Firma',
-                'Fecha Tramitación', 'Fecha Creación', 'Num. Líneas Móviles',
+                'Paquete (Snapshot)', 'Precio Final (€)', 'Probabilidad (%)', 'Fecha Firma',
+                'Fecha Tramitación', 'Fecha Creación', 'Num. Líneas Móviles', 'Estado', // Añadido Estado
             ], ';');
 
             foreach ($offersToExport as $offer) {
@@ -627,13 +845,14 @@ class OfferController extends Controller
                     $offer->client?->cif_nif ?? 'N/A',
                     $offer->user?->name ?? 'N/A',
                     $offer->user?->team?->name ?? 'N/A',
-                    $offer->package?->name ?? 'N/A',
+                    $offer->package_name ?? 'N/A', // --- CAMBIO: Usar el campo snapshot ---
                     number_format($offer->summary['finalPrice'] ?? 0, 2, '.', ''),
                     $offer->probability ?? '',
                     $offer->signing_date ? $offer->signing_date->format('Y-m-d') : '',
                     $offer->processing_date ? $offer->processing_date->format('Y-m-d') : '',
                     $offer->created_at ? $offer->created_at->format('Y-m-d H:i:s') : '',
                     $offer->lines_count ?? 0,
+                    $offer->status ?? 'borrador', // --- CAMBIO: Añadido estado ---
                 ], ';');
             }
             fclose($file);
@@ -642,4 +861,4 @@ class OfferController extends Controller
         return Response::stream($callback, 200, $headers);
     }
 
-} // Fin de la clase OfferController
+}
