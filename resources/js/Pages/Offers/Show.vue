@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, ref } from 'vue'; // ref añadido
 import { Head, Link, usePage, useForm } from '@inertiajs/vue3';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
@@ -11,7 +11,7 @@ import Modal from '@/Components/Modal.vue';
 
 const props = defineProps({
     offer: Object, // La oferta con relaciones cargadas
-    centralitaExtensions: Array, // (Se mantiene, aunque su uso es menor)
+    centralitaExtensions: Array, // <-- ¡AÑADIDO! La lógica que funciona lo necesita
 });
 
 const page = usePage();
@@ -19,10 +19,11 @@ const page = usePage();
 // --- LÓGICA VISIBILIDAD COMISIONES ---
 const canViewCommissions = computed(() => {
     const userRole = page.props.auth.user?.role;
+    // Asumiendo que is_manager se pasa correctamente
     return userRole === 'admin' || page.props.auth.user?.is_manager;
 });
 
-// --- INICIO: LÓGICA DE BLOQUEO ---
+// --- INICIO: LÓGICA DE BLOQUEO (de Show.vue) ---
 const confirmingLockOffer = ref(false);
 const lockForm = useForm({});
 
@@ -42,44 +43,114 @@ const lockOffer = () => {
 };
 // --- FIN: LÓGICA DE BLOQUEO ---
 
+// --- LÓGICA CENTRALITA (Principal) - (Del Fichero 2) ---
+const centralitaInfo = computed(() => {
+    if (!props.offer) return null;
 
-// --- INICIO: LÓGICA DE ADDONS (SIMPLIFICADA PARA SNAPSHOT) ---
-// Ahora solo leemos de 'offer.addons', que contiene los datos snapshot
-// en 'pivot' (ej. pivot.addon_name, pivot.addon_price)
+    // Busca la centralita principal (la que no está asociada a una línea adicional)
+    const savedCentralita = props.offer.addons?.find(a => a.type === 'centralita');
+    const savedOperadora = props.offer.addons?.find(a => a.type === 'centralita_feature');
+    
+    // --- CORRECCIÓN ---
+    // Filtramos extensiones: solo las que pertenecen a la centralita principal
+    const mainCentralitaPivotId = savedCentralita?.pivot.id;
+    const contractedExtensions = props.offer.addons?.filter(a => 
+        a.type === 'centralita_extension' && a.pivot.related_centralita_id === mainCentralitaPivotId
+    ) || [];
+    // --- FIN CORRECCIÓN ---
+    
+    const includedCentralita = props.offer.package?.addons?.find(a => a.type === 'centralita' && a.pivot.is_included);
+    const includedOperadora = props.offer.package?.addons?.find(a => a.type === 'centralita_feature' && a.pivot.is_included);
+    
+    const finalCentralita = savedCentralita || includedCentralita;
+    const finalOperadora = savedOperadora || includedOperadora;
+    
+    const packageIncludedExtensions = props.offer.package?.addons?.filter(a =>
+        a.type === 'centralita_extension' && a.pivot.is_included && a.pivot.included_quantity > 0
+    ) || [];
 
+    if (!finalCentralita && !finalOperadora && contractedExtensions.length === 0 && packageIncludedExtensions.length === 0) {
+        return null; // No hay centralita principal
+    }
+    
+    return {
+        centralita: finalCentralita,
+        operadora: finalOperadora,
+        contractedExtensions: contractedExtensions,
+        packageIncludedExtensions: packageIncludedExtensions
+    };
+});
+
+// --- LÓGICA INTERNET, TV Y MULTISEDE (Del Fichero 2) ---
 const allAddons = computed(() => props.offer.addons || []);
+const allPackageAddons = computed(() => props.offer.package?.addons || []);
 
+// Mantenemos la lógica de Show.vue (snapshot) para Internet y TV
 const baseInternetAddon = computed(() => allAddons.value.find(a => a.type === 'internet'));
 const ipFijaPrincipal = computed(() => allAddons.value.find(a => a.type === 'internet_feature'));
 const additionalInternetAddons = computed(() => allAddons.value.filter(a => a.type === 'internet_additional') || []);
 const tvAddons = computed(() => allAddons.value.filter(a => a.type === 'tv' || a.type === 'tv_base' || a.type === 'tv_premium') || []);
 
-// Centralita Principal (solo lo que está en offer.addons)
-const mainCentralita = computed(() => allAddons.value.find(a => a.type === 'centralita'));
-const mainOperadora = computed(() => allAddons.value.find(a => a.type === 'centralita_feature'));
-const mainExtensions = computed(() => allAddons.value.filter(a => a.type === 'centralita_extension'));
+/**
+ * Busca los detalles de una centralita (por su ID) dentro de los addons
+ * disponibles en el PAQUETE (ya que de ahí se saca el nombre y precio).
+ */
+const getPackageCentralitaDetails = (centralitaId) => {
+    if (!centralitaId) return null;
+    // Busca en los addons del paquete el nombre de la centralita
+    return allPackageAddons.value.find(a => a.type === 'centralita' && a.id === centralitaId);
+};
 
-// Centralitas Multisede
-const multisedeLines = computed(() => {
+/**
+ * Busca la extensión auto-incluida que corresponde a un tipo de centralita.
+ * (Replicando la lógica de useOfferCalculations)
+ */
+const findAutoIncludedExtension = (centralitaAddon) => {
+    if (!centralitaAddon) return null;
+    // Extrae el tipo del nombre, ej: "Centralita Básica" -> "Básica"
+    const type = centralitaAddon.name.split(' ')[1]; 
+    if (!type) return null;
+    
+    // --- ¡CORREGIDO! ---
+    // Buscar en la prop 'centralitaExtensions' (la lista completa)
+    // en lugar de 'props.offer.package.addons' (solo los del paquete)
+    return props.centralitaExtensions.find(a => 
+        a.type === 'centralita_extension' && a.name.includes(type)
+    );
+};
+
+// Computed para Centralitas Multisede (con sus extensiones)
+const centralitasMultisede = computed(() => {
+    // --- ¡CORREGIDO! ---
+    // Usar la nueva prop 'centralitaExtensions' como guarda
+    if (!props.centralitaExtensions) return [];
+
+    // Usamos 'additionalInternetAddons' que SÍ lee del snapshot
     return additionalInternetAddons.value
         .filter(addon => !!addon.pivot.selected_centralita_id) // Filtra las que SÍ tienen centralita
         .map(addon => {
-            // Buscamos la centralita que fue seleccionada (también está en allAddons)
-            const centralitaDetails = allAddons.value.find(c => c.id === addon.pivot.selected_centralita_id);
-            
-            // NOTA: La lógica de 'extensiones auto-incluidas' se elimina.
-            // Solo mostramos lo que fue explícitamente guardado en el snapshot.
+            const centralitaDetails = getPackageCentralitaDetails(addon.pivot.selected_centralita_id);
+            const includedExtension = findAutoIncludedExtension(centralitaDetails); // Busca la extensión incluida
+
+            // --- CORRECCIÓN ---
+            // Buscamos las extensiones ADICIONALES que pertenecen a esta multisede
+            const multiCentralitaPivotId = allAddons.value.find(c => c.id === addon.pivot.selected_centralita_id)?.pivot.id;
+            const multiContractedExtensions = allAddons.value.filter(a => 
+                a.type === 'centralita_extension' && a.pivot.related_centralita_id === multiCentralitaPivotId
+            ) || [];
+            // --- FIN CORRECCIÓN ---
 
             return {
                 id: addon.id, // ID único del addon de internet
-                lineName: addon.pivot.addon_name, // <-- LEEMOS SNAPSHOT
-                centralitaName: centralitaDetails?.pivot.addon_name || `ID ${addon.pivot.selected_centralita_id}`, // <-- LEEMOS SNAPSHOT
+                lineName: addon.pivot.addon_name, // <-- Leemos del Snapshot
+                centralitaName: centralitaDetails?.name || `ID ${addon.pivot.selected_centralita_id}`,
                 has_ip_fija: addon.pivot.has_ip_fija,
-                extensionName: null // Simplificado. Solo mostramos extensiones contratadas (mainExtensions)
+                extensionName: includedExtension?.name || null, // Nombre de la extensión incluida
+                contractedExtensions: multiContractedExtensions // <-- AÑADIDO
             };
         });
 });
-// --- FIN: LÓGICA DE ADDONS ---
+// --- FIN LÓGICA INTERNET/CENTRALITA ---
 
 
 // --- FUNCIONES FORMATO ---
@@ -123,33 +194,33 @@ const openDetails = ref({
              <div class="flex flex-wrap justify-between items-center gap-4">
                  <h2 class="font-semibold text-xl text-gray-800 leading-tight">Detalle de la Oferta #{{ offer.id }}</h2>
                  <div class="space-x-2 flex items-center flex-wrap">
-                     <Link :href="route('offers.index')"><SecondaryButton>Volver</SecondaryButton></Link>
-                     
-                     <Link v-if="offer.status === 'borrador'" :href="route('offers.edit', offer.id)">
-                        <PrimaryButton>Editar</PrimaryButton>
-                     </Link>
-                     
-                     <DangerButton @click="confirmLockOffer" v-if="offer.status === 'borrador'">
-                         Finalizar y Bloquear
-                     </DangerButton>
-                     <PrimaryButton @click="sendOfferByEmail" :disabled="sendEmailForm.processing || !offer.client?.email" :class="{ 'opacity-25': sendEmailForm.processing || !offer.client?.email }" :title="!offer.client?.email ? 'El cliente no tiene email' : 'Enviar email'">
-                         <svg v-if="sendEmailForm.processing" class="animate-spin -ml-1 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A8 8 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                         {{ sendEmailForm.processing ? 'Enviando...' : 'Email' }}
-                     </PrimaryButton>
-                     <a :href="route('offers.pdf', offer.id)" target="_blank" download class="inline-flex items-center px-4 py-2 bg-gray-800 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-gray-700 active:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition ease-in-out duration-150">PDF</a>
+                      <Link :href="route('offers.index')"><SecondaryButton>Volver</SecondaryButton></Link>
+                      
+                      <Link v-if="offer.status === 'borrador'" :href="route('offers.edit', offer.id)">
+                          <PrimaryButton>Editar</PrimaryButton>
+                      </Link>
+                      
+                      <DangerButton @click="confirmLockOffer" v-if="offer.status === 'borrador'">
+                           Finalizar y Bloquear
+                      </DangerButton>
+                      <PrimaryButton @click="sendOfferByEmail" :disabled="sendEmailForm.processing || !offer.client?.email" :class="{ 'opacity-25': sendEmailForm.processing || !offer.client?.email }" :title="!offer.client?.email ? 'El cliente no tiene email' : 'Enviar email'">
+                          <svg v-if="sendEmailForm.processing" class="animate-spin -ml-1 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A8 8 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                          {{ sendEmailForm.processing ? 'Enviando...' : 'Email' }}
+                      </PrimaryButton>
+                      <a :href="route('offers.pdf', offer.id)" target="_blank" download class="inline-flex items-center px-4 py-2 bg-gray-800 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-gray-700 active:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition ease-in-out duration-150">PDF</a>
                  </div>
              </div>
         </template>
 
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 mt-6">
            <div v-if="$page.props.flash.success" class="p-4 mb-4 bg-green-100 border border-green-300 text-green-800 rounded-md shadow-sm transition duration-300 ease-in-out">
-               {{ $page.props.flash.success }}
+                {{ $page.props.flash.success }}
            </div>
            <div v-if="$page.props.flash.warning" class="p-4 mb-4 bg-yellow-100 border border-yellow-300 text-yellow-800 rounded-md shadow-sm transition duration-300 ease-in-out">
-                {{ $page.props.flash.warning }}
+                 {{ $page.props.flash.warning }}
            </div>
            <div v-if="$page.props.flash.error" class="p-4 mb-4 bg-red-100 border border-red-300 text-red-800 rounded-md shadow-sm transition duration-300 ease-in-out">
-               {{ $page.props.flash.error }}
+                {{ $page.props.flash.error }}
            </div>
         </div>
 
@@ -163,7 +234,7 @@ const openDetails = ref({
                              <div class="flex flex-wrap justify-between items-start gap-y-2 mb-4">
                                  <div>
                                      <p class="text-sm text-gray-500">Creada el {{ formatDate(offer.created_at) }} por <span class="font-medium">{{ offer.user?.name || 'N/A' }}</span> (Equipo: {{ offer.user?.team?.name || 'N/A' }})</p>
-                                     <p class="text-sm text-gray-500 mt-1">Paquete Base: <span class="font-medium">{{ offer.package_name || 'N/A' }}</span></p>
+                                     <p class="text-sm text-gray-500 mt-1">Paquete Base: <span class="font-medium">{{ offer.package_name || offer.package?.name || 'N/A' }}</span></p>
                                  </div>
                                  <div class="text-right">
                                      <span class="font-semibold text-gray-600 block">Estado:</span>
@@ -173,7 +244,7 @@ const openDetails = ref({
                                              'bg-green-100 text-green-800': offer.status === 'finalizada',
                                              'bg-gray-100 text-gray-800': !offer.status
                                            }">
-                                         {{ offer.status || 'Borrador' }}
+                                          {{ offer.status || 'Borrador' }}
                                      </span>
                                      </div>
                              </div>
@@ -205,13 +276,13 @@ const openDetails = ref({
                                                  <div><span class="font-semibold block text-gray-500">VAP</span> <span :class="line.has_vap ? 'text-red-700 font-bold' : 'text-gray-500'">{{ line.has_vap ? 'Sí' : 'No' }}</span></div>
                                                  
                                                  <div class="md:col-span-3 mt-3 pt-3 border-t border-gray-100" v-if="line.terminal_name">
-                                                     <span class="font-semibold block text-gray-500 mb-1">Terminal Asociado</span>
-                                                     <div class="flex flex-wrap justify-between items-center gap-2">
-                                                         <span>{{ line.terminal_name }}</span> <span class="text-xs bg-gray-100 px-2 py-1 rounded">Ini: {{ formatCurrency(line.initial_cost) }} / Mes: {{ formatCurrency(line.monthly_cost) }}</span>
-                                                     </div>
+                                                      <span class="font-semibold block text-gray-500 mb-1">Terminal Asociado</span>
+                                                      <div class="flex flex-wrap justify-between items-center gap-2">
+                                                          <span>{{ line.terminal_name }}</span> <span class="text-xs bg-gray-100 px-2 py-1 rounded">Ini: {{ formatCurrency(line.initial_cost) }} / Mes: {{ formatCurrency(line.monthly_cost) }}</span>
+                                                      </div>
                                                  </div>
                                                  <div class="md:col-span-3 mt-2 italic text-xs text-gray-400" v-else>Sin terminal asociado.</div>
-                                                 </div>
+                                                </div>
                                          </div>
                                      </div>
                                      <p v-else class="italic text-gray-500">No se añadieron líneas móviles.</p>
@@ -237,7 +308,8 @@ const openDetails = ref({
                                         <div v-if="ipFijaPrincipal" class="mt-2 pt-2 border-t border-blue-200 ml-4">
                                             <span class="text-xs font-semibold text-gray-700">IP Fija Principal:</span>
                                             <span class="ml-1 text-xs">
-                                                Incluida
+                                                 Incluida
+                                                 <span v-if="centralitaInfo">(Gratis por Centralita)</span>
                                                 </span>
                                         </div>
                                     </div>
@@ -267,7 +339,7 @@ const openDetails = ref({
                             </details>
                         </section>
 
-                        <section v-if="mainCentralita || multisedeLines.length > 0" class="bg-white p-6 shadow-sm sm:rounded-lg">
+                        <section v-if="centralitaInfo || centralitasMultisede.length > 0" class="bg-white p-6 shadow-sm sm:rounded-lg">
                             <details class="group" :open="openDetails.centralita" @toggle="openDetails.centralita = $event.target.open">
                                 <summary class="flex justify-between items-center font-medium cursor-pointer list-none">
                                     <h3 class="text-lg leading-6 text-gray-900">📞 Centralita Virtual y Multisede</h3>
@@ -278,27 +350,44 @@ const openDetails = ref({
                                 
                                 <div class="mt-4 space-y-4 border-t pt-4">
                                     
-                                    <div v-if="mainCentralita" class="text-sm bg-indigo-50 p-4 rounded shadow-sm">
+                                    <div v-if="centralitaInfo" class="text-sm bg-indigo-50 p-4 rounded shadow-sm">
                                         <p class="font-medium text-indigo-900 mb-2">Centralita Principal</p>
-                                        <p v-if="mainCentralita"><span class="font-semibold text-indigo-800">Base:</span> {{ mainCentralita.pivot.addon_name }}</p>
-                                        <p v-if="mainOperadora" class="mt-1"><span class="font-semibold text-indigo-800">Operadora Automática:</span> {{ mainOperadora.pivot.addon_name }}</p>
+                                        <p v-if="centralitaInfo.centralita"><span class="font-semibold text-indigo-800">Base:</span> {{ centralitaInfo.centralita.name }}</p>
+                                        <p v-if="centralitaInfo.operadora" class="mt-1"><span class="font-semibold text-indigo-800">Operadora Automática:</span> {{ centralitaInfo.operadora.name }}</p>
                                         
                                         <div class="mt-2 pt-2 border-t border-indigo-200">
                                             <span class="font-semibold block text-indigo-800 mb-1">Extensiones (Principal):</span>
-                                            <ul v-if="mainExtensions.length > 0" class="list-disc list-inside ml-4 space-y-1">
-                                                <li v-for="ext in mainExtensions" :key="ext.id">
-                                                    {{ ext.pivot.addon_name }} (x{{ ext.pivot.quantity }})
+                                            
+                                            <ul v-if="centralitaInfo.packageIncludedExtensions.length > 0" class="list-disc list-inside ml-4 text-gray-500 space-y-1">
+                                                <li v-for="ext in centralitaInfo.packageIncludedExtensions" :key="ext.id">
+                                                    {{ ext.name }} (x{{ ext.pivot.included_quantity }} incluidas)
                                                 </li>
                                             </ul>
-                                            <p v-else class="ml-4 italic text-gray-500">Sin extensiones adicionales contratadas.</p>
-                                            </div>
+
+                                            <ul v-if="centralitaInfo.contractedExtensions.length > 0" class="list-disc list-inside ml-4 space-y-1">
+                                                <li v-for="ext in centralitaInfo.contractedExtensions" :key="ext.id">
+                                                    {{ ext.pivot.addon_name || ext.name }} (x{{ ext.pivot.quantity }})
+                                                </li>
+                                            </ul>
+
+                                            <p v-if="centralitaInfo.contractedExtensions.length === 0 && centralitaInfo.packageIncludedExtensions.length === 0" class="ml-4 italic text-gray-500">Sin extensiones.</p>
+                                        </div>
                                     </div>
                                     
-                                    <div v-if="multisedeLines.length > 0" class="space-y-3">
-                                        <div v-for="multi in multisedeLines" :key="multi.id" class="text-sm bg-indigo-50 p-4 rounded shadow-sm">
+                                    <div v-if="centralitasMultisede.length > 0" class="space-y-3">
+                                        <div v-for="multi in centralitasMultisede" :key="multi.id" class="text-sm bg-indigo-50 p-4 rounded shadow-sm">
                                             <p class="font-medium text-indigo-900 mb-2">Centralita Multisede (en {{ multi.lineName }})</p>
                                             <p><span class="font-semibold text-indigo-800">Base:</span> {{ multi.centralitaName }}</p>
                                             
+                                            <div v-if="multi.extensionName" class="mt-2 pt-2 border-t border-indigo-200">
+                                                <span class="font-semibold block text-indigo-800 mb-1">Extensión Incluida (Multisede):</span>
+                                                <ul class="list-disc list-inside ml-4 space-y-1">
+                                                    <li>{{ multi.extensionName }} (x1 Incluida)</li>
+                                                </ul>
+                                            </div>
+
+                                            
+
                                             <div v-if="multi.has_ip_fija" class="mt-2 pt-2 border-t border-indigo-200">
                                                 <span class="text-xs font-semibold text-gray-700">IP Fija:</span>
                                                 <span class="ml-1 text-xs">Incluida (Gratis por Centralita)</span>
@@ -310,7 +399,7 @@ const openDetails = ref({
                             </details>
                         </section>
                         
-                        <section v-if="!mainCentralita && multisedeLines.length === 0" class="bg-white p-6 shadow-sm sm:rounded-lg italic text-gray-500">
+                        <section v-if="!centralitaInfo && centralitasMultisede.length === 0" class="bg-white p-6 shadow-sm sm:rounded-lg italic text-gray-500">
                             No se incluyó ninguna centralita en esta oferta.
                         </section>
                         </div> 
@@ -365,17 +454,17 @@ const openDetails = ref({
 
                                  <div class="space-y-2 text-sm bg-green-50 p-4 rounded-lg border border-green-200 shadow-sm">
                                       <div class="flex justify-between font-medium text-gray-600">
-                                         <span>Comisión Bruta (100%):</span>
-                                         <span class="font-mono">{{ formatCurrency(offer.summary?.totalCommission) }}</span>
-                                     </div>
-                                     <div v-if="page.props.auth.user?.role !== 'admin'" class="flex justify-between font-medium text-gray-700">
-                                         <span>Comisión Equipo:</span>
-                                         <span class="font-mono">{{ formatCurrency(offer.summary?.teamCommission) }}</span>
-                                     </div>
-                                     <div class="flex justify-between text-lg font-bold text-emerald-700 pt-2 border-t border-green-300 mt-2">
-                                         <span>Comisión Vendedor:</span>
-                                         <span class="font-mono">{{ formatCurrency(offer.summary?.userCommission) }}</span>
-                                     </div>
+                                          <span>Comisión Bruta (100%):</span>
+                                          <span class="font-mono">{{ formatCurrency(offer.summary?.totalCommission) }}</span>
+                                      </div>
+                                      <div v-if="page.props.auth.user?.role !== 'admin'" class="flex justify-between font-medium text-gray-700">
+                                          <span>Comisión Equipo:</span>
+                                          <span class="font-mono">{{ formatCurrency(offer.summary?.teamCommission) }}</span>
+                                      </div>
+                                      <div class="flex justify-between text-lg font-bold text-emerald-700 pt-2 border-t border-green-300 mt-2">
+                                          <span>Comisión Vendedor:</span>
+                                          <span class="font-mono">{{ formatCurrency(offer.summary?.userCommission) }}</span>
+                                      </div>
                                  </div>
                              </section>
                              <section v-else class="bg-white p-6 shadow-sm sm:rounded-lg italic text-sm text-gray-500">
