@@ -67,10 +67,27 @@ const form = useForm({
 
 const selectedPackageId = ref(props.offer.package_id); // Mantenemos este ref para reactividad del paquete
 
-// Inicializamos 'lines' como ref usando los datos de props.offer.lines
-const lines = ref(props.offer.lines.map(line => {
+// --- CAMBIO 1: Inicializar 'lines' con la lógica de descuento ---
+const lines = ref(props.offer.lines.map((line, index) => { // <-- Obtenemos el index
     const terminalPivotData = line.terminal_pivot;
     const terminalInfo = terminalPivotData?.terminal;
+
+    // Leemos los valores de la BBDD
+    const initialCostFromDB = parseFloat(line.initial_cost || 0);
+    const monthlyCostFromDB = parseFloat(line.monthly_cost || 0);
+    const initialDiscountFromDB = parseFloat(line.initial_cost_discount || 0);
+    const monthlyDiscountFromDB = parseFloat(line.monthly_cost_discount || 0);
+
+    let originalInitial = initialCostFromDB;
+    let originalMonthly = monthlyCostFromDB;
+    
+    // Si es la línea 0, el precio guardado está descontado.
+    // Reconstruimos el original sumando el descuento.
+    if (index === 0 && terminalPivotData) {
+        originalInitial = initialCostFromDB + initialDiscountFromDB;
+        originalMonthly = monthlyCostFromDB + monthlyDiscountFromDB;
+    }
+
     return {
         ...line,
         id: line.id || Date.now() + Math.random(),
@@ -81,10 +98,20 @@ const lines = ref(props.offer.lines.map(line => {
         selected_model_id: terminalInfo?.id || null,
         selected_duration: terminalPivotData?.duration_months || null,
         terminal_pivot: terminalPivotData,
-        package_terminal_id: line.package_terminal_id, // Aseguramos que el ID pivote se mantenga
-        // initial_cost y monthly_cost ya vienen de la línea
+        package_terminal_id: line.package_terminal_id,
+        
+        // Estos son los v-models (ya están descontados desde la BBDD)
+        initial_cost: initialCostFromDB,
+        monthly_cost: monthlyCostFromDB,
+
+        // Guardamos los valores originales y de descuento para recálculos
+        original_initial_cost: originalInitial,
+        original_monthly_cost: originalMonthly,
+        initial_cost_discount: initialDiscountFromDB,
+        monthly_cost_discount: monthlyDiscountFromDB,
     };
 }));
+// --- FIN CAMBIO 1 ---
 
 // --- 3. MODIFICACIÓN: Inicializar los 'ref' locales con las nuevas props ---
 const selectedInternetAddonId = ref(form.internet_addon_id); 
@@ -143,13 +170,45 @@ const { calculationSummary } = useOfferCalculations(
 const modelsByBrand = (brand) => availableTerminals.value.filter(t => t.brand === brand).filter((v, i, a) => a.findIndex(t => t.model === v.model) === i);
 // Buscamos el pivot usando el ID del terminal y la duración
 const findTerminalPivot = (line) => availableTerminals.value.find(t => t.id === line.selected_model_id && t.pivot.duration_months === line.selected_duration)?.pivot;
+
+// --- CAMBIO 2: Actualizar 'assignTerminalPrices' con TU lógica ---
 const assignTerminalPrices = (line) => {
     const pivot = findTerminalPivot(line);
-    line.initial_cost = parseFloat(pivot?.initial_cost || 0);
-    line.monthly_cost = parseFloat(pivot?.monthly_cost || 0);
+    
+    // 1. Obtenemos todos los valores del pivot
+    const originalInitial = parseFloat(pivot?.initial_cost || 0);
+    const originalMonthly = parseFloat(pivot?.monthly_cost || 0);
+    const initialDiscount = parseFloat(pivot?.initial_cost_discount || 0);
+    const monthlyDiscount = parseFloat(pivot?.monthly_cost_discount || 0);
+
+    // 2. Guardamos los valores originales y de descuento en la línea (para el cálculo de comisiones)
+    line.original_initial_cost = originalInitial;
+    line.original_monthly_cost = originalMonthly;
+    line.initial_cost_discount = initialDiscount;
+    line.monthly_cost_discount = monthlyDiscount;
+
+    // --- INICIO DE TU LÓGICA ---
+    // Buscamos el índice de la línea actual
+    const lineIndex = lines.value.findIndex(l => l.id === line.id);
+
+    // 3. Aplicamos el descuento SÓLO a la PRIMERA línea (index 0)
+    if (lineIndex === 0) {
+        // Estos son los v-model de los inputs, así que se actualizarán
+        line.initial_cost = originalInitial - initialDiscount;
+        line.monthly_cost = originalMonthly - monthlyDiscount;
+    } else {
+        // Todas las demás líneas (principales o extras) usan el precio normal
+        line.initial_cost = originalInitial;
+        line.monthly_cost = originalMonthly;
+    }
+    // --- FIN DE TU LÓGICA ---
+
+    // 4. Asignamos el resto de datos
     line.terminal_pivot = pivot;
     line.package_terminal_id = pivot?.id || null; // Guardamos el ID de la tabla pivote
 };
+// --- FIN FUNCIÓN MODIFICADA ---
+
 
 const copyPreviousLine = (line, index) => {
     if (index <= 0 || !lines.value[index - 1]) return;
@@ -161,15 +220,38 @@ const copyPreviousLine = (line, index) => {
     line.selected_brand = prev.selected_brand;
     line.selected_model_id = prev.selected_model_id;
     line.selected_duration = prev.selected_duration;
-    assignTerminalPrices(line); // Asigna pivot, costs y package_terminal_id
+    assignTerminalPrices(line); // Asigna pivot, costs y package_terminal_id (y ahora descuentos)
 };
 
 // --- INICIO CÓDIGO CORREGIDO (Reactividad) ---
+// --- CAMBIO 3: Actualizar 'addLine' (para nuevas líneas) ---
 const addLine = () => {
-    const newLine = { id: Date.now(), is_extra: true, is_portability: false, phone_number: '', source_operator: null, has_vap: false, o2o_discount_id: null, selected_brand: null, selected_model_id: null, selected_duration: null, terminal_pivot: null, package_terminal_id: null, initial_cost: 0, monthly_cost: 0 };
+    const newLine = { 
+        id: Date.now(), 
+        is_extra: true, 
+        is_portability: false, 
+        phone_number: '', 
+        source_operator: null, 
+        has_vap: false, 
+        o2o_discount_id: null, 
+        selected_brand: null, 
+        selected_model_id: null, 
+        selected_duration: null, 
+        terminal_pivot: null, 
+        package_terminal_id: null, 
+        initial_cost: 0, 
+        monthly_cost: 0,
+        // --- LÍNEAS AÑADIDAS ---
+        original_initial_cost: 0,
+        original_monthly_cost: 0,
+        initial_cost_discount: 0,
+        monthly_cost_discount: 0
+        // --- FIN LÍNEAS AÑADIDAS ---
+    };
     lines.value.push(newLine); 
     addWatchersToLine(lines.value[lines.value.length - 1]); // Apuntar al objeto reactivo
 };
+// --- FIN CAMBIO 3 ---
 const removeLine = (index) => { if (lines.value[index]?.is_extra) lines.value.splice(index, 1); };
 
 // Watcher para líneas de internet adicionales
@@ -204,6 +286,7 @@ const getO2oDiscountsForLine = (line, index) => {
     return line.is_extra && extrasBefore < limit ? availableO2oDiscounts.value.filter(d => (parseFloat(d.total_discount_amount) / parseFloat(d.duration_months)) <= 1) : availableO2oDiscounts.value;
 };
 
+// --- CAMBIO 4: Actualizar 'saveOffer' para enviar los descuentos ---
 const saveOffer = () => {
     try {
         let finalExt = [];
@@ -218,9 +301,13 @@ const saveOffer = () => {
             has_vap: l.has_vap,
             o2o_discount_id: l.o2o_discount_id,
             terminal_pivot_id: l.package_terminal_id, 
-            initial_cost: l.initial_cost,
-            monthly_cost: l.monthly_cost,
+            initial_cost: l.initial_cost, // Ya está descontado si es línea 0
+            monthly_cost: l.monthly_cost, // Ya está descontado si es línea 0
+            // ¡AÑADIMOS LOS DESCUENTOS AL GUARDAR!
+            initial_cost_discount: l.initial_cost_discount,
+            monthly_cost_discount: l.monthly_cost_discount,
         }));
+        // --- FIN CAMBIO 4 ---
 
         form.internet_addon_id = selectedInternetAddonId.value;
         // --- 4. MODIFICACIÓN: Usar el ref local para guardar ---
@@ -435,7 +522,7 @@ watch(isCentralitaActive, (isActive) => {
 
                             <div class="space-y-4 p-6 bg-slate-50 rounded-lg h-full">
                                 <h3 class="text-lg font-semibold text-gray-800">Internet Adicional</h3>
-                                <div v-for="(line, index) in additionalInternetLines" :key="line.id" class="p-3 border rounded-lg bg-blue-50 border-blue-200 space-y-2">  
+                                <div v-for="(line, index) in additionalInternetLines" :key="line.id" class="p-3 border rounded-lg bg-blue-50 border-blue-200 space-y-2">  
                                     <div class="flex-1">
                                         <div class="flex justify-between items-center mb-1">
                                             <label class="block text-xs font-medium text-gray-500">Línea Adicional {{ index + 1 }}</label>
@@ -464,7 +551,7 @@ watch(isCentralitaActive, (isActive) => {
                                              </span>
                                          </label>
                                     </div>
-                                   </div>
+                                    </div>
                                 <PrimaryButton @click="addInternetLine" type="button" class="w-full justify-center">Añadir Internet</PrimaryButton>
                             </div>
                         </div>
@@ -546,11 +633,11 @@ watch(isCentralitaActive, (isActive) => {
                                     </div>
                                 </div>
                             </div>
-                         </div>
+                        </div>
                          <div class="flex justify-center pt-4">
                              <PrimaryButton @click="addLine" type="button">Añadir Línea Móvil Adicional</PrimaryButton>
                          </div>
-                     </div>
+                    </div>
 
                     <div v-if="selectedPackage" class="mt-10 flex justify-center">
                         <PrimaryButton @click="saveOffer" :disabled="form.processing">
@@ -616,9 +703,9 @@ watch(isCentralitaActive, (isActive) => {
                              </div>
                          </div>
                      </div>
-                 </div>
-             </div>
+                </div>
+            </div>
 
-         </div>
+        </div>
      </AuthenticatedLayout>
- </template>
+</template>

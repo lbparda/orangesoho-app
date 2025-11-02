@@ -15,7 +15,7 @@ class Package extends Model
     {
         return $this->belongsToMany(Terminal::class, 'package_terminal')
             // MODIFICACIÓN CRÍTICA: Se añade 'id' para que el guardado funcione
-            ->withPivot('id', 'initial_cost', 'monthly_cost', 'duration_months','included_line_commission', 'additional_line_commission')
+            ->withPivot('id', 'initial_cost', 'monthly_cost', 'duration_months','included_line_commission', 'additional_line_commission','initial_cost_discount','monthly_cost_discount')
             ->withTimestamps();
     }
     public function addons(): BelongsToMany

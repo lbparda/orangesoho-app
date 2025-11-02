@@ -41,6 +41,13 @@ const createNewLine = (isExtra = false) => ({
     o2o_discount_id: null, selected_brand: null, selected_model_id: null,
     selected_duration: null, terminal_pivot: null, package_terminal_id: null, // Añadido package_terminal_id
     initial_cost: 0, monthly_cost: 0,
+    // --- LÍNEAS AÑADIDAS ---
+    // Guardamos los valores originales para el cálculo de comisiones
+    original_initial_cost: 0,
+    original_monthly_cost: 0,
+    initial_cost_discount: 0,
+    monthly_cost_discount: 0,
+    // --- FIN LÍNEAS AÑADIDAS ---
 });
 
 const form = useForm({
@@ -104,13 +111,44 @@ const { calculationSummary } = useOfferCalculations(
 const modelsByBrand = (brand) => availableTerminals.value.filter(t => t.brand === brand).filter((v, i, a) => a.findIndex(t => t.model === v.model) === i);
 // Ahora usamos pivot.id (que viene de package_terminal.id)
 const findTerminalPivot = (line) => availableTerminals.value.find(t => t.id === line.selected_model_id && t.pivot.duration_months === line.selected_duration)?.pivot;
+
+// --- FUNCIÓN 'assignTerminalPrices' MODIFICADA ---
 const assignTerminalPrices = (line) => {
     const pivot = findTerminalPivot(line);
-    line.initial_cost = parseFloat(pivot?.initial_cost || 0);
-    line.monthly_cost = parseFloat(pivot?.monthly_cost || 0);
+
+    // 1. Obtenemos todos los valores del pivot
+    const originalInitial = parseFloat(pivot?.initial_cost || 0);
+    const originalMonthly = parseFloat(pivot?.monthly_cost || 0);
+    const initialDiscount = parseFloat(pivot?.initial_cost_discount || 0);
+    const monthlyDiscount = parseFloat(pivot?.monthly_cost_discount || 0);
+
+    // 2. Guardamos los valores originales y de descuento en la línea (para el cálculo de comisiones)
+    line.original_initial_cost = originalInitial;
+    line.original_monthly_cost = originalMonthly;
+    line.initial_cost_discount = initialDiscount;
+    line.monthly_cost_discount = monthlyDiscount;
+
+    // --- INICIO DE LA MODIFICACIÓN ---
+    // Buscamos el índice de la línea actual
+    const lineIndex = lines.value.findIndex(l => l.id === line.id);
+
+    // 3. Aplicamos el descuento SÓLO a la PRIMERA línea (index 0)
+    if (lineIndex === 0) {
+        // Estos son los v-model de los inputs, así que se actualizarán
+        line.initial_cost = originalInitial - initialDiscount;
+        line.monthly_cost = originalMonthly - monthlyDiscount;
+    } else {
+        // Todas las demás líneas (principales o extras) usan el precio normal
+        line.initial_cost = originalInitial;
+        line.monthly_cost = originalMonthly;
+    }
+    // --- FIN DE LA MODIFICACIÓN ---
+
+    // 4. Asignamos el resto de datos
     line.terminal_pivot = pivot;
     line.package_terminal_id = pivot?.id || null; // Guardamos el ID de la tabla pivote
 };
+// --- FIN FUNCIÓN MODIFICADA ---
 
 // --- INICIO CÓDIGO CORREGIDO ---
 const addLine = () => {
@@ -193,7 +231,12 @@ const saveOffer = () => {
             is_extra: line.is_extra, is_portability: line.is_portability, phone_number: line.phone_number,
             source_operator: line.source_operator, has_vap: line.has_vap, o2o_discount_id: line.o2o_discount_id,
             terminal_pivot_id: line.package_terminal_id, // Enviamos el ID del pivot
-            initial_cost: line.initial_cost, monthly_cost: line.monthly_cost,
+            initial_cost: line.initial_cost, // Este valor ya está descontado si es línea principal
+            monthly_cost: line.monthly_cost, // Este valor ya está descontado si es línea principal
+            // --- LÍNEAS AÑADIDAS (para guardar en la BBDD) ---
+            initial_cost_discount: line.initial_cost_discount,
+            monthly_cost_discount: line.monthly_cost_discount,
+            // --- FIN LÍNEAS AÑADIDAS ---
         }));
         form.internet_addon_id = selectedInternetAddonId.value;
         // --- INICIO CÓDIGO MODIFICADO: Enviar has_ip_fija y centralita ---
@@ -423,35 +466,35 @@ watch(isCentralitaActive, (isActive) => {
 
                             <div class="space-y-4 p-6 bg-slate-50 rounded-lg h-full">
                                 <h3 class="text-lg font-semibold text-gray-800">6. Internet Adicional</h3>
-                                <div v-for="(line, index) in additionalInternetLines" :key="line.id" class="p-3 border rounded-lg bg-blue-50 border-blue-200 space-y-2">  <div class="flex-1">
-                                        <div class="flex justify-between items-center mb-1">
-                                            <label class="block text-xs font-medium text-gray-500">Línea Adicional {{ index + 1 }}</label>
-                                            <button @click="removeInternetLine(index)" type="button" class="text-red-500 hover:text-red-700"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
-                                        </div>
-                                        <select v-model="line.addon_id" class="block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-indigo-500 focus:ring-indigo-500">
-                                            <option :value="null" disabled>-- Selecciona --</option>
-                                            <option v-for="addon in additionalInternetAddons" :key="addon.id" :value="addon.id">{{ addon.name }} (+{{ parseFloat(addon.price).toFixed(2) }}€)</option>
-                                        </select>
+                                <div v-for="(line, index) in additionalInternetLines" :key="line.id" class="p-3 border rounded-lg bg-blue-50 border-blue-200 space-y-2">  <div class="flex-1">
+                                    <div class="flex justify-between items-center mb-1">
+                                        <label class="block text-xs font-medium text-gray-500">Línea Adicional {{ index + 1 }}</label>
+                                        <button @click="removeInternetLine(index)" type="button" class="text-red-500 hover:text-red-700"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
                                     </div>
+                                    <select v-model="line.addon_id" class="block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                        <option :value="null" disabled>-- Selecciona --</option>
+                                        <option v-for="addon in additionalInternetAddons" :key="addon.id" :value="addon.id">{{ addon.name }} (+{{ parseFloat(addon.price).toFixed(2) }}€)</option>
+                                    </select>
+                                </div>
 
-                                    <div v-if="line.addon_id && centralitaAddonOptions.length > 0">
-                                         <label :for="`multi_centralita_${line.id}`" class="block text-xs font-medium text-gray-500">Centralita Multisede</label>
-                                         <select v-model="line.selected_centralita_id" :id="`multi_centralita_${line.id}`" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-indigo-500 focus:ring-indigo-500">
-                                             <option :value="null">-- Sin Centralita Multisede --</option>
-                                             <option v-for="centralita in centralitaAddonOptions" :key="centralita.id" :value="centralita.id">
-                                                 {{ centralita.name }} (+{{ parseFloat(centralita.pivot.price).toFixed(2) }}€)
-                                             </option>
-                                         </select>
-                                    </div>
-                                    <div v-if="line.addon_id && props.fiberFeatures && props.fiberFeatures.length > 0">
-                                         <label class="flex items-center">
-                                             <Checkbox v-model:checked="line.has_ip_fija" />
-                                             <span class="ml-2 text-xs text-gray-600">
-                                                 Añadir IP Fija (+{{ props.fiberFeatures[0].price }}€)
-                                             </span>
-                                         </label>
-                                    </div>
-                                    </div>
+                                <div v-if="line.addon_id && centralitaAddonOptions.length > 0">
+                                     <label :for="`multi_centralita_${line.id}`" class="block text-xs font-medium text-gray-500">Centralita Multisede</label>
+                                     <select v-model="line.selected_centralita_id" :id="`multi_centralita_${line.id}`" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                         <option :value="null">-- Sin Centralita Multisede --</option>
+                                         <option v-for="centralita in centralitaAddonOptions" :key="centralita.id" :value="centralita.id">
+                                             {{ centralita.name }} (+{{ parseFloat(centralita.pivot.price).toFixed(2) }}€)
+                                         </option>
+                                     </select>
+                                </div>
+                                <div v-if="line.addon_id && props.fiberFeatures && props.fiberFeatures.length > 0">
+                                     <label class="flex items-center">
+                                         <Checkbox v-model:checked="line.has_ip_fija" />
+                                         <span class="ml-2 text-xs text-gray-600">
+                                             Añadir IP Fija (+{{ props.fiberFeatures[0].price }}€)
+                                         </span>
+                                     </label>
+                                </div>
+                                </div>
                                 <PrimaryButton @click="addInternetLine" type="button" class="w-full justify-center">Añadir Internet</PrimaryButton>
                             </div>
                         </div>
@@ -536,7 +579,7 @@ watch(isCentralitaActive, (isActive) => {
                                    </div>
                                </div>
                            </div>
-                         </div>
+                       </div>
                         <div class="flex justify-center pt-4">
                             <PrimaryButton @click="addLine" type="button">Añadir Línea Móvil Adicional</PrimaryButton>
                         </div>
@@ -606,9 +649,10 @@ watch(isCentralitaActive, (isActive) => {
                              </div>
                          </div>
                      </div>
-                 </div>
-             </div>
+                </div>
+            </div>
 
-         </div>
+        </div>
      </AuthenticatedLayout>
- </template>
+</template>
+

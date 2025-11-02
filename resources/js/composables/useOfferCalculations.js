@@ -27,9 +27,9 @@ export function useOfferCalculations(
         return internetAddonOptions.value.find(a => a.id === selectedInternetAddonId.value);
     });
     const tvAddonOptions = computed(() => { // Necesario para cálculo TV
-       if (!selectedPackage.value?.addons) return [];
-       return selectedPackage.value.addons.filter(a => a.type === 'tv');
-     });
+        if (!selectedPackage.value?.addons) return [];
+        return selectedPackage.value.addons.filter(a => a.type === 'tv');
+    });
     const centralitaAddonOptions = computed(() => { // Necesario para cálculo Centralita
         if (!selectedPackage.value?.addons) return [];
         return selectedPackage.value.addons.filter(a => a.type === 'centralita' && !a.pivot.is_included);
@@ -42,12 +42,12 @@ export function useOfferCalculations(
         return !!includedCentralita.value || !!selectedCentralitaId.value;
     });
     const autoIncludedExtension = computed(() => { // Necesario para cálculo Extensiones
-       if (!selectedCentralitaId.value) return null;
-       const selectedCentralita = centralitaAddonOptions.value.find(c => c.id === selectedCentralitaId.value);
-       if (!selectedCentralita) return null;
-       const centralitaType = selectedCentralita.name.split(' ')[1];
-       if (!centralitaType) return null;
-       return props.centralitaExtensions.find(ext => ext.name.includes(centralitaType));
+        if (!selectedCentralitaId.value) return null;
+        const selectedCentralita = centralitaAddonOptions.value.find(c => c.id === selectedCentralitaId.value);
+        if (!selectedCentralita) return null;
+        const centralitaType = selectedCentralita.name.split(' ')[1];
+        if (!centralitaType) return null;
+        return props.centralitaExtensions.find(ext => ext.name.includes(centralitaType));
     });
     const includedCentralitaExtensions = computed(() => { // Necesario para cálculo Extensiones
         if (!isCentralitaActive.value || !selectedPackage.value?.addons) return [];
@@ -59,13 +59,13 @@ export function useOfferCalculations(
         if (!selectedPackage.value?.addons) return null;
         return selectedPackage.value.addons.find(a => a.type === 'centralita_feature');
     });
-      const mobileAddonInfo = computed(() => { // Necesario para cálculo Líneas Móviles
-       if (!selectedPackage.value?.addons) return null;
-       return selectedPackage.value.addons.find(a => a.type === 'mobile_line');
+    const mobileAddonInfo = computed(() => { // Necesario para cálculo Líneas Móviles
+        if (!selectedPackage.value?.addons) return null;
+        return selectedPackage.value.addons.find(a => a.type === 'mobile_line');
     });
-      const availableO2oDiscounts = computed(() => { // Necesario para cálculo O2O
-       if (!selectedPackage.value) return [];
-       return selectedPackage.value.o2o_discounts || [];
+    const availableO2oDiscounts = computed(() => { // Necesario para cálculo O2O
+        if (!selectedPackage.value) return [];
+        return selectedPackage.value.o2o_discounts || [];
     });
 
     // --- Computed para IP Fija (Addon principal) ---
@@ -98,15 +98,15 @@ export function useOfferCalculations(
         });
 
         // console.clear(); // Limpia la consola en cada recálculo - Puedes descomentar si quieres
-        console.log("===== INICIO DEBUG DESCUENTOS =====");
-        console.log(`Paquete: ${packageName}`);
-        console.log(`Línea Principal:`, { is_portability: principalLine.is_portability, has_vap: principalLine.has_vap, source_operator: principalLine.source_operator });
-        console.log(`¿Tiene TV Bares?: ${hasTVBares}`);
-        console.log("-------------------------------------");
+        // console.log("===== INICIO DEBUG DESCUENTOS =====");
+        // console.log(`Paquete: ${packageName}`);
+        // console.log(`Línea Principal:`, { is_portability: principalLine.is_portability, has_vap: principalLine.has_vap, source_operator: principalLine.source_operator });
+        // console.log(`¿Tiene TV Bares?: ${hasTVBares}`);
+        // console.log("-------------------------------------");
 
         // 1. Si se ha contratado TV Bares
         if (hasTVBares) {
-            console.log("Modo: TV BARES. Buscando descuento prioritario...");
+            // console.log("Modo: TV BARES. Buscando descuento prioritario...");
             const matchingTvDiscount = props.discounts.find(d => {
                 const conditions = d.conditions;
                 if (!conditions.requires_tv_bares) return false;
@@ -116,67 +116,67 @@ export function useOfferCalculations(
                 const vapMatch = conditions.requires_vap === principalLine.has_vap;
 
                 if(packageMatch && portabilityMatch && vapMatch) {
-                    console.log(`%c[MATCH] ${d.name}`, "color: green; font-weight: bold;");
+                    // console.log(`%c[MATCH] ${d.name}`, "color: green; font-weight: bold;");
                     return true;
                 }
                 return false;
             });
-            console.log("===== FIN DEBUG =====");
+            // console.log("===== FIN DEBUG =====");
             return matchingTvDiscount || null;
         }
 
         // 2. Si NO se ha contratado TV Bares
         else {
-            console.log("Modo: GENERAL. Buscando descuentos aplicables...");
+            // console.log("Modo: GENERAL. Buscando descuentos aplicables...");
             const applicableGeneralDiscounts = props.discounts.filter(d => {
                 const conditions = d.conditions;
-                console.log(`\nEvaluando: "${d.name}"`);
+                // console.log(`\nEvaluando: "${d.name}"`);
 
                 if (conditions.requires_tv_bares) {
-                    console.log(` -> DESCARTADO: Es para TV Bares.`);
+                    // console.log(` -> DESCARTADO: Es para TV Bares.`);
                     return false;
                 }
                 if (!conditions.package_names || !conditions.package_names.includes(packageName)) {
-                    console.log(` -> DESCARTADO: No aplica a este paquete.`);
+                    // console.log(` -> DESCARTADO: No aplica a este paquete.`);
                     return false;
                 }
 
                 if (conditions.hasOwnProperty('requires_vap') && conditions.requires_vap !== principalLine.has_vap) {
-                    console.log(` -> DESCARTADO: Condición de VAP no cumplida (Req: ${conditions.requires_vap}, Tiene: ${principalLine.has_vap})`);
+                    // console.log(` -> DESCARTADO: Condición de VAP no cumplida (Req: ${conditions.requires_vap}, Tiene: ${principalLine.has_vap})`);
                     return false;
                 }
 
                 if (conditions.hasOwnProperty('requires_portability') && conditions.requires_portability !== principalLine.is_portability) {
-                    console.log(` -> DESCARTADO: Condición de Portabilidad no cumplida (Req: ${conditions.requires_portability}, Es: ${principalLine.is_portability})`);
+                    // console.log(` -> DESCARTADO: Condición de Portabilidad no cumplida (Req: ${conditions.requires_portability}, Es: ${principalLine.is_portability})`);
                     return false;
                 }
 
                 // --- INICIO CÓDIGO RESTAURADO ---
                 if (conditions.hasOwnProperty('source_operators') && conditions.source_operators && !conditions.source_operators.includes(principalLine.source_operator)) {
-                    console.log(` -> DESCARTADO: Operador de origen no permitido (Req: ${conditions.source_operators.join(', ')}, Viene de: ${principalLine.source_operator})`);
+                    // console.log(` -> DESCARTADO: Operador de origen no permitido (Req: ${conditions.source_operators.join(', ')}, Viene de: ${principalLine.source_operator})`);
                     return false;
                 }
 
                 if (conditions.hasOwnProperty('excluded_operators') && conditions.excluded_operators && conditions.excluded_operators.includes(principalLine.source_operator)) {
-                    console.log(` -> DESCARTADO: Operador de origen EXCLUIDO (Excluye: ${conditions.excluded_operators.join(', ')}, Viene de: ${principalLine.source_operator})`);
+                    // console.log(` -> DESCARTADO: Operador de origen EXCLUIDO (Excluye: ${conditions.excluded_operators.join(', ')}, Viene de: ${principalLine.source_operator})`);
                     return false;
                 }
                 // --- FIN CÓDIGO RESTAURADO ---
 
 
-                console.log(` -> CUMPLE TODAS LAS CONDICIONES`);
+                // console.log(` -> CUMPLE TODAS LAS CONDICIONES`);
                 return true;
             });
 
             if (applicableGeneralDiscounts.length > 0) {
-                console.log("\nDescuentos aplicables encontrados:", applicableGeneralDiscounts.map(d => d.name));
+                // console.log("\nDescuentos aplicables encontrados:", applicableGeneralDiscounts.map(d => d.name));
                 const bestDiscount = applicableGeneralDiscounts.sort((a, b) => b.percentage - a.percentage)[0];
-                console.log(`%c[SELECCIONADO] El mejor es: ${bestDiscount.name} (${bestDiscount.percentage}%)`, "color: blue; font-weight: bold;");
-                console.log("===== FIN DEBUG =====");
+                // console.log(`%c[SELECCIONADO] El mejor es: ${bestDiscount.name} (${bestDiscount.percentage}%)`, "color: blue; font-weight: bold;");
+                // console.log("===== FIN DEBUG =====");
                 return bestDiscount;
             } else {
-                console.log("\nNo se encontraron descuentos aplicables.");
-                console.log("===== FIN DEBUG =====");
+                // console.log("\nNo se encontraron descuentos aplicables.");
+                // console.log("===== FIN DEBUG =====");
             }
         }
 
@@ -316,7 +316,7 @@ export function useOfferCalculations(
 
         if (includedCentralita.value) {
             // 1. Obtenemos la comisión normal
-            const commission = parseFloat(includedCentralita.value.pivot.included_line_commission) || 0;
+            const commission = parseFloat(includedCentralita.value.pivot.included_line_commission) || 0;
             
             // 2. Obtenemos la NUEVA decomisión (que vendrá en negativo)
             const decommission = parseFloat(includedCentralita.value.pivot.included_line_decommission) || 0; // <-- ¡AQUÍ!
@@ -324,8 +324,8 @@ export function useOfferCalculations(
             // 3. Los sumamos para obtener el total
             const totalAmount = commission + decommission;
 
-  //_MODIFIED       
-             commissionDetails.Centralita.push({ 
+    //_MODIFIED 
+            commissionDetails.Centralita.push({ 
                 description: `Centralita Incluida (${includedCentralita.value.name})`, 
                 amount: totalAmount // <-- Usamos el total
             });
@@ -399,8 +399,27 @@ export function useOfferCalculations(
 
             lines.value.forEach((line, index) => {
                 const lineName = index === 0 ? 'Línea Principal' : `Línea Adicional ${index+1}`;
-                totalTerminalFee += parseFloat(line.monthly_cost || 0);
-                totalInitialPayment += parseFloat(line.initial_cost || 0);
+                
+                // --- INICIO DE LA MODIFICACIÓN (Lógica de descuento eliminada) ---
+                
+                // Los valores de 'line' ya vienen descontados desde Create/Edit.vue
+                let initialCost = parseFloat(line.initial_cost || 0);
+                let monthlyCost = parseFloat(line.monthly_cost || 0);
+
+                // --- MANTENEMOS EL DEBUGGING PERO LO ADAPTAMOS ---
+                console.log(`[Calculo Línea ${index}]`, line);
+                console.log(`  -> Costes YA DESCONTADOS (v-model): Inicial=${initialCost}, Mensual=${monthlyCost}`);
+                if (index === 0 && line.terminal_pivot) {
+                    console.log(`  -> (Línea Principal con terminal)`);
+                    console.log(`  -> Descuentos Leídos: Inicial=${line.initial_cost_discount}, Mensual=${line.monthly_cost_discount}`);
+                    console.log(`  -> Costes Originales (para comisión): Inicial=${line.original_initial_cost}, Mensual=${line.original_monthly_cost}`);
+                }
+                // --- FIN DEBUGGING ---
+
+                // La resta ya no se hace aquí. Simplemente sumamos los valores que ya vienen descontados.
+                totalTerminalFee += monthlyCost;
+                totalInitialPayment += initialCost;
+                // --- FIN DE LA MODIFICACIÓN ---
 
                 if (line.is_extra) {
                     extraLinesCounter++;
@@ -423,7 +442,15 @@ export function useOfferCalculations(
                 }
 
                 if (line.terminal_pivot && line.selected_duration) {
-                    const terminalTotalPrice = (parseFloat(line.initial_cost) || 0) + (parseFloat(line.monthly_cost || 0) * parseInt(line.selected_duration, 10));
+                    // --- INICIO DE LA MODIFICACIÓN (Cálculo de Comisión) ---
+                    // La comisión se calcula sobre el precio ORIGINAL, no el descontado
+                    const terminalTotalPrice = (parseFloat(line.original_initial_cost) || 0) + (parseFloat(line.original_monthly_cost || 0) * parseInt(line.selected_duration, 10));
+                    
+                    // --- DEBUGGING PARA COMISIÓN ---
+                    console.log(`  -> Cálculo Comisión (Línea ${index}): Precio Total Original = ${terminalTotalPrice}`);
+                    // --- FIN DEBUGGING ---
+
+                    // --- FIN DE LA MODIFICACIÓN ---
                     let terminalCommission = 0;
                     if (terminalTotalPrice < 40) terminalCommission = 15;
                     else if (terminalTotalPrice >= 40 && terminalTotalPrice < 350) terminalCommission = 45;
@@ -449,9 +476,14 @@ export function useOfferCalculations(
         }
 
         price += totalTerminalFee;
-        if(totalTerminalFee > 0) {
+        
+        // --- INICIO DE LA MODIFICACIÓN (Bug de Resumen) ---
+        // El total puede ser negativo si hay un descuento, así que usamos '!=' en lugar de '>'
+        if(totalTerminalFee !== 0) { 
             summaryBreakdown.push({ description: 'Cuotas mensuales de Terminales', price: totalTerminalFee });
         }
+        // --- FIN DE LA MODIFICACIÓN ---
+        
         price += extraLinesCost; // Este ya estaba
 
         Object.keys(commissionDetails).forEach(key => {
@@ -504,3 +536,4 @@ export function useOfferCalculations(
         calculationSummary,
     };
 }
+

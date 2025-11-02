@@ -40,6 +40,8 @@ class ImportController extends Controller
                     $duration_months = $row[3] ?? null; // Columna D
                     $initial_cost    = $row[5] ?? 0;   // Columna F
                     $monthly_cost    = $row[6] ?? 0;   // Columna G
+                    $initial_cost_discount = $row[7] ?? 0;   // Columna F
+                    $monthly_cost_discount    = $row[8] ?? 0;   // Columna G
 
                     if (empty($brand) || empty($model) || !is_numeric($duration_months)) {
                         continue;
@@ -57,6 +59,8 @@ class ImportController extends Controller
                         'duration_months' => $duration_months,
                         'initial_cost'    => is_numeric($initial_cost) ? $initial_cost : 0,
                         'monthly_cost'    => is_numeric($monthly_cost) ? $monthly_cost : 0,
+                        'initial_cost_discount' => is_numeric($initial_cost_discount) ? $initial_cost_discount : 0,
+                        'monthly_cost_discount' => is_numeric($monthly_cost_discount) ? $monthly_cost_discount : 0,
                         'created_at'      => now(),
                         'updated_at'      => now(),
                     ];
@@ -69,7 +73,7 @@ class ImportController extends Controller
                     DB::table('package_terminal')->upsert(
                         $dataToUpsert,
                         ['package_id', 'terminal_id', 'duration_months'], // La clave única para identificar duplicados
-                        ['initial_cost', 'monthly_cost', 'updated_at']   // Las columnas a actualizar si se encuentra un duplicado
+                        ['initial_cost', 'monthly_cost','initial_cost_discount', 'monthly_cost_discount',  'updated_at']   // Las columnas a actualizar si se encuentra un duplicado
                     );
                 }
             }
