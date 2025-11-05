@@ -10,6 +10,7 @@ use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\TeamController;
 // --- INICIO: IMPORTACIÓN AÑADIDA ---
 use App\Http\Controllers\Admin\PackageController; 
+use App\Http\Controllers\Admin\DiscountController;
 // --- FIN: IMPORTACIÓN AÑADIDA ---
 use App\Http\Controllers\TeamLead\ManagementController;
 use App\Http\Controllers\ClientController;
@@ -66,6 +67,9 @@ Route::prefix('admin')
         Route::get('packages/{package}/edit', [PackageController::class, 'edit'])->name('packages.edit');
         Route::put('packages/{package}', [PackageController::class, 'update'])->name('packages.update');
         // --- FIN: RUTAS DE PAQUETES AÑADIDAS ---
+        // Rutas para Descuentos (simplificadas)
+        Route::resource('discounts', DiscountController::class)->only(['index', 'edit', 'update']); // <-- AÑADIR ESTA LÍNEA
+        // --- FIN: RUTAS AÑADIDAS ---
 });
 
 // --- GRUPO DE RUTAS DE JEFE DE EQUIPO (Fusionado) ---

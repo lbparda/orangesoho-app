@@ -57,6 +57,9 @@ const showingNavigationDropdown = ref(false);
                                                 <!-- INICIO: LÍNEA AÑADIDA -->
                                                 <DropdownLink :href="route('admin.packages.index')"> Gestionar Paquetes </DropdownLink>
                                                 <!-- FIN: LÍNEA AÑADIDA -->
+                                                 <!-- INICIO: LÍNEA AÑADIDA -->
+                                                <DropdownLink :href="route('admin.discounts.index')"> Gestionar Descuentos </DropdownLink>
+                                                <!-- FIN: LÍNEA AÑADIDA -->
                                             </template>
                                         </Dropdown>
                                     </div>
@@ -114,6 +117,9 @@ const showingNavigationDropdown = ref(false);
                             <ResponsiveNavLink :href="route('terminals.import.create')"> Importar Terminales </ResponsiveNavLink>
                             <!-- INICIO: LÍNEA AÑADIDA -->
                             <ResponsiveNavLink :href="route('admin.packages.index')"> Gestionar Paquetes </ResponsiveNavLink>
+                            <!-- FIN: LÍNEA AÑADIDA -->
+                             <!-- INICIO: LÍNEA AÑADIDA -->
+                            <ResponsiveNavLink :href="route('admin.discounts.index')"> Gestionar Descuentos </ResponsiveNavLink>
                             <!-- FIN: LÍNEA AÑADIDA -->
                         </div>
                     </div>
