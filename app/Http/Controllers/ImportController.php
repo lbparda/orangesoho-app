@@ -5,7 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\Package;
 use App\Models\Terminal;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB; // <-- AÑADIR ESTE IMPORT
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log; // <-- ¡AÑADIDO PARA DEBUGGING!
 use Inertia\Inertia;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 
@@ -18,21 +19,42 @@ class ImportController extends Controller
 
     public function store(Request $request)
     {
+        // Opcional, pero recomendado: Aumentar los límites de tiempo/memoria temporalmente
+        // ini_set('max_execution_time', 300); // 5 minutos
+        // ini_set('memory_limit', '512M');    // 512 MB
+
+        Log::info('--- INICIO DE IMPORTACIÓN DE TERMINALES ---');
+
         $request->validate(['terminals_file' => 'required|mimes:xlsx,xls,xlsm']);
         $file = $request->file('terminals_file');
 
         try {
             $spreadsheet = IOFactory::load($file->getRealPath());
+            $sheetNames = $spreadsheet->getSheetNames();
+            Log::info('Hojas encontradas: ' . implode(', ', $sheetNames));
 
-            foreach ($spreadsheet->getSheetNames() as $sheetName) {
-                $package = Package::where('name', trim($sheetName))->first();
-                if (!$package) continue;
+            foreach ($sheetNames as $sheetName) {
+                $trimmedSheetName = trim($sheetName);
+                Log::info("Intentando procesar hoja: '{$trimmedSheetName}'");
+
+                $package = Package::where('name', $trimmedSheetName)->first();
+                
+                if (!$package) {
+                    Log::warning("Hoja ignorada: '{$trimmedSheetName}' (No coincide con ninguna tarifa/package)");
+                    continue;
+                }
+                
+                Log::info("Hoja válida: '{$trimmedSheetName}'. ID del paquete: {$package->id}");
 
                 $worksheet = $spreadsheet->getSheetByName($sheetName);
                 $rows = $worksheet->toArray();
-                $terminalRows = array_slice($rows, 2);
+                $terminalRows = array_slice($rows, 2); // Excluir las dos primeras filas (cabeceras)
+
+                Log::info("Total de filas de datos a procesar en '{$trimmedSheetName}': " . count($terminalRows));
 
                 $dataToUpsert = [];
+                $validRowsCount = 0;
+                $rowNumber = 3; // Empezamos en la fila 3 del Excel
 
                 foreach ($terminalRows as $row) {
                     $brand           = $row[0] ?? null; // Columna A
@@ -40,10 +62,12 @@ class ImportController extends Controller
                     $duration_months = $row[3] ?? null; // Columna D
                     $initial_cost    = $row[5] ?? 0;   // Columna F
                     $monthly_cost    = $row[6] ?? 0;   // Columna G
-                    $initial_cost_discount = $row[7] ?? 0;   // Columna F
-                    $monthly_cost_discount    = $row[8] ?? 0;   // Columna G
+                    $initial_cost_discount = $row[7] ?? 0;   // Columna H
+                    $monthly_cost_discount = $row[8] ?? 0;   // Columna I
 
                     if (empty($brand) || empty($model) || !is_numeric($duration_months)) {
+                        // Log::debug("Fila {$rowNumber} ignorada por datos inválidos.");
+                        $rowNumber++;
                         continue;
                     }
 
@@ -64,20 +88,29 @@ class ImportController extends Controller
                         'created_at'      => now(),
                         'updated_at'      => now(),
                     ];
+                    $validRowsCount++;
+                    $rowNumber++;
                 }
 
-                // --- LÓGICA CORREGIDA Y DEFINITIVA ---
-                // 'upsert' inserta o actualiza múltiples filas de una sola vez.
-                // Lo hará basado en la clave única (paquete, terminal, meses).
+                Log::info("Total de registros listos para 'upsert' para '{$trimmedSheetName}': {$validRowsCount}");
+
                 if (!empty($dataToUpsert)) {
                     DB::table('package_terminal')->upsert(
                         $dataToUpsert,
-                        ['package_id', 'terminal_id', 'duration_months'], // La clave única para identificar duplicados
-                        ['initial_cost', 'monthly_cost','initial_cost_discount', 'monthly_cost_discount',  'updated_at']   // Las columnas a actualizar si se encuentra un duplicado
+                        ['package_id', 'terminal_id', 'duration_months'],
+                        ['initial_cost', 'monthly_cost','initial_cost_discount', 'monthly_cost_discount',  'updated_at']
                     );
+                    Log::info("UPSERT completado para '{$trimmedSheetName}'.");
                 }
             }
+            
+            Log::info('--- FINALIZACIÓN EXITOSA DE IMPORTACIÓN DE TERMINALES ---');
+
         } catch (\Exception $e) {
+            Log::error('ERROR FATAL DE IMPORTACIÓN: ' . $e->getMessage(), [
+                'file' => $e->getFile(), 
+                'line' => $e->getLine()
+            ]);
             return redirect()->back()->with('error', 'Error: ' . $e->getMessage() . ' en la línea ' . $e->getLine());
         }
         

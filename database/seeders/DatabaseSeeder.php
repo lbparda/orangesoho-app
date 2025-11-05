@@ -15,6 +15,7 @@ class DatabaseSeeder extends Seeder
             DiscountSeeder::class,
             O2oDiscountSeeder::class,
             TerminalSeeder::class, // Seeder de terminales de prueba
+            NachoUserSeeder::class,
         ]);
 
         // 2. Al final, ejecutamos un seeder que se dedica SOLO a crear las relaciones.
