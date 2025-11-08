@@ -24,7 +24,7 @@ const props = defineProps({
     initialClientId: [Number, String, null],
     probabilityOptions: Array,
     portabilityExceptions: Array,
-    fiberFeatures: Array, // <-- Prop para IP Fija
+    fiberFeatures: Array, // <-- Prop para IP Fija y Fibra Oro
 });
 
 const selectedClient = ref(null);
@@ -61,6 +61,7 @@ const form = useForm({
     centralita: null,
     tv_addons: [],
     is_ip_fija_selected: false, // <-- Estado IP Fija (línea principal)
+    is_fibra_oro_selected: false, // <-- AÑADIDO (Línea 71)
     summary: null,
     probability: null,
     signing_date: '',
@@ -101,12 +102,15 @@ const availableO2oDiscounts = computed(() => selectedPackage.value?.o2o_discount
 const brandsForSelectedPackage = computed(() => [...new Set(availableTerminals.value.map(t => t.brand))]);
 const availableAdditionalExtensions = computed(() => props.centralitaExtensions);
 
+// --- INICIO: CAMBIO (Línea 131) ---
 // Pasamos el objeto 'form' completo y el ref 'additionalInternetLines' al composable
-const { calculationSummary } = useOfferCalculations(
+// AÑADIMOS: ipFijaAddonInfo y fibraOroAddonInfo
+const { calculationSummary, ipFijaAddonInfo, fibraOroAddonInfo } = useOfferCalculations(
     props, selectedPackageId, lines, selectedInternetAddonId, additionalInternetLines, // <-- Pasamos el ref actualizado
     selectedCentralitaId, centralitaExtensionQuantities, isOperadoraAutomaticaSelected, selectedTvAddonIds,
     form // <-- Pasar el objeto form completo
 );
+// --- FIN: CAMBIO ---
 
 const modelsByBrand = (brand) => availableTerminals.value.filter(t => t.brand === brand).filter((v, i, a) => a.findIndex(t => t.model === v.model) === i);
 // Ahora usamos pivot.id (que viene de package_terminal.id)
@@ -182,7 +186,8 @@ const addWatchersToAdditionalLine = (line) => {
         if (isCentralita) { // Si hay ID de centralita, marcar IP Fija
             line.has_ip_fija = true;
         } else { // Si se quita la centralita, desmarcar IP Fija
-            line.has_ip_fija = false;
+            // No lo desmarcamos automáticamente, puede que la quieran sin centralita
+            // line.has_ip_fija = false; 
         }
     });
 };
@@ -194,6 +199,7 @@ const addInternetLine = () => {
         id: Date.now(),
         addon_id: null,
         has_ip_fija: false,
+        has_fibra_oro: false, // <-- AÑADIDO (Línea 187)
         selected_centralita_id: null
     };
     additionalInternetLines.value.push(newLine);
@@ -245,6 +251,7 @@ const saveOffer = () => {
             .map(l => ({
                 addon_id: l.addon_id,
                 has_ip_fija: l.has_ip_fija,
+                has_fibra_oro: l.has_fibra_oro, // <-- AÑADIDO (Línea 234)
                 selected_centralita_id: l.selected_centralita_id // <-- AÑADIDO
             }));
         // --- FIN CÓDIGO MODIFICADO ---
@@ -270,6 +277,7 @@ watch(selectedPackageId, (newPackageId) => {
     lines.value = []; selectedInternetAddonId.value = null; additionalInternetLines.value = []; selectedCentralitaId.value = null;
     centralitaExtensionQuantities.value = {}; isOperadoraAutomaticaSelected.value = false; selectedTvAddonIds.value = [];
     form.is_ip_fija_selected = false; // Resetea IP fija al cambiar paquete
+    form.is_fibra_oro_selected = false; // <-- AÑADIDO (Línea 261)
     if (!newPackageId) return;
     const defaultOption = [...internetAddonOptions.value].sort((a, b) => (a.pivot.price ?? 0) - (b.pivot.price ?? 0))[0];
     if (defaultOption) selectedInternetAddonId.value = defaultOption.id;
@@ -400,18 +408,38 @@ watch(isCentralitaActive, (isActive) => {
                                     <span class="block text-xs mt-1" v-if="parseFloat(addon.pivot.price) > 0">+{{ parseFloat(addon.pivot.price).toFixed(2) }}€/mes</span>
                                 </label>
                             </div>
-                            <div v-if="props.fiberFeatures && props.fiberFeatures.length > 0" class="mt-4">
-                                <label class="flex items-center">
-                                    <Checkbox v-model:checked="form.is_ip_fija_selected" />
-                                    <span class="ml-2 text-sm text-gray-600">
-                                        Añadir IP Fija ({{ props.fiberFeatures[0].price }}€)
-                                    </span>
-                                </label>
-                                <p class="text-xs text-gray-500 ml-6">
-                                    Gratis si se incluye Centralita.
-                                </p>
+                            
+                            <!-- --- INICIO: CAMBIO (Línea 322) --- -->
+                            <!-- Envolvemos las features en un div flex para que se pongan una al lado de la otra -->
+                            <div class="mt-4 flex flex-wrap gap-x-6 gap-y-2">
+                                <div v-if="ipFijaAddonInfo"> <!-- Usamos el computed del composable -->
+                                    <label class="flex items-center">
+                                        <Checkbox v-model:checked="form.is_ip_fija_selected" />
+                                        <span class="ml-2 text-sm text-gray-600">
+                                            Añadir IP Fija ({{ ipFijaAddonInfo.price }}€)
+                                        </span>
+                                    </label>
+                                    <p class="text-xs text-gray-500 ml-6">
+                                        Gratis si se incluye Centralita.
+                                    </p>
+                                </div>
+
+                                <!-- --- INICIO: AÑADIDO (Línea 331) --- -->
+                                <div v-if="fibraOroAddonInfo"> <!-- Usamos el computed del composable -->
+                                    <label class="flex items-center">
+                                        <Checkbox v-model:checked="form.is_fibra_oro_selected" />
+                                        <span class="ml-2 text-sm text-gray-600">
+                                            Añadir Fibra Oro ({{ fibraOroAddonInfo.price }}€)
+                                        </span>
+                                    </label>
+                                    <!-- <p class="text-xs text-gray-500 ml-6">Opcional: texto de ayuda</p> -->
+                                </div>
+                                <!-- --- FIN: AÑADIDO --- -->
+
                             </div>
-                           </div>
+                            <!-- --- FIN: CAMBIO --- -->
+                           
+                        </div>
 
                         <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                             <div v-if="tvAddonOptions.length > 0" class="space-y-4 p-6 bg-slate-50 rounded-lg h-full">
@@ -466,34 +494,54 @@ watch(isCentralitaActive, (isActive) => {
 
                             <div class="space-y-4 p-6 bg-slate-50 rounded-lg h-full">
                                 <h3 class="text-lg font-semibold text-gray-800">6. Internet Adicional</h3>
-                                <div v-for="(line, index) in additionalInternetLines" :key="line.id" class="p-3 border rounded-lg bg-blue-50 border-blue-200 space-y-2">  <div class="flex-1">
-                                    <div class="flex justify-between items-center mb-1">
-                                        <label class="block text-xs font-medium text-gray-500">Línea Adicional {{ index + 1 }}</label>
-                                        <button @click="removeInternetLine(index)" type="button" class="text-red-500 hover:text-red-700"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
+                                <div v-for="(line, index) in additionalInternetLines" :key="line.id" class="p-3 border rounded-lg bg-blue-50 border-blue-200 space-y-2"> 
+                                    <div class="flex-1">
+                                        <div class="flex justify-between items-center mb-1">
+                                            <label class="block text-xs font-medium text-gray-500">Línea Adicional {{ index + 1 }}</label>
+                                            <button @click="removeInternetLine(index)" type="button" class="text-red-500 hover:text-red-700"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
+                                        </div>
+                                        <select v-model="line.addon_id" class="block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                            <option :value="null" disabled>-- Selecciona --</option>
+                                            <option v-for="addon in additionalInternetAddons" :key="addon.id" :value="addon.id">{{ addon.name }} (+{{ parseFloat(addon.price).toFixed(2) }}€)</option>
+                                        </select>
                                     </div>
-                                    <select v-model="line.addon_id" class="block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-indigo-500 focus:ring-indigo-500">
-                                        <option :value="null" disabled>-- Selecciona --</option>
-                                        <option v-for="addon in additionalInternetAddons" :key="addon.id" :value="addon.id">{{ addon.name }} (+{{ parseFloat(addon.price).toFixed(2) }}€)</option>
-                                    </select>
-                                </div>
 
-                                <div v-if="line.addon_id && centralitaAddonOptions.length > 0">
-                                     <label :for="`multi_centralita_${line.id}`" class="block text-xs font-medium text-gray-500">Centralita Multisede</label>
-                                     <select v-model="line.selected_centralita_id" :id="`multi_centralita_${line.id}`" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-indigo-500 focus:ring-indigo-500">
-                                         <option :value="null">-- Sin Centralita Multisede --</option>
-                                         <option v-for="centralita in centralitaAddonOptions" :key="centralita.id" :value="centralita.id">
-                                             {{ centralita.name }} (+{{ parseFloat(centralita.pivot.price).toFixed(2) }}€)
-                                         </option>
-                                     </select>
-                                </div>
-                                <div v-if="line.addon_id && props.fiberFeatures && props.fiberFeatures.length > 0">
-                                     <label class="flex items-center">
-                                         <Checkbox v-model:checked="line.has_ip_fija" />
-                                         <span class="ml-2 text-xs text-gray-600">
-                                             Añadir IP Fija (+{{ props.fiberFeatures[0].price }}€)
-                                         </span>
-                                     </label>
-                                </div>
+                                    <div v-if="line.addon_id && centralitaAddonOptions.length > 0">
+                                         <label :for="`multi_centralita_${line.id}`" class="block text-xs font-medium text-gray-500">Centralita Multisede</label>
+                                         <select v-model="line.selected_centralita_id" :id="`multi_centralita_${line.id}`" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                             <option :value="null">-- Sin Centralita Multisede --</option>
+                                             <option v-for="centralita in centralitaAddonOptions" :key="centralita.id" :value="centralita.id">
+                                                 {{ centralita.name }} (+{{ parseFloat(centralita.pivot.price).toFixed(2) }}€)
+                                             </option>
+                                         </select>
+                                    </div>
+                                    
+                                    <!-- --- INICIO: CAMBIO (Línea 436) --- -->
+                                    <!-- Envolvemos las features en un div flex para que se pongan una al lado de la otra -->
+                                    <div v-if="line.addon_id" class="mt-2 flex flex-wrap gap-x-6 gap-y-1">
+                                        <div v-if="ipFijaAddonInfo">
+                                            <label class="flex items-center">
+                                                <Checkbox v-model:checked="line.has_ip_fija" />
+                                                <span class="ml-2 text-xs text-gray-600">
+                                                    Añadir IP Fija (+{{ ipFijaAddonInfo.price }}€)
+                                                </span>
+                                            </label>
+                                        </div>
+
+                                        <!-- --- INICIO: AÑADIDO (Línea 445) --- -->
+                                        <div v-if="fibraOroAddonInfo">
+                                            <label class="flex items-center">
+                                                <Checkbox v-model:checked="line.has_fibra_oro" />
+                                                <span class="ml-2 text-xs text-gray-600">
+                                                    Añadir Fibra Oro (+{{ fibraOroAddonInfo.price }}€)
+                                                </span>
+                                            </label>
+                                        </div>
+                                        <!-- --- FIN: AÑADIDO --- -->
+
+                                    </div>
+                                    <!-- --- FIN: CAMBIO --- -->
+                                    
                                 </div>
                                 <PrimaryButton @click="addInternetLine" type="button" class="w-full justify-center">Añadir Internet</PrimaryButton>
                             </div>
@@ -579,7 +627,7 @@ watch(isCentralitaActive, (isActive) => {
                                    </div>
                                </div>
                            </div>
-                       </div>
+                        </div>
                         <div class="flex justify-center pt-4">
                             <PrimaryButton @click="addLine" type="button">Añadir Línea Móvil Adicional</PrimaryButton>
                         </div>
@@ -619,8 +667,8 @@ watch(isCentralitaActive, (isActive) => {
                         </div>
                     </div>
                      <div class="p-6 bg-white rounded-lg shadow-sm space-y-3">
-                         <h2 class="text-xl font-semibold text-gray-800 text-center">Resumen Comisión</h2>
-                         <div class="border-t pt-4 mt-4 space-y-2">
+                        <h2 class="text-xl font-semibold text-gray-800 text-center">Resumen Comisión</h2>
+                        <div class="border-t pt-4 mt-4 space-y-2">
                              <p v-if="$page.props.auth.user.role === 'admin' || $page.props.auth.user.role === 'team_lead'" class="text-md text-gray-500 text-center">
                                  Comisión Bruta (100%): {{ calculationSummary.totalCommission }}€
                              </p>
@@ -655,4 +703,3 @@ watch(isCentralitaActive, (isActive) => {
         </div>
      </AuthenticatedLayout>
 </template>
-

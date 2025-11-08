@@ -6,12 +6,14 @@ export function useOfferCalculations(
     selectedPackageId, // ref
     lines, // ref
     selectedInternetAddonId, // ref
-    additionalInternetLines, // ref <-- Ahora contiene objetos con { addon_id, has_ip_fija, selected_centralita_id }
+    // --- CAMBIO (Comentario): Añadido 'has_fibra_oro' ---
+    additionalInternetLines, // ref <-- Ahora contiene objetos con { addon_id, has_ip_fija, selected_centralita_id, has_fibra_oro }
     selectedCentralitaId, // ref
     centralitaExtensionQuantities, // ref
     isOperadoraAutomaticaSelected, // ref
     selectedTvAddonIds, // ref
-    form // <-- Recibe el objeto 'form' completo (incluye form.is_ip_fija_selected para línea principal)
+    // --- CAMBIO (Comentario): Añadido 'is_fibra_oro_selected' ---
+    form // <-- Recibe el objeto 'form' completo (incluye form.is_ip_fija_selected y form.is_fibra_oro_selected)
 ) {
 
     // --- Computeds auxiliares INTERNAS al cálculo ---
@@ -75,6 +77,13 @@ export function useOfferCalculations(
         return props.fiberFeatures.find(f => f.name === 'IP Fija'); // Más seguro buscar por nombre
     });
     // --- FIN ---
+
+    // --- INICIO: AÑADIDO PARA FIBRA ORO ---
+    const fibraOroAddonInfo = computed(() => {
+        if (!props.fiberFeatures || props.fiberFeatures.length === 0) return null;
+        return props.fiberFeatures.find(f => f.name === 'Fibra Oro');
+    });
+    // --- FIN: AÑADIDO PARA FIBRA ORO ---
 
     // =================================================================
     // =========== LÓGICA DE DESCUENTOS (VERSIÓN CON DEBUG) ============
@@ -240,6 +249,20 @@ export function useOfferCalculations(
                     }
                     // --- FIN LÓGICA MODIFICADA ---
 
+                    // --- INICIO: AÑADIDO PARA FIBRA ORO ADICIONAL ---
+                    if (line.has_fibra_oro && fibraOroAddonInfo.value) {
+                        const itemPrice = parseFloat(fibraOroAddonInfo.value.price) || 0;
+                        const commission = parseFloat(fibraOroAddonInfo.value.commission) || 0;
+                        
+                        price += itemPrice;
+                        summaryBreakdown.push({ description: `Fibra Oro Adicional ${index + 1}`, price: itemPrice });
+
+                        if (commission > 0) {
+                            commissionDetails.Fibra.push({ description: `Fibra Oro Adicional ${index + 1}`, amount: commission });
+                        }
+                    }
+                    // --- FIN: AÑADIDO PARA FIBRA ORO ADICIONAL ---
+
                     // --- INICIO CÓDIGO NUEVO: Cálculo Centralita Multisede ---
                     if (line.selected_centralita_id) {
                         const centralitaInfo = centralitaAddonOptions.value.find(c => c.id === line.selected_centralita_id);
@@ -305,6 +328,20 @@ export function useOfferCalculations(
         // --- FIN LÓGICA IP FIJA PRINCIPAL ---
         // ===================================================
 
+        // --- INICIO: AÑADIDO PARA FIBRA ORO PRINCIPAL ---
+        if (form.is_fibra_oro_selected && fibraOroAddonInfo.value) {
+            const itemPrice = parseFloat(fibraOroAddonInfo.value.price) || 0;
+            const commission = parseFloat(fibraOroAddonInfo.value.commission) || 0;
+            
+            price += itemPrice;
+            summaryBreakdown.push({ description: 'Fibra Oro Principal', price: itemPrice });
+
+            if (commission > 0) {
+                commissionDetails.Fibra.push({ description: 'Fibra Oro Principal', amount: commission });
+            }
+        }
+        // --- FIN: AÑADIDO PARA FIBRA ORO PRINCIPAL ---
+
         tvAddonOptions.value.forEach(addon => {
             if (selectedTvAddonIds.value.includes(addon.id)) {
                 const itemPrice = parseFloat(addon.pivot?.price ?? addon.price) || 0;
@@ -324,7 +361,7 @@ export function useOfferCalculations(
             // 3. Los sumamos para obtener el total
             const totalAmount = commission + decommission;
 
-    //_MODIFIED 
+        //_MODIFIED 
             commissionDetails.Centralita.push({ 
                 description: `Centralita Incluida (${includedCentralita.value.name})`, 
                 amount: totalAmount // <-- Usamos el total
@@ -469,7 +506,7 @@ export function useOfferCalculations(
                         const packageO2oPivot = selectedPackage.value?.o2o_discounts?.find(d => d.id === o2o.id)?.pivot;
                         if (packageO2oPivot && packageO2oPivot.dho_payment) {
                              commissionDetails.Ajustes.push({ description: `Ajuste DHO ${lineName}`, amount: -parseFloat(packageO2oPivot.dho_payment) });
-                         }
+                        }
                     }
                 }
             });
@@ -532,8 +569,12 @@ export function useOfferCalculations(
         };
     });
 
+    // --- INICIO: AÑADIDO (Línea 541) ---
     return {
         calculationSummary,
+        // Exponemos la info para el v-if del formulario
+        ipFijaAddonInfo, // Ya estaba
+        fibraOroAddonInfo, 
     };
+    // --- FIN: AÑADIDO ---
 }
-

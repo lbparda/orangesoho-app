@@ -87,7 +87,18 @@ const allPackageAddons = computed(() => props.offer.package?.addons || []);
 
 // Mantenemos la lógica de Show.vue (snapshot) para Internet y TV
 const baseInternetAddon = computed(() => allAddons.value.find(a => a.type === 'internet'));
-const ipFijaPrincipal = computed(() => allAddons.value.find(a => a.type === 'internet_feature'));
+
+// --- INICIO: CAMBIO (Línea 103) ---
+// Hacemos la búsqueda más específica por nombre
+const ipFijaPrincipal = computed(() => allAddons.value.find(a => 
+    a.type === 'internet_feature' && a.pivot.addon_name === 'IP Fija'
+));
+// --- AÑADIDO: 'fibraOroPrincipal' ---
+const fibraOroPrincipal = computed(() => allAddons.value.find(a => 
+    a.type === 'internet_feature' && a.pivot.addon_name === 'Fibra Oro'
+));
+// --- FIN: CAMBIO ---
+
 const additionalInternetAddons = computed(() => allAddons.value.filter(a => a.type === 'internet_additional') || []);
 const tvAddons = computed(() => allAddons.value.filter(a => a.type === 'tv' || a.type === 'tv_base' || a.type === 'tv_premium') || []);
 
@@ -145,6 +156,7 @@ const centralitasMultisede = computed(() => {
                 lineName: addon.pivot.addon_name, // <-- Leemos del Snapshot
                 centralitaName: centralitaDetails?.name || `ID ${addon.pivot.selected_centralita_id}`,
                 has_ip_fija: addon.pivot.has_ip_fija,
+                has_fibra_oro: addon.pivot.has_fibra_oro, // <-- AÑADIDO (Línea 166)
                 extensionName: includedExtension?.name || null, // Nombre de la extensión incluida
                 contractedExtensions: multiContractedExtensions // <-- AÑADIDO
             };
@@ -214,13 +226,13 @@ const openDetails = ref({
 
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 mt-6">
            <div v-if="$page.props.flash.success" class="p-4 mb-4 bg-green-100 border border-green-300 text-green-800 rounded-md shadow-sm transition duration-300 ease-in-out">
-                {{ $page.props.flash.success }}
+               {{ $page.props.flash.success }}
            </div>
            <div v-if="$page.props.flash.warning" class="p-4 mb-4 bg-yellow-100 border border-yellow-300 text-yellow-800 rounded-md shadow-sm transition duration-300 ease-in-out">
-                 {{ $page.props.flash.warning }}
+                {{ $page.props.flash.warning }}
            </div>
            <div v-if="$page.props.flash.error" class="p-4 mb-4 bg-red-100 border border-red-300 text-red-800 rounded-md shadow-sm transition duration-300 ease-in-out">
-                {{ $page.props.flash.error }}
+               {{ $page.props.flash.error }}
            </div>
         </div>
 
@@ -276,10 +288,10 @@ const openDetails = ref({
                                                  <div><span class="font-semibold block text-gray-500">VAP</span> <span :class="line.has_vap ? 'text-red-700 font-bold' : 'text-gray-500'">{{ line.has_vap ? 'Sí' : 'No' }}</span></div>
                                                  
                                                  <div class="md:col-span-3 mt-3 pt-3 border-t border-gray-100" v-if="line.terminal_name">
-                                                      <span class="font-semibold block text-gray-500 mb-1">Terminal Asociado</span>
-                                                      <div class="flex flex-wrap justify-between items-center gap-2">
-                                                          <span>{{ line.terminal_name }}</span> <span class="text-xs bg-gray-100 px-2 py-1 rounded">Ini: {{ formatCurrency(line.initial_cost) }} / Mes: {{ formatCurrency(line.monthly_cost) }}</span>
-                                                      </div>
+                                                     <span class="font-semibold block text-gray-500 mb-1">Terminal Asociado</span>
+                                                     <div class="flex flex-wrap justify-between items-center gap-2">
+                                                         <span>{{ line.terminal_name }}</span> <span class="text-xs bg-gray-100 px-2 py-1 rounded">Ini: {{ formatCurrency(line.initial_cost) }} / Mes: {{ formatCurrency(line.monthly_cost) }}</span>
+                                                     </div>
                                                  </div>
                                                  <div class="md:col-span-3 mt-2 italic text-xs text-gray-400" v-else>Sin terminal asociado.</div>
                                                 </div>
@@ -308,11 +320,18 @@ const openDetails = ref({
                                         <div v-if="ipFijaPrincipal" class="mt-2 pt-2 border-t border-blue-200 ml-4">
                                             <span class="text-xs font-semibold text-gray-700">IP Fija Principal:</span>
                                             <span class="ml-1 text-xs">
-                                                 Incluida
-                                                 <span v-if="centralitaInfo">(Gratis por Centralita)</span>
-                                                </span>
+                                                Incluida
+                                                <span v-if="centralitaInfo">(Gratis por Centralita)</span>
+                                            </span>
                                         </div>
-                                    </div>
+                                        
+                                        <div v-if="fibraOroPrincipal" class="mt-2 pt-2 border-t border-blue-200 ml-4">
+                                            <span class="text-xs font-semibold text-gray-700">Fibra Oro Principal:</span>
+                                            <span class="ml-1 text-xs">
+                                                Incluida
+                                            </span>
+                                        </div>
+                                        </div>
                                     
                                     <div v-if="additionalInternetAddons.length > 0">
                                         <div v-for="(addon, index) in additionalInternetAddons" :key="addon.id + '-' + index" class="text-sm bg-blue-50 p-3 rounded mt-2 shadow-sm">
@@ -323,7 +342,12 @@ const openDetails = ref({
                                                 <span class="text-xs font-semibold text-gray-700">IP Fija:</span>
                                                 <span class="ml-1 text-xs">Incluida</span>
                                             </div>
-                                        </div>
+                                            
+                                            <div v-if="addon.pivot.has_fibra_oro && !addon.pivot.selected_centralita_id" class="mt-2 pt-2 border-t border-blue-200 ml-4 space-y-1">
+                                                <span class="text-xs font-semibold text-gray-700">Fibra Oro:</span>
+                                                <span class="ml-1 text-xs">Incluida</span>
+                                            </div>
+                                            </div>
                                     </div>
                                     
                                     <div v-if="tvAddons.length > 0" class="text-sm bg-purple-50 p-3 rounded mt-2 shadow-sm">
@@ -387,12 +411,26 @@ const openDetails = ref({
                                             </div>
 
                                             
+                                            <div v-if="multi.contractedExtensions.length > 0" class="mt-2 pt-2 border-t border-indigo-200">
+                                                <span class="font-semibold block text-indigo-800 mb-1">Extensiones Adicionales (Multisede):</span>
+                                                <ul class="list-disc list-inside ml-4 space-y-1">
+                                                    <li v-for="ext in multi.contractedExtensions" :key="ext.id">
+                                                        {{ ext.pivot.addon_name || ext.name }} (x{{ ext.pivot.quantity }})
+                                                    </li>
+                                                </ul>
+                                            </div>
+
 
                                             <div v-if="multi.has_ip_fija" class="mt-2 pt-2 border-t border-indigo-200">
                                                 <span class="text-xs font-semibold text-gray-700">IP Fija:</span>
                                                 <span class="ml-1 text-xs">Incluida (Gratis por Centralita)</span>
                                             </div>
-                                        </div>
+
+                                            <div v-if="multi.has_fibra_oro" class="mt-2 pt-2 border-t border-indigo-200">
+                                                <span class="text-xs font-semibold text-gray-700">Fibra Oro:</span>
+                                                <span class="ml-1 text-xs">Incluida</span>
+                                            </div>
+                                            </div>
                                     </div>
 
                                 </div>
@@ -402,7 +440,7 @@ const openDetails = ref({
                         <section v-if="!centralitaInfo && centralitasMultisede.length === 0" class="bg-white p-6 shadow-sm sm:rounded-lg italic text-gray-500">
                             No se incluyó ninguna centralita en esta oferta.
                         </section>
-                        </div> 
+                         </div> 
                     
                     <div class="lg:col-span-1 space-y-8">
                          <div class="sticky top-8 space-y-8"> 
@@ -454,17 +492,17 @@ const openDetails = ref({
 
                                  <div class="space-y-2 text-sm bg-green-50 p-4 rounded-lg border border-green-200 shadow-sm">
                                       <div class="flex justify-between font-medium text-gray-600">
-                                          <span>Comisión Bruta (100%):</span>
-                                          <span class="font-mono">{{ formatCurrency(offer.summary?.totalCommission) }}</span>
-                                      </div>
-                                      <div v-if="page.props.auth.user?.role !== 'admin'" class="flex justify-between font-medium text-gray-700">
-                                          <span>Comisión Equipo:</span>
-                                          <span class="font-mono">{{ formatCurrency(offer.summary?.teamCommission) }}</span>
-                                      </div>
-                                      <div class="flex justify-between text-lg font-bold text-emerald-700 pt-2 border-t border-green-300 mt-2">
-                                          <span>Comisión Vendedor:</span>
-                                          <span class="font-mono">{{ formatCurrency(offer.summary?.userCommission) }}</span>
-                                      </div>
+                                         <span>Comisión Bruta (100%):</span>
+                                         <span class="font-mono">{{ formatCurrency(offer.summary?.totalCommission) }}</span>
+                                     </div>
+                                     <div v-if="page.props.auth.user?.role !== 'admin'" class="flex justify-between font-medium text-gray-700">
+                                         <span>Comisión Equipo:</span>
+                                         <span class="font-mono">{{ formatCurrency(offer.summary?.teamCommission) }}</span>
+                                     </div>
+                                     <div class="flex justify-between text-lg font-bold text-emerald-700 pt-2 border-t border-green-300 mt-2">
+                                         <span>Comisión Vendedor:</span>
+                                         <span class="font-mono">{{ formatCurrency(offer.summary?.userCommission) }}</span>
+                                     </div>
                                  </div>
                              </section>
                              <section v-else class="bg-white p-6 shadow-sm sm:rounded-lg italic text-sm text-gray-500">

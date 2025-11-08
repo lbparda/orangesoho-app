@@ -91,7 +91,7 @@ class Offer extends Model
                 'addon_name',
                 'addon_price',
                 'addon_commission',
-                // --- FIN CAMPOS SNAPSHOT PIVOTE ---
+                'has_fibra_oro' // <-- AÑADIDO
             ])
             ->withTimestamps(); // Buena práctica si tu tabla pivote tiene timestamps
     }

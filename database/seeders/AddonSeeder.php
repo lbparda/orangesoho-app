@@ -112,6 +112,15 @@ class AddonSeeder extends Seeder
             ['name' => 'Futbol Bares > 250.000 hab.'],
             ['type' => 'tv', 'price' => 355.00, 'commission' => 50.00, 'description' => 'TV para bares en localidades con más de 250.000 habitantes.']
         );
+        Addon::updateOrCreate([
+                'name' => 'Fibra Oro',
+                'type' => 'internet_feature', // Lo ponemos como "feature" igual que la IP Fija
+                'price' => 5.00,
+                'commission' => 20.00,
+                'decommission' => 0.00,
+                'created_at' => now(),
+                'updated_at' => now() ]
+            );
 
         Addon::updateOrCreate([
             'name' => 'IP Fija',

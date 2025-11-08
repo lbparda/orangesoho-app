@@ -14,21 +14,17 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
-use Illuminate\Support\Str; 
-use Illuminate\Support\Facades\Response; 
-use Illuminate\Validation\Rule; 
-
-// --- INICIO: IMPORTACIONES AÑADIDAS ---
-// (Ya tenías O2oDiscount, lo cual es correcto)
-use App\Models\O2oDiscount;
-// --- FIN: IMPORTACIONES AÑADIDAS ---
+use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Response;
+use Illuminate\Validation\Rule;
+use App\Models\O2oDiscount; // Asegúrate de que esta importación existe
 
 class OfferController extends Controller
 {
     public function index(Request $request)
     {
         $user = $request->user();
-
+        
         $query = Offer::with(['package', 'user.team','client'])->latest();
 
         if ($user->isManager()) { 
@@ -53,16 +49,16 @@ class OfferController extends Controller
 
         $packages = Package::with(['addons', 'o2oDiscounts', 'terminals'])->get();
         
-        // --- INICIO: CORRECCIÓN (Solo descuentos activos) ---
-        // Aquí le decimos que solo coja los descuentos donde is_active = true
+        // --- CORRECCIÓN: SOLO DESCUENTOS ACTIVOS ---
         $discounts = Discount::where('is_active', true)->get();
-        // --- FIN: CORRECCIÓN ---
-
+        
         $operators = ['Movistar', 'Vodafone', 'Grupo+Orange', 'Otros'];
         $portabilityCommission = config('commissions.portability_extra', 0.00);
         $portabilityExceptions = config('commissions.portability_group_exceptions', []);
         $additionalInternetAddons = Addon::where('type', 'internet_additional')->get();
         $centralitaExtensions = Addon::where('type', 'centralita_extension')->get();
+        
+        // Esta consulta ya coge "IP Fija" y "Fibra Oro" (porque ambas son 'internet_feature')
         $fiberFeatures = Addon::where('type', 'internet_feature')->get(); 
 
         $clientsQuery = Client::query();
@@ -82,13 +78,13 @@ class OfferController extends Controller
 
         return Inertia::render('Offers/Create', [
             'packages' => $packages,
-            'discounts' => $discounts, // <-- Ahora solo se envían los activos
+            'discounts' => $discounts,
             'operators' => $operators,
             'portabilityCommission' => $portabilityCommission,
             'portabilityExceptions' => $portabilityExceptions,
             'additionalInternetAddons' => $additionalInternetAddons,
             'centralitaExtensions' => $centralitaExtensions,
-            'fiberFeatures' => $fiberFeatures,
+            'fiberFeatures' => $fiberFeatures, // <-- Se pasan aquí
             'auth' => ['user' => auth()->user()->load('team')],
             'clients' => $clients, 
             'initialClientId' => $newClientId ? (int)$newClientId : null, 
@@ -98,6 +94,7 @@ class OfferController extends Controller
 
     public function store(Request $request)
     {
+        // --- INICIO: VALIDACIÓN ACTUALIZADA ---
         $validated = $request->validate([
             'client_id' => 'required|exists:clients,id',
             'package_id' => 'required|exists:packages,id',
@@ -111,20 +108,23 @@ class OfferController extends Controller
                     $query->where('type', 'internet_additional'); 
                 }),
             ],
-            'additional_internet_lines.*.has_ip_fija' => 'required|boolean', 
+            'additional_internet_lines.*.has_ip_fija' => 'required|boolean',
+            'additional_internet_lines.*.has_fibra_oro' => 'nullable|boolean', // <-- AÑADIDO
             'additional_internet_lines.*.selected_centralita_id' => 'nullable|exists:addons,id', 
             'centralita' => 'present|array',
             'tv_addons' => 'nullable|array',
             'tv_addons.*' => 'exists:addons,id',
             'is_ip_fija_selected' => 'nullable|boolean',
+            'is_fibra_oro_selected' => 'nullable|boolean', // <-- AÑADIDO
             'probability' => 'nullable|integer|in:0,25,50,75,90,100',
             'signing_date' => 'nullable|date',
             'processing_date' => 'nullable|date',
         ]);
-        
+        // --- FIN: VALIDACIÓN ACTUALIZADA ---
+
         try {
             DB::transaction(function () use ($validated, $request) {
-
+                
                 $package = Package::find($validated['package_id']);
                 
                 $offer = Offer::create([
@@ -136,22 +136,16 @@ class OfferController extends Controller
                     'signing_date' => $validated['signing_date'] ?? null,
                     'processing_date' => $validated['processing_date'] ?? null,
                     'package_name' => $package->name ?? 'Paquete no encontrado',
-                    
-                    // --- INICIO: CORRECCIÓN (usar base_price) ---
-                    'package_price' => $package->base_price ?? 0,
-                    // --- FIN: CORRECCIÓN ---
-
+                    'package_price' => $package->base_price ?? 0, // Usamos base_price
                     'package_commission' => $package->commission_amount ?? 0, 
                     'status' => 'borrador', 
                 ]);
 
                 foreach ($validated['lines'] as $lineData) {
-
                     $o2oDiscount = null;
                     if (!empty($lineData['o2o_discount_id'])) {
-                        $o2oDiscount = \App\Models\O2oDiscount::find($lineData['o2o_discount_id']);
+                        $o2oDiscount = O2oDiscount::find($lineData['o2o_discount_id']);
                     }
-
                     $terminalPivot = null;
                     $terminalName = null;
                     if (!empty($lineData['terminal_pivot_id'])) {
@@ -165,7 +159,6 @@ class OfferController extends Controller
                             $terminalName = $terminalPivot->brand . ' ' . $terminalPivot->model;
                         }
                     }
-
                     $offer->lines()->create([
                         'is_extra' => $lineData['is_extra'],
                         'is_portability' => $lineData['is_portability'],
@@ -177,15 +170,17 @@ class OfferController extends Controller
                         'initial_cost' => $lineData['initial_cost'],
                         'monthly_cost' => $lineData['monthly_cost'],
                         'o2o_discount_name' => $o2oDiscount->name ?? null,
-                        'o2o_discount_amount' => $o2oDiscount->discount_amount ?? null,
+                        'o2o_discount_amount' => $o2oDiscount->discount_amount ?? null, 
                         'terminal_name' => $terminalName,
                     ]);
                 }
                 
-                // (El resto de la lógica de 'store' para los addons sigue igual)
+                // --- INICIO: LÓGICA DE ADDONS ACTUALIZADA ---
                 
+                // 1. IP Fija Principal
                 if (!empty($validated['is_ip_fija_selected'])) {
-                    $ipFijaAddon = Addon::where('type', 'internet_feature')->first();
+                    // Usamos where() para ser más específicos
+                    $ipFijaAddon = Addon::where('name', 'IP Fija')->where('type', 'internet_feature')->first();
                     if ($ipFijaAddon) {
                         $offer->addons()->attach($ipFijaAddon->id, [
                             'quantity' => 1,
@@ -196,6 +191,20 @@ class OfferController extends Controller
                     }
                 }
 
+                // 1.b. (AÑADIDO) Fibra Oro Principal
+                if (!empty($validated['is_fibra_oro_selected'])) {
+                    $fibraOroAddon = Addon::where('name', 'Fibra Oro')->where('type', 'internet_feature')->first();
+                    if ($fibraOroAddon) {
+                        $offer->addons()->attach($fibraOroAddon->id, [
+                            'quantity' => 1,
+                            'addon_name' => $fibraOroAddon->name,
+                            'addon_price' => $fibraOroAddon->price,
+                            'addon_commission' => $fibraOroAddon->commission, 
+                        ]);
+                    }
+                }
+
+                // 2. Internet Principal
                 if (!empty($validated['internet_addon_id'])) {
                     $internetAddon = Addon::find($validated['internet_addon_id']);
                     if ($internetAddon) {
@@ -208,6 +217,7 @@ class OfferController extends Controller
                     }
                 }
                 
+                // 3. Internet Adicional (¡ACTUALIZADO!)
                 if (!empty($validated['additional_internet_lines'])) {
                     foreach ($validated['additional_internet_lines'] as $internetLine) {
                         if (!empty($internetLine['addon_id'])) {
@@ -216,7 +226,9 @@ class OfferController extends Controller
                                 $offer->addons()->attach($additionalAddon->id, [
                                     'quantity' => 1,
                                     'has_ip_fija' => $internetLine['has_ip_fija'],
+                                    'has_fibra_oro' => $internetLine['has_fibra_oro'] ?? false, // <-- AÑADIDO
                                     'selected_centralita_id' => $internetLine['selected_centralita_id'],
+                                    // Snapshot
                                     'addon_name' => $additionalAddon->name,
                                     'addon_price' => $additionalAddon->price,
                                     'addon_commission' => $additionalAddon->commission,
@@ -226,6 +238,7 @@ class OfferController extends Controller
                     }
                 }
                 
+                // 4. Centralita (sin cambios)
                 $centralitaData = $validated['centralita'];
                 if (!empty($centralitaData['id'])) {
                     $centralitaAddon = Addon::find($centralitaData['id']);
@@ -250,6 +263,7 @@ class OfferController extends Controller
                     }
                 }
                 
+                // 5. Extensiones (sin cambios)
                 $extensionSyncData = [];
                 if (!empty($centralitaData['extensions'])) {
                     foreach ($centralitaData['extensions'] as $ext) {
@@ -274,6 +288,7 @@ class OfferController extends Controller
                     $offer->addons()->attach($id, $pivot);
                 }
 
+                // 6. TV Addons (sin cambios)
                 if (!empty($validated['tv_addons'])) {
                     foreach ($validated['tv_addons'] as $tvAddonId) {
                         $tvAddon = Addon::find($tvAddonId);
@@ -287,6 +302,7 @@ class OfferController extends Controller
                         }
                     }
                 }
+                // --- FIN LÓGICA DE ADDONS ---
             });
 
             return redirect()->route('offers.index')->with('success', 'Oferta guardada correctamente.');
@@ -309,16 +325,16 @@ class OfferController extends Controller
             'terminals' => fn($query) => $query->select('terminals.*', 'package_terminal.id as pivot_id', 'package_terminal.duration_months', 'package_terminal.initial_cost', 'package_terminal.monthly_cost')
         ])->get();
         
-        // --- INICIO: CORRECCIÓN (Solo descuentos activos) ---
-        // Aquí también, para que el formulario de edición no muestre descuentos antiguos
+        // --- CORRECCIÓN: SOLO DESCUENTOS ACTIVOS ---
         $discounts = Discount::where('is_active', true)->get();
-        // --- FIN: CORRECCIÓN ---
         
         $operators = ['Movistar', 'Vodafone', 'Grupo+Orange', 'Otros'];
         $portabilityCommission = config('commissions.portability_extra', 0.00);
         $portabilityExceptions = config('commissions.portability_group_exceptions', []);
         $additionalInternetAddons = Addon::where('type', 'internet_additional')->get();
         $centralitaExtensions = Addon::where('type', 'centralita_extension')->get();
+        
+        // Esta consulta ya coge "IP Fija" y "Fibra Oro"
         $fiberFeatures = Addon::where('type', 'internet_feature')->get(); 
 
         $user = Auth::user();
@@ -333,13 +349,16 @@ class OfferController extends Controller
 
         $probabilityOptions = [0, 25, 50, 75, 90, 100];
 
+        // --- INICIO: CARGAR PIVOTES (ACTUALIZADO) ---
         $offer->load(['lines', 'client', 'addons' => function ($query) {
                 $query->withPivot(
                     'quantity', 'has_ip_fija', 'selected_centralita_id',
-                    'addon_name', 'addon_price', 'addon_commission' 
+                    'addon_name', 'addon_price', 'addon_commission',
+                    'has_fibra_oro' // <-- AÑADIDO
                 );
             }
         ]);
+        // --- FIN: CARGAR PIVOTES ---
 
         $offer->lines->each(function ($line) {
             if ($line->package_terminal_id) {
@@ -355,8 +374,14 @@ class OfferController extends Controller
             }
         });
 
-        $mainIpFijaSelected = $offer->addons()->where('type', 'internet_feature')->exists();
+        // --- INICIO: PREPARAR DATOS VUE (ACTUALIZADO) ---
+        
+        // 1. IP Fija Principal
+        $mainIpFijaSelected = $offer->addons()->where('name', 'IP Fija')->where('type', 'internet_feature')->exists();
+        // 1.b. (AÑADIDO) Fibra Oro Principal
+        $mainFibraOroSelected = $offer->addons()->where('name', 'Fibra Oro')->where('type', 'internet_feature')->exists();
 
+        // 2. Líneas Adicionales
         $additionalInternetLinesData = $offer->addons()
             ->where('type', 'internet_additional')
             ->get()
@@ -365,15 +390,17 @@ class OfferController extends Controller
                     'id' => $addon->id + microtime(true) + $index, 
                     'addon_id' => $addon->id,
                     'has_ip_fija' => (bool) $addon->pivot->has_ip_fija, 
+                    'has_fibra_oro' => (bool) $addon->pivot->has_fibra_oro, // <-- AÑADIDO
                     'selected_centralita_id' => $addon->pivot->selected_centralita_id, 
                 ];
             })->toArray();
+        // --- FIN: PREPARAR DATOS VUE ---
 
 
         return Inertia::render('Offers/Edit', [
             'offer' => $offer,
             'packages' => $packages,
-            'discounts' => $discounts, // <-- Ahora solo se envían los activos
+            'discounts' => $discounts,
             'operators' => $operators,
             'portabilityCommission' => $portabilityCommission,
             'portabilityExceptions' => $portabilityExceptions,
@@ -384,7 +411,8 @@ class OfferController extends Controller
             'clients' => $clients,
             'probabilityOptions' => $probabilityOptions,
             'initialAdditionalInternetLines' => $additionalInternetLinesData, 
-            'initialMainIpFijaSelected' => $mainIpFijaSelected,            
+            'initialMainIpFijaSelected' => $mainIpFijaSelected,
+            'initialMainFibraOroSelected' => $mainFibraOroSelected, // <-- AÑADIDO
         ]);
     }
 
@@ -415,6 +443,7 @@ class OfferController extends Controller
              return back()->with('error', 'No tienes permiso para asignar esta oferta a ese cliente.');
          }
 
+         // --- INICIO: VALIDACIÓN ACTUALIZADA ---
          $validated = $request->validate([
              'client_id' => 'required|exists:clients,id',
              'package_id' => 'required|exists:packages,id',
@@ -429,15 +458,18 @@ class OfferController extends Controller
                  }),
              ],
              'additional_internet_lines.*.has_ip_fija' => 'required|boolean',
-             'additional_internet_lines.*.selected_centralita_id' => 'nullable|exists:addons,id',
+             'additional_internet_lines.*.has_fibra_oro' => 'nullable|boolean', // <-- AÑADIDO
+             'additional_internet_lines.*.selected_centralita_id' => 'nullable|exists:addons,id', 
              'centralita' => 'present|array',
              'tv_addons' => 'nullable|array',
              'tv_addons.*' => 'exists:addons,id',
              'is_ip_fija_selected' => 'nullable|boolean',
+             'is_fibra_oro_selected' => 'nullable|boolean', // <-- AÑADIDO
              'probability' => 'nullable|integer|in:0,25,50,75,90,100',
              'signing_date' => 'nullable|date',
              'processing_date' => 'nullable|date',
          ]);
+        // --- FIN: VALIDACIÓN ACTUALIZADA ---
 
 
         try {
@@ -454,11 +486,7 @@ class OfferController extends Controller
                     'processing_date' => $validated['processing_date'] ?? null,
                     
                     'package_name' => $package->name ?? 'Paquete no encontrado',
-                    
-                    // --- INICIO: CORRECCIÓN (usar base_price) ---
-                    'package_price' => $package->base_price ?? 0,
-                    // --- FIN: CORRECCIÓN ---
-
+                    'package_price' => $package->base_price ?? 0, // Usamos base_price
                     'package_commission' => $package->commission_amount ?? 0,
                 ]);
 
@@ -467,7 +495,7 @@ class OfferController extends Controller
                     
                     $o2oDiscount = null;
                     if (!empty($lineData['o2o_discount_id'])) {
-                        $o2oDiscount = \App\Models\O2oDiscount::find($lineData['o2o_discount_id']);
+                        $o2oDiscount = O2oDiscount::find($lineData['o2o_discount_id']);
                     }
 
                     $terminalPivot = null;
@@ -500,13 +528,13 @@ class OfferController extends Controller
                         'terminal_name' => $terminalName,
                     ]);
                 }
-                
-                // (El resto de la lógica de 'update' para los addons sigue igual)
 
+                // --- INICIO: LÓGICA DE ADDONS ACTUALIZADA ---
                 $offer->addons()->detach();
 
+                // 1. IP Fija Principal
                 if (!empty($validated['is_ip_fija_selected'])) {
-                    $ipFijaAddon = Addon::where('type', 'internet_feature')->first();
+                    $ipFijaAddon = Addon::where('name', 'IP Fija')->where('type', 'internet_feature')->first();
                     if ($ipFijaAddon) {
                         $offer->addons()->attach($ipFijaAddon->id, [
                             'quantity' => 1,
@@ -517,6 +545,20 @@ class OfferController extends Controller
                     }
                 }
 
+                // 1.b. (AÑADIDO) Fibra Oro Principal
+                if (!empty($validated['is_fibra_oro_selected'])) {
+                    $fibraOroAddon = Addon::where('name', 'Fibra Oro')->where('type', 'internet_feature')->first();
+                    if ($fibraOroAddon) {
+                        $offer->addons()->attach($fibraOroAddon->id, [
+                            'quantity' => 1,
+                            'addon_name' => $fibraOroAddon->name,
+                            'addon_price' => $fibraOroAddon->price,
+                            'addon_commission' => $fibraOroAddon->commission,
+                        ]);
+                    }
+                }
+
+                // 2. Internet Principal
                 if (!empty($validated['internet_addon_id'])) {
                     $internetAddon = Addon::find($validated['internet_addon_id']);
                     if ($internetAddon) {
@@ -529,6 +571,7 @@ class OfferController extends Controller
                     }
                 }
                 
+                // 3. Internet Adicional (¡ACTUALIZADO!)
                 if (!empty($validated['additional_internet_lines'])) {
                     foreach ($validated['additional_internet_lines'] as $internetLine) {
                         if (!empty($internetLine['addon_id'])) {
@@ -537,6 +580,7 @@ class OfferController extends Controller
                                 $offer->addons()->attach($additionalAddon->id, [
                                     'quantity' => 1,
                                     'has_ip_fija' => $internetLine['has_ip_fija'],
+                                    'has_fibra_oro' => $internetLine['has_fibra_oro'] ?? false, // <-- AÑADIDO
                                     'selected_centralita_id' => $internetLine['selected_centralita_id'],
                                     'addon_name' => $additionalAddon->name,
                                     'addon_price' => $additionalAddon->price,
@@ -547,6 +591,7 @@ class OfferController extends Controller
                     }
                 }
                 
+                // 4. Centralita (sin cambios)
                 $centralitaData = $validated['centralita'];
                 if (!empty($centralitaData['id'])) {
                     $centralitaAddon = Addon::find($centralitaData['id']);
@@ -571,6 +616,7 @@ class OfferController extends Controller
                     }
                 }
                 
+                // 5. Extensiones (sin cambios)
                 $extensionSyncData = [];
                 if (!empty($centralitaData['extensions'])) {
                     foreach ($centralitaData['extensions'] as $ext) {
@@ -595,6 +641,7 @@ class OfferController extends Controller
                     $offer->addons()->attach($id, $pivot);
                 }
 
+                // 6. TV Addons (sin cambios)
                 if (!empty($validated['tv_addons'])) {
                     foreach ($validated['tv_addons'] as $tvAddonId) {
                         $tvAddon = Addon::find($tvAddonId);
@@ -608,6 +655,7 @@ class OfferController extends Controller
                         }
                     }
                 }
+                // --- FIN LÓGICA DE ADDONS ---
 
             });
 
@@ -622,6 +670,7 @@ class OfferController extends Controller
 
     public function show(Offer $offer)
     {
+        // --- INICIO: CARGAR PIVOTES (ACTUALIZADO) ---
         $offer->load([
             'package.addons', 
             'user.team', 
@@ -630,10 +679,12 @@ class OfferController extends Controller
             'addons' => function ($query) {
                 $query->withPivot(
                     'quantity', 'has_ip_fija', 'selected_centralita_id',
-                    'addon_name', 'addon_price', 'addon_commission' 
+                    'addon_name', 'addon_price', 'addon_commission',
+                    'has_fibra_oro' // <-- AÑADIDO
                 );
             }
         ]);
+        // --- FIN: CARGAR PIVOTES ---
 
         $offer->lines->each(function ($line) {
             if ($line->terminal_name) {
@@ -659,6 +710,7 @@ class OfferController extends Controller
     {
         set_time_limit(300);
 
+        // --- INICIO: CARGAR PIVOTES (ACTUALIZADO) ---
         $offer->load([
             'package.addons', 
             'user', 
@@ -667,10 +719,12 @@ class OfferController extends Controller
             'addons' => function ($query) {
                 $query->withPivot(
                     'quantity', 'has_ip_fija', 'selected_centralita_id',
-                    'addon_name', 'addon_price', 'addon_commission'
+                    'addon_name', 'addon_price', 'addon_commission',
+                    'has_fibra_oro' // <-- AÑADIDO
                 );
             }
         ]);
+        // --- FIN: CARGAR PIVOTES ---
 
         $offer->lines->each(function ($line) {
              if ($line->terminal_name) {
