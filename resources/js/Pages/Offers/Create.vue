@@ -187,7 +187,7 @@ const addWatchersToAdditionalLine = (line) => {
             line.has_ip_fija = true;
         } else { // Si se quita la centralita, desmarcar IP Fija
             // No lo desmarcamos automáticamente, puede que la quieran sin centralita
-            // line.has_ip_fija = false; 
+              line.has_ip_fija = false; 
         }
     });
 };
