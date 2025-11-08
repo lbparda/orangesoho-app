@@ -11,6 +11,7 @@ use App\Http\Controllers\Admin\TeamController;
 // --- INICIO: IMPORTACIÓN AÑADIDA ---
 use App\Http\Controllers\Admin\PackageController; 
 use App\Http\Controllers\Admin\DiscountController;
+use App\Http\Controllers\Admin\DiscountImportController; 
 // --- FIN: IMPORTACIÓN AÑADIDA ---
 use App\Http\Controllers\TeamLead\ManagementController;
 use App\Http\Controllers\ClientController;
@@ -67,9 +68,17 @@ Route::prefix('admin')
         Route::get('packages/{package}/edit', [PackageController::class, 'edit'])->name('packages.edit');
         Route::put('packages/{package}', [PackageController::class, 'update'])->name('packages.update');
         // --- FIN: RUTAS DE PAQUETES AÑADIDAS ---
-        // Rutas para Descuentos (simplificadas)
-        Route::resource('discounts', DiscountController::class)->only(['index', 'edit', 'update']); // <-- AÑADIR ESTA LÍNEA
-        // --- FIN: RUTAS AÑADIDAS ---
+        // --- INICIO: RUTAS DE DESCUENTOS (COMPLETAS) ---
+        Route::get('discounts/generate-seeder', [DiscountController::class, 'generateSeeder'])->name('discounts.generateSeeder');
+        Route::get('discounts/export-csv', [DiscountController::class, 'exportCsv'])->name('discounts.exportCsv');
+        
+        // Importación
+        Route::get('discounts/import-csv', [DiscountImportController::class, 'showImportForm'])->name('discounts.importCsv');
+        Route::post('discounts/import-csv', [DiscountImportController::class, 'storeCsv'])->name('discounts.storeCsv');
+        
+        // Rutas CRUD estándar (index, create, store, edit, update, destroy)
+        Route::resource('discounts', DiscountController::class);
+        // --- FIN: RUTAS DE DESCUENTOS ---
 });
 
 // --- GRUPO DE RUTAS DE JEFE DE EQUIPO (Fusionado) ---
