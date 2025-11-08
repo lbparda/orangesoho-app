@@ -10,48 +10,45 @@ const props = defineProps({
     discount: Object,
 });
 
-// Cargamos los datos correctos de la tabla en el formulario
+const formatJson = (jsonObj) => {
+    if (!jsonObj || Object.keys(jsonObj).length === 0) {
+        return ''; 
+    }
+    try {
+        return JSON.stringify(jsonObj, null, 2); 
+    } catch (e) {
+        return 'Error al parsear JSON';
+    }
+};
+
 const form = useForm({
-    name: props.discount.name ?? '',
-    percentage: props.discount.percentage ?? 0,
-    duration_months: props.discount.duration_months ?? 0,
-    // Convertimos el JSON (o null) a un string legible para el textarea
-    conditions: props.discount.conditions ? JSON.stringify(props.discount.conditions, null, 2) : '',
+    name: props.discount.name,
+    percentage: props.discount.percentage,
+    duration_months: props.discount.duration_months,
+    conditions: formatJson(props.discount.conditions), 
+    is_active: props.discount.is_active, // <-- AÑADIDO
 });
 
 const submit = () => {
-    // --- INICIO: CORRECCIÓN DEL JSON ---
-    // Creamos un objeto temporal con los datos del formulario
     const dataToSubmit = {
         ...form.data(),
     };
 
-    // Intentamos "parsear" (convertir de texto a objeto) el campo de condiciones
     try {
         if (form.conditions && form.conditions.trim() !== '') {
-            // Si tiene texto, lo convertimos a un objeto JSON real
             dataToSubmit.conditions = JSON.parse(form.conditions);
         } else {
-            // Si está vacío, lo enviamos como 'null'
             dataToSubmit.conditions = null;
         }
-        form.clearErrors('conditions'); // Limpiamos errores previos si los hay
+        form.clearErrors('conditions'); 
     } catch (e) {
-        // Si el JSON escrito por el usuario es inválido, mostramos un error y no enviamos
         form.setError('conditions', 'El formato JSON no es válido. Revisa las comillas y las comas.');
-        return;
+        return; 
     }
 
-    // Usamos .transform() para enviar nuestro objeto 'dataToSubmit' limpio,
-    // en lugar del 'form' que tiene el 'conditions' como texto.
     form.transform(() => dataToSubmit).put(route('admin.discounts.update', props.discount.id), {
         preserveScroll: true,
-        onSuccess: () => {
-            form.clearErrors('conditions');
-        },
-        // Si el backend devuelve un error (ej. 'array' falla), se mostrará
     });
-    // --- FIN: CORRECCIÓN DEL JSON ---
 };
 </script>
 
@@ -133,6 +130,21 @@ const submit = () => {
                             <InputError class="mt-2" :message="form.errors.conditions" />
                         </div>
                         
+                        <!-- AÑADIDO: Campo Estado -->
+                        <div>
+                            <InputLabel for="is_active" value="Estado" />
+                            <select
+                                id="is_active"
+                                class="mt-1 block w-full border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm"
+                                v-model="form.is_active"
+                                required
+                            >
+                                <option :value="true">Activo</option>
+                                <option :value="false">Inactivo</option>
+                            </select>
+                            <InputError class="mt-2" :message="form.errors.is_active" />
+                        </div>
+
                         <!-- Botón Guardar -->
                         <div class="flex items-center gap-4">
                             <PrimaryButton :disabled="form.processing">

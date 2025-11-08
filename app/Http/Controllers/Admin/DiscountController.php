@@ -7,7 +7,8 @@ use App\Models\Discount;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Illuminate\Validation\Rule;
-use Illuminate\Support\Facades\DB; // Importar DB
+use Illuminate\Support\Facades\DB;
+use Illuminate\Database\QueryException; // Importar QueryException
 
 class DiscountController extends Controller
 {
@@ -17,13 +18,13 @@ class DiscountController extends Controller
     public function index()
     {
         return Inertia::render('Admin/Discounts/Index', [
-            // Mapeamos para enviar solo los datos necesarios al listado
             'discounts' => Discount::all()->map(function ($discount) {
                 return [
                     'id' => $discount->id,
                     'name' => $discount->name,
                     'percentage' => $discount->percentage,
                     'duration_months' => $discount->duration_months,
+                    'is_active' => $discount->is_active, // <-- AÑADIDO
                 ];
             }),
         ]);
@@ -34,7 +35,6 @@ class DiscountController extends Controller
      */
     public function create()
     {
-        // Simplemente renderiza la vista de creación
         return Inertia::render('Admin/Discounts/Create');
     }
 
@@ -43,15 +43,14 @@ class DiscountController extends Controller
      */
     public function store(Request $request)
     {
-        // Validamos los campos (exactamente igual que en update)
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255', 'unique:discounts,name'],
             'percentage' => ['required', 'numeric', 'min:0', 'max:100'],
             'duration_months' => ['required', 'integer', 'min:0'],
-            'conditions' => ['nullable', 'array'], // Espera un objeto/array
+            'conditions' => ['nullable', 'array'],
+            'is_active' => ['required', 'boolean'], // <-- AÑADIDO
         ]);
 
-        // Creamos el descuento (funciona gracias a $guarded = [])
         Discount::create($validated);
 
         return redirect()->route('admin.discounts.index')
@@ -71,6 +70,7 @@ class DiscountController extends Controller
                 'percentage' => $discount->percentage,
                 'duration_months' => $discount->duration_months,
                 'conditions' => $discount->conditions,
+                'is_active' => $discount->is_active, // <-- AÑADIDO
             ],
         ]);
     }
@@ -80,12 +80,12 @@ class DiscountController extends Controller
      */
     public function update(Request $request, Discount $discount)
     {
-        // Validamos los campos de tu tabla
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255', Rule::unique('discounts')->ignore($discount->id)],
             'percentage' => ['required', 'numeric', 'min:0', 'max:100'],
             'duration_months' => ['required', 'integer', 'min:0'],
             'conditions' => ['nullable', 'array'],
+            'is_active' => ['required', 'boolean'], // <-- AÑADIDO
         ]);
 
         $discount->update($validated);
@@ -99,14 +99,25 @@ class DiscountController extends Controller
      */
     public function destroy(Discount $discount)
     {
-        // Opcional: Comprobar si está en uso antes de borrar
-        // if ($discount->packages()->exists()) {
-        //     return redirect()->route('admin.discounts.index')
-        //                      ->with('error', 'No se puede eliminar. El descuento está en uso por paquetes.');
-        // }
+        // 1. Comprobamos si algún paquete está usando este descuento.
+        if ($discount->packages()->exists()) {
+            // Si está en uso, volvemos con un mensaje de error.
+            return redirect()->route('admin.discounts.index')
+                             ->with('error', 'No se puede eliminar. El descuento "' . $discount->name . '" está en uso por uno o más paquetes. Desactívalo en su lugar.');
+        }
 
-        $discount->delete();
+        // 2. Si no está en uso, intentamos borrar.
+        try {
+            $discount->delete();
+        } catch (QueryException $e) {
+            return redirect()->route('admin.discounts.index')
+                             ->with('error', 'Error de base de datos al eliminar el descuento: ' . $e->getMessage());
+        } catch (\Exception $e) {
+            return redirect()->route('admin.discounts.index')
+                             ->with('error', 'Ocurrió un error inesperado al eliminar el descuento.');
+        }
 
+        // 3. Si todo ha ido bien, volvemos con éxito.
         return redirect()->route('admin.discounts.index')
                          ->with('success', 'Descuento eliminado correctamente.');
     }
@@ -126,9 +137,9 @@ class DiscountController extends Controller
             $content .= "                'percentage' => " . $discount->percentage . ",\n";
             $content .= "                'duration_months' => " . $discount->duration_months . ",\n";
             
-            // Convertimos el array de conditions a un string JSON o null
             $conditions = $discount->conditions ? "'" . $this->escapeQuote(json_encode($discount->conditions)) . "'" : 'null';
             $content .= "                'conditions' => " . $conditions . ",\n";
+            $content .= "                'is_active' => " . ($discount->is_active ? 'true' : 'false') . ",\n"; // <-- AÑADIDO
             
             $content .= "                'created_at' => now(),\n";
             $content .= "                'updated_at' => now(),\n";
@@ -137,7 +148,6 @@ class DiscountController extends Controller
 
         $content .= "        ]);\n    }\n}\n";
 
-        // Devolvemos el contenido como un archivo de texto para descargar
         return response($content, 200, [
             'Content-Type' => 'text/plain',
             'Content-Disposition' => 'attachment; filename="DiscountSeeder.php.txt"',
@@ -163,21 +173,21 @@ class DiscountController extends Controller
         $callback = function() use ($discounts) {
             $file = fopen('php://output', 'w');
             
-            // --- INICIO: CORRECCIÓN ---
-            // Añadir el delimitador (;) para que coincida con el importador
-            fputcsv($file, ['id', 'name', 'percentage', 'duration_months', 'conditions'], ';');
+            fwrite($file, "\xEF\xBB\xBF"); // BOM para Excel
+
+            // Añadimos la nueva columna al CSV
+            fputcsv($file, ['id', 'name', 'percentage', 'duration_months', 'conditions', 'is_active'], ';');
 
             foreach ($discounts as $discount) {
-                // Añadir el delimitador (;) para que coincida con el importador
                 fputcsv($file, [
                     $discount->id,
                     $discount->name,
                     $discount->percentage,
                     $discount->duration_months,
-                    $discount->conditions ? json_encode($discount->conditions) : '', // Convertir JSON a string
+                    $discount->conditions ? json_encode($discount->conditions) : '',
+                    $discount->is_active ? '1' : '0', // <-- AÑADIDO (1 para true, 0 para false)
                 ], ';');
             }
-            // --- FIN: CORRECCIÓN ---
             
             fclose($file);
         };
@@ -185,9 +195,6 @@ class DiscountController extends Controller
         return response()->stream($callback, 200, $headers);
     }
 
-    /**
-     * Helper para escapar comillas simples en los strings generados.
-     */
     private function escapeQuote($string)
     {
         if ($string === null) return '';

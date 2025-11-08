@@ -53,21 +53,17 @@ const formatPercentage = (value) => {
                 <h1 class="text-2xl font-bold text-gray-800">Gestionar Descuentos</h1>
                 
                 <div class="flex flex-wrap items-center space-x-2">
-                    
                     <Link :href="route('admin.discounts.importCsv')">
                         <SecondaryButton>Importar CSV</SecondaryButton>
                     </Link>
-
                     <a :href="route('admin.discounts.exportCsv')"
                        class="inline-flex items-center px-4 py-2 bg-white border border-gray-300 rounded-md font-semibold text-xs text-gray-700 uppercase tracking-widest shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-25 transition ease-in-out duration-150">
                         Exportar a CSV
                     </a>
-
                     <a :href="route('admin.discounts.generateSeeder')"
                        class="inline-flex items-center px-4 py-2 bg-gray-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-gray-500 active:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition ease-in-out duration-150">
                         Generar Seeder (TXT)
                     </a>
-                    
                     <Link :href="route('admin.discounts.create')">
                         <PrimaryButton>Crear Descuento</PrimaryButton>
                     </Link>
@@ -76,7 +72,7 @@ const formatPercentage = (value) => {
         </template>
 
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 mt-6">
-             <div v-if="$page.props.flash.success" class="p-4 mb-4 bg-green-100 border border-green-300 text-green-800 rounded-md shadow-sm">
+            <div v-if="$page.props.flash.success" class="p-4 mb-4 bg-green-100 border border-green-300 text-green-800 rounded-md shadow-sm">
                 {{ $page.props.flash.success }}
             </div>
             <div v-if="$page.props.flash.error" class="p-4 mb-4 bg-red-100 border border-red-300 text-red-800 rounded-md shadow-sm">
@@ -94,14 +90,23 @@ const formatPercentage = (value) => {
                                     <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nombre</th>
                                     <th scope="col" class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Porcentaje (%)</th>
                                     <th scope="col" class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Duración (Meses)</th>
+                                    <!-- AÑADIDA: Columna Estado -->
+                                    <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
                                     <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
                                 </tr>
                             </thead>
                             <tbody class="bg-white divide-y divide-gray-200">
                                 <tr v-for="discount in discounts" :key="discount.id" class="hover:bg-gray-50">
-                                    <td class="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ discount.name }}</td>
-                                    <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500 text-right">{{ formatPercentage(discount.percentage) }}</td>
-                                    <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500 text-right">{{ discount.duration_months }}</td>
+                                    <td class="px-4 py-4 whitespace-nowrap text-sm font-medium" :class="discount.is_active ? 'text-gray-900' : 'text-gray-400 line-through'">{{ discount.name }}</td>
+                                    <td class="px-4 py-4 whitespace-nowrap text-sm text-right" :class="discount.is_active ? 'text-gray-500' : 'text-gray-400 line-through'">{{ formatPercentage(discount.percentage) }}</td>
+                                    <td class="px-4 py-4 whitespace-nowrap text-sm text-right" :class="discount.is_active ? 'text-gray-500' : 'text-gray-400 line-through'">{{ discount.duration_months }}</td>
+                                    <!-- AÑADIDO: Celda Estado -->
+                                    <td class="px-4 py-4 whitespace-nowrap text-sm text-center">
+                                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full"
+                                              :class="discount.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'">
+                                            {{ discount.is_active ? 'Activo' : 'Inactivo' }}
+                                        </span>
+                                    </td>
                                     <td class="px-4 py-4 whitespace-nowrap text-center text-sm font-medium space-x-2">
                                         <Link :href="route('admin.discounts.edit', discount.id)" class="text-indigo-600 hover:text-indigo-800">
                                             Editar
@@ -112,7 +117,7 @@ const formatPercentage = (value) => {
                                     </td>
                                 </tr>
                                 <tr v-if="discounts.length === 0">
-                                    <td colspan="4" class="px-6 py-10 text-center text-sm text-gray-500 italic">
+                                    <td colspan="5" class="px-6 py-10 text-center text-sm text-gray-500 italic"> <!-- Colspan actualizado a 5 -->
                                         No hay descuentos creados.
                                     </td>
                                 </tr>
@@ -128,7 +133,7 @@ const formatPercentage = (value) => {
                 Eliminar Descuento
             </template>
             <template #content>
-                ¿Estás seguro de que quieres eliminar el descuento "{{ discountToDelete?.name }}"? Esta acción no se puede deshacer.
+                ¿Estás seguro de que quieres eliminar el descuento "{{ discountToDelete?.name }}"? Esta acción no se puede deshacer. (Si está en uso, se recomienda desactivarlo).
             </template>
             <template #footer>
                 <SecondaryButton @click="closeModal">

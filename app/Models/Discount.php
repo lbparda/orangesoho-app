@@ -10,7 +10,16 @@ class Discount extends Model
 {
     use HasFactory;
     protected $guarded = [];
-    protected $casts = ['conditions' => 'array'];
+
+    /**
+     * The attributes that should be cast.
+     *
+     * @var array
+     */
+    protected $casts = [
+        'conditions' => 'array',
+        'is_active' => 'boolean', // <-- AÑADIDO
+    ];
 
     public function packages(): BelongsToMany
     {

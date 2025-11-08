@@ -1,13 +1,19 @@
 <script setup>
-import { ref } from 'vue';
+import { ref, computed } from 'vue'; // <-- Asegúrate de importar 'computed'
 import ApplicationLogo from '@/Components/ApplicationLogo.vue';
 import Dropdown from '@/Components/Dropdown.vue';
 import DropdownLink from '@/Components/DropdownLink.vue';
 import NavLink from '@/Components/NavLink.vue';
 import ResponsiveNavLink from '@/Components/ResponsiveNavLink.vue';
-import { Link } from '@inertiajs/vue3';
+import { Link, usePage } from '@inertiajs/vue3'; // <-- Asegúrate de importar 'usePage'
 
 const showingNavigationDropdown = ref(false);
+
+// --- INICIO: LÓGICA DE ROLES (AÑADIDA) ---
+const page = usePage();
+const isAdmin = computed(() => page.props.auth.user?.is_admin);
+const isManager = computed(() => page.props.auth.user?.is_manager);
+// --- FIN: LÓGICA DE ROLES ---
 </script>
 
 <template>
@@ -39,7 +45,8 @@ const showingNavigationDropdown = ref(false);
                                     Clientes
                                 </NavLink>
                                 
-                                <div v-if="$page.props.auth.user && $page.props.auth.user.is_admin" class="hidden sm:flex sm:items-center sm:ms-6">
+                                <!-- INICIO: MENÚ ADMIN ACTUALIZADO -->
+                                <div v-if="isAdmin" class="hidden sm:flex sm:items-center sm:ms-6">
                                     <div class="ms-3 relative">
                                         <Dropdown align="right" width="48">
                                             <template #trigger>
@@ -54,18 +61,16 @@ const showingNavigationDropdown = ref(false);
                                                 <DropdownLink :href="route('admin.users.index')"> Gestionar Usuarios </DropdownLink>
                                                 <DropdownLink :href="route('admin.teams.index')"> Gestionar Equipos </DropdownLink>
                                                 <DropdownLink :href="route('terminals.import.create')"> Importar Terminales </DropdownLink>
-                                                <!-- INICIO: LÍNEA AÑADIDA -->
+                                                <hr class="my-1 border-gray-100">
                                                 <DropdownLink :href="route('admin.packages.index')"> Gestionar Paquetes </DropdownLink>
-                                                <!-- FIN: LÍNEA AÑADIDA -->
-                                                 <!-- INICIO: LÍNEA AÑADIDA -->
                                                 <DropdownLink :href="route('admin.discounts.index')"> Gestionar Descuentos </DropdownLink>
-                                                <!-- FIN: LÍNEA AÑADIDA -->
                                             </template>
                                         </Dropdown>
                                     </div>
                                 </div>
+                                <!-- FIN: MENÚ ADMIN ACTUALIZADO -->
                                 
-                                <NavLink v-if="$page.props.auth.user && $page.props.auth.user.is_manager" :href="route('team-lead.users.index')" :active="route().current().startsWith('team-lead')">
+                                <NavLink v-if="isManager" :href="route('team-lead.users.index')" :active="route().current().startsWith('team-lead')">
                                     Gestionar Equipo
                                 </NavLink>
                             </div>
@@ -109,22 +114,21 @@ const showingNavigationDropdown = ref(false);
                         <ResponsiveNavLink :href="route('clients.index')" :active="route().current('clients.index')">Clientes </ResponsiveNavLink>
                     </div>
 
-                    <div v-if="$page.props.auth.user && $page.props.auth.user.is_admin" class="border-t border-gray-200 pt-4 pb-1">
+                    <!-- INICIO: MENÚ RESPONSIVE ADMIN ACTUALIZADO -->
+                    <div v-if="isAdmin" class="border-t border-gray-200 pt-4 pb-1">
                         <div class="px-4"><div class="font-medium text-base text-gray-800">Administración</div></div>
                         <div class="mt-3 space-y-1">
                             <ResponsiveNavLink :href="route('admin.users.index')"> Gestionar Usuarios </ResponsiveNavLink>
                             <ResponsiveNavLink :href="route('admin.teams.index')"> Gestionar Equipos </ResponsiveNavLink>
                             <ResponsiveNavLink :href="route('terminals.import.create')"> Importar Terminales </ResponsiveNavLink>
-                            <!-- INICIO: LÍNEA AÑADIDA -->
+                            <hr class="my-1 border-gray-100">
                             <ResponsiveNavLink :href="route('admin.packages.index')"> Gestionar Paquetes </ResponsiveNavLink>
-                            <!-- FIN: LÍNEA AÑADIDA -->
-                             <!-- INICIO: LÍNEA AÑADIDA -->
                             <ResponsiveNavLink :href="route('admin.discounts.index')"> Gestionar Descuentos </ResponsiveNavLink>
-                            <!-- FIN: LÍNEA AÑADIDA -->
                         </div>
                     </div>
+                    <!-- FIN: MENÚ RESPONSIVE ADMIN ACTUALIZADO -->
 
-                    <div v-if="$page.props.auth.user && $page.props.auth.user.is_manager" class="border-t border-gray-200 pt-4 pb-1">
+                    <div v-if="isManager" class="border-t border-gray-200 pt-4 pb-1">
                         <div class="px-4"><div class="font-medium text-base text-gray-800">Jefe de Equipo</div></div>
                         <div class="mt-3 space-y-1">
                             <ResponsiveNavLink :href="route('team-lead.users.index')"> Gestionar Equipo </ResponsiveNavLink>

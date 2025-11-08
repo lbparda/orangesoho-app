@@ -23,7 +23,6 @@ class DiscountImportController extends Controller
      */
     public function storeCsv(Request $request)
     {
-        // 1. Validar el archivo
         $request->validate([
             'csv_file' => ['required', 'file', 'mimes:csv,txt'],
         ]);
@@ -32,67 +31,68 @@ class DiscountImportController extends Controller
         $path = $file->getRealPath();
 
         try {
-            // 2. Abrir y leer el archivo
             $fileHandle = fopen($path, 'r');
             if (!$fileHandle) {
                 throw new Exception("No se pudo abrir el archivo CSV.");
             }
 
-            // 3. Leer la cabecera (primera fila) para obtener los nombres de las columnas
-            // --- MODIFICADO: Añadir el delimitador ';' ---
+            // Leer cabecera (usando ';')
             $header = array_map('trim', fgetcsv($fileHandle, 0, ';')); 
             
-            // Validar cabeceras esperadas
-            $expectedHeaders = ['id', 'name', 'percentage', 'duration_months', 'conditions'];
-            if (count(array_diff($expectedHeaders, $header)) > 0) {
+            // --- AÑADIDO 'is_active' A LAS CABECERAS ESPERADAS ---
+            $expectedHeaders = ['id', 'name', 'percentage', 'duration_months', 'conditions', 'is_active'];
+            $diff = array_diff($expectedHeaders, $header);
+            
+            if (count($diff) > 0) {
                  fclose($fileHandle);
-                 throw new Exception("El CSV no tiene las columnas esperadas. Asegúrate de que contiene: id, name, percentage, duration_months, conditions");
+                 throw new Exception("El CSV no tiene las columnas esperadas. Faltan: " . implode(', ', $diff));
             }
 
             $rowCount = 0;
-            // 4. Leer el resto de filas, una por una
-            // --- MODIFICADO: Añadir el delimitador ';' ---
+            // Leer filas (usando ';')
             while (($row = fgetcsv($fileHandle, 0, ';')) !== false) {
                 
-                // --- INICIO: CORRECCIÓN DE ERROR ---
-                // Comprobamos que la fila no esté vacía (ej. una línea en blanco al final)
                 if (empty(array_filter($row))) {
-                    continue; // Saltar esta fila vacía
+                    continue; // Saltar filas vacías
                 }
 
+                // --- INICIO: CORRECCIÓN DE ERROR DE SINTAXIS ---
                 // Comprobamos que el número de columnas de la fila coincida con la cabecera
                 if (count($header) !== count($row)) {
                     fclose($fileHandle);
+                    // Arregladas las comillas (") que faltaban
                     throw new Exception(
-                        "Error en la fila " . ($rowCount + 2) . ". " . // +2 porque +1 es la cabecera y +1 es el índice 0
-                        "El número de columnas (" . count($row) . ") no coincide con la cabecera (" . count($header) . "). " .
-                        "Revisa si hay comas o saltos de línea extra en tu CSV."
+                        "Error en la fila " . ($rowCount + 2) . ". " . 
+                        "El número de columnas (" . count($row) . ") no coincide con la cabecera (" . count($header) . ")."
                     );
                 }
-                // --- FIN: CORRECCIÓN DE ERROR ---
+                // --- FIN: CORRECCIÓN DE ERROR DE SINTAXIS ---
 
-                // Combinar la cabecera con la fila para obtener un array asociativo
                 $data = array_combine($header, $row);
 
-                // 5. Limpiar y preparar los datos
                 $id = !empty($data['id']) ? (int)$data['id'] : null;
                 $conditions = !empty($data['conditions']) ? json_decode($data['conditions'], true) : null;
                 
-                // Si el JSON es inválido, json_decode devuelve null.
+                // --- INICIO: CORRECCIÓN DE ERROR DE SINTAXIS ---
                 if (!empty($data['conditions']) && $conditions === null) {
+                    // Arregladas las comillas (") que faltaban
                     throw new Exception("Error en la fila " . ($rowCount + 2) . ": El JSON de 'conditions' no es válido.");
                 }
+                // --- FIN: CORRECCIÓN DE ERROR DE SINTAXIS ---
 
-                // 6. Usar updateOrCreate para actualizar o crear
+                // --- AÑADIDO: Lógica para 'is_active' (convierte '1' a true, '0' o vacío a false) ---
+                $isActive = isset($data['is_active']) && (strtolower($data['is_active']) === '1' || strtolower($data['is_active']) === 'true');
+
                 Discount::updateOrCreate(
                     [
-                        'id' => $id // Busca por ID (si es null, creará uno nuevo)
+                        'id' => $id // Busca por ID (si es null, crea uno nuevo)
                     ],
                     [ // Datos para actualizar o crear
                         'name' => $data['name'],
                         'percentage' => (float)$data['percentage'],
                         'duration_months' => (int)$data['duration_months'],
                         'conditions' => $conditions,
+                        'is_active' => $isActive, // <-- AÑADIDO
                     ]
                 );
                 $rowCount++;
@@ -101,12 +101,10 @@ class DiscountImportController extends Controller
             fclose($fileHandle);
 
         } catch (Exception $e) {
-            // Si algo sale mal (JSON inválido, archivo corrupto...)
             return redirect()->route('admin.discounts.importCsv')
                              ->with('error', 'Error al importar: ' . $e->getMessage());
         }
 
-        // 7. Éxito
         return redirect()->route('admin.discounts.index')
                          ->with('success', "¡Importación completada! Se procesaron $rowCount descuentos.");
     }

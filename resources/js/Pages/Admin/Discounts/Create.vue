@@ -6,16 +6,15 @@ import InputLabel from '@/Components/InputLabel.vue';
 import TextInput from '@/Components/TextInput.vue';
 import InputError from '@/Components/InputError.vue';
 
-// Definimos el formulario con valores por defecto para la creación
 const form = useForm({
     name: '',
     percentage: 0,
     duration_months: 0,
-    conditions: '', // El usuario escribirá el JSON como texto
+    conditions: '', 
+    is_active: true, // <-- AÑADIDO: Por defecto 'Activo'
 });
 
 const submit = () => {
-    // --- Lógica para manejar el JSON (idéntica a Edit.vue) ---
     const dataToSubmit = {
         ...form.data(),
     };
@@ -32,11 +31,10 @@ const submit = () => {
         return;
     }
 
-    // Usamos .transform() para enviar el objeto limpio
     form.transform(() => dataToSubmit).post(route('admin.discounts.store'), {
         preserveScroll: true,
         onSuccess: () => {
-            form.reset(); // Limpia el formulario después de crear
+            form.reset(); 
         },
     });
 };
@@ -120,6 +118,21 @@ const submit = () => {
                             <InputError class="mt-2" :message="form.errors.conditions" />
                         </div>
                         
+                        <!-- AÑADIDO: Campo Estado -->
+                        <div>
+                            <InputLabel for="is_active" value="Estado" />
+                            <select
+                                id="is_active"
+                                class="mt-1 block w-full border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm"
+                                v-model="form.is_active"
+                                required
+                            >
+                                <option :value="true">Activo</option>
+                                <option :value="false">Inactivo</option>
+                            </select>
+                            <InputError class="mt-2" :message="form.errors.is_active" />
+                        </div>
+                        
                         <!-- Botón Guardar -->
                         <div class="flex items-center gap-4">
                             <PrimaryButton :disabled="form.processing">
@@ -132,7 +145,6 @@ const submit = () => {
                                 leave-active-class="transition ease-in-out"
                                 leave-to-class="opacity-0"
                             >
-                                <!-- ¡AQUÍ ESTÁ LA CORRECCIÓN! (v-if en lugar de v_if) -->
                                 <p v-if="form.recentlySuccessful" class="text-sm text-green-600">Creado.</p>
                             </Transition>
                         </div>

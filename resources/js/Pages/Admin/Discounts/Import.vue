@@ -71,7 +71,8 @@ const submit = () => {
                                 Sube el archivo CSV que has modificado. El sistema usará la columna 'id' para actualizar los descuentos existentes o crear nuevos si el 'id' está vacío.
                             </p>
                             <p class="mt-2 text-xs text-gray-500">
-                                Columnas esperadas: <strong>id, name, percentage, duration_months, conditions</strong>
+                                <!-- AÑADIDO 'is_active' -->
+                                Columnas esperadas: <strong>id, name, percentage, duration_months, conditions, is_active</strong>
                             </p>
                             
                             <InputError class="mt-2" :message="form.errors.csv_file" />
