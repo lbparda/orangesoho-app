@@ -112,6 +112,13 @@ class AddonSeeder extends Seeder
             ['name' => 'Futbol Bares > 250.000 hab.'],
             ['type' => 'tv', 'price' => 355.00, 'commission' => 50.00, 'description' => 'TV para bares en localidades con más de 250.000 habitantes.']
         );
+        
+        Addon::updateOrCreate([
+            'name' => 'IP Fija',
+            'type' => 'internet_feature', 
+            'price' => 12.00,
+            'commission' => 0.00 ]
+        );
         Addon::updateOrCreate([
                 'name' => 'Fibra Oro',
                 'type' => 'internet_feature', // Lo ponemos como "feature" igual que la IP Fija
@@ -121,13 +128,75 @@ class AddonSeeder extends Seeder
                 'created_at' => now(),
                 'updated_at' => now() ]
             );
-
-        Addon::updateOrCreate([
-            'name' => 'IP Fija',
-            'type' => 'internet_feature', 
-            'price' => 12.00,
-            'commission' => 0.00 ]
+        Addon::updateOrCreate(
+            ['name' => 'Microsoft 365'],
+            [
+                'type' => 'service', // O 'software', como prefieras
+                'price' => 5.99, // Precio real (el beneficio dará 50% dto.)
+                'commission' => 1.00, // Ajusta la comisión
+                'decommission' => 0.00,
+                'description' => 'Producto Microsoft 365 (para beneficio)',
+                'created_at' => now(),
+                'updated_at' => now()
+            ]
         );
+
+        // 3. Presencia Digital
+        Addon::updateOrCreate(
+            ['name' => 'Presencia Digital'],
+            [
+                'type' => 'service',
+                'price' => 20.00, // Precio real (el beneficio dará 50% dto.)
+                'commission' => 5.00, // Ajusta la comisión
+                'decommission' => 0.00,
+                'description' => 'Producto Presencia Digital (para beneficio)',
+                'created_at' => now(),
+                'updated_at' => now()
+            ]
+        );
+
+        // 4. Factura electrónica
+        Addon::updateOrCreate(
+            ['name' => 'Factura electrónica'],
+            [
+                'type' => 'service',
+                'price' => 5.00, // ¡Placeholder! Ajusta el precio real
+                'commission' => 1.00, // Ajusta la comisión
+                'decommission' => 0.00,
+                'description' => 'Producto Factura electrónica (para beneficio)',
+                'created_at' => now(),
+                'updated_at' => now()
+            ]
+        );
+
+        // 5. Disney+
+        Addon::updateOrCreate(
+            ['name' => 'Disney+ con +90 canales'],
+            [
+                'type' => 'tv',
+                'price' => 8.99, // Precio real
+                'commission' => 2.00, // Ajusta la comisión
+                'decommission' => 0.00,
+                'description' => 'Producto Disney+ (para beneficio)',
+                'created_at' => now(),
+                'updated_at' => now()
+            ]
+        );
+
+        // 6. Amazon Prime
+        Addon::updateOrCreate(
+            ['name' => 'Amazon Prime'],
+            [
+                'type' => 'tv', // O 'service'
+                'price' => 4.99, // ¡Placeholder! Ajusta el precio real (PVP Amazon)
+                'commission' => 1.00, // Ajusta la comisión
+                'decommission' => 0.00,
+                'description' => 'Producto Amazon Prime (para beneficio)',
+                'created_at' => now(),
+                'updated_at' => now()
+            ]
+        );    
+
 
 
     }

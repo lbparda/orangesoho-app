@@ -11,6 +11,9 @@ import { useOfferCalculations } from '@/composables/useOfferCalculations.js';
 const props = defineProps({
     clients: Array,
     packages: Array,
+    // --- INICIO MODIFICACIÓN BENEFICIOS ---
+    allAddons: Array, // <-- ¡NUEVO PROP!
+    // --- FIN MODIFICACIÓN BENEFICIOS ---
     discounts: Array,
     operators: Array,
     portabilityCommission: {
@@ -66,6 +69,9 @@ const form = useForm({
     probability: null,
     signing_date: '',
     processing_date: '',
+    // --- INICIO MODIFICACIÓN BENEFICIOS ---
+    applied_benefit_ids: [], // <-- ¡NUEVO! Para enviar al backend
+    // --- FIN MODIFICACIÓN BENEFICIOS ---
 });
 
 const selectedPackageId = ref(null);
@@ -80,7 +86,38 @@ const isOperadoraAutomaticaSelected = ref(false);
 const selectedTvAddonIds = ref([]);
 const showCommissionDetails = ref(false);
 
+// --- INICIO MODIFICACIÓN BENEFICIOS ---
+// Almacena los IDs de los beneficios seleccionados: [1, 5, 7]
+const selectedBenefitIds = ref([]); 
+// --- FIN MODIFICACIÓN BENEFICIOS ---
+
 const selectedPackage = computed(() => props.packages.find(p => p.id === selectedPackageId.value) || null);
+
+// --- INICIO MODIFICACIÓN BENEFICIOS: Computeds de Lógica ---
+const benefitLimit = computed(() => selectedPackage.value?.benefit_limit || 0);
+const availableBenefits = computed(() => selectedPackage.value?.benefits || []);
+
+// Agrupar beneficios por categoría para la UI
+const benefitsEmpresa = computed(() => availableBenefits.value.filter(b => b.category === 'Empresa'));
+const benefitsHogar = computed(() => availableBenefits.value.filter(b => b.category === 'Hogar'));
+
+// Lógica de Reglas de Selección
+const selectedBenefits = computed(() => 
+    availableBenefits.value.filter(b => selectedBenefitIds.value.includes(b.id))
+);
+
+const totalSelectedCount = computed(() => selectedBenefitIds.value.length);
+const hogarSelectedCount = computed(() => 
+    selectedBenefits.value.filter(b => b.category === 'Hogar').length
+);
+
+// Regla 1: Límite total alcanzado
+const isTotalLimitReached = computed(() => totalSelectedCount.value >= benefitLimit.value);
+
+// Regla 2: Límite de "Hogar" alcanzado
+const isHogarLimitReached = computed(() => hogarSelectedCount.value >= 1);
+// --- FIN MODIFICACIÓN BENEFICIOS ---
+
 const tvAddonOptions = computed(() => selectedPackage.value?.addons.filter(a => a.type === 'tv') || []);
 const mobileAddonInfo = computed(() => selectedPackage.value?.addons.find(a => a.type === 'mobile_line'));
 const internetAddonOptions = computed(() => selectedPackage.value?.addons.filter(a => a.type === 'internet') || []);
@@ -102,15 +139,16 @@ const availableO2oDiscounts = computed(() => selectedPackage.value?.o2o_discount
 const brandsForSelectedPackage = computed(() => [...new Set(availableTerminals.value.map(t => t.brand))]);
 const availableAdditionalExtensions = computed(() => props.centralitaExtensions);
 
-// --- INICIO: CAMBIO (Línea 131) ---
+// --- INICIO: MODIFICACIÓN BENEFICIOS (Línea 131) ---
 // Pasamos el objeto 'form' completo y el ref 'additionalInternetLines' al composable
 // AÑADIMOS: ipFijaAddonInfo y fibraOroAddonInfo
 const { calculationSummary, ipFijaAddonInfo, fibraOroAddonInfo } = useOfferCalculations(
     props, selectedPackageId, lines, selectedInternetAddonId, additionalInternetLines, // <-- Pasamos el ref actualizado
     selectedCentralitaId, centralitaExtensionQuantities, isOperadoraAutomaticaSelected, selectedTvAddonIds,
-    form // <-- Pasar el objeto form completo
+    form, // <-- Pasar el objeto form completo
+    selectedBenefits // <-- ¡NUEVO! Pasa la lista de objetos de beneficio seleccionados
 );
-// --- FIN: CAMBIO ---
+// --- FIN: MODIFICACIÓN BENEFICIOS ---
 
 const modelsByBrand = (brand) => availableTerminals.value.filter(t => t.brand === brand).filter((v, i, a) => a.findIndex(t => t.model === v.model) === i);
 // Ahora usamos pivot.id (que viene de package_terminal.id)
@@ -118,6 +156,7 @@ const findTerminalPivot = (line) => availableTerminals.value.find(t => t.id === 
 
 // --- FUNCIÓN 'assignTerminalPrices' MODIFICADA ---
 const assignTerminalPrices = (line) => {
+// ... (código existente sin cambios)
     const pivot = findTerminalPivot(line);
 
     // 1. Obtenemos todos los valores del pivot
@@ -156,6 +195,7 @@ const assignTerminalPrices = (line) => {
 
 // --- INICIO CÓDIGO CORREGIDO ---
 const addLine = () => {
+// ... (código existente sin cambios)
     if (!canAddLine.value) return;
     const newLine = createNewLine(true);
     lines.value.push(newLine);
@@ -167,6 +207,7 @@ const addLine = () => {
 const removeLine = (index) => { if (lines.value[index]?.is_extra) lines.value.splice(index, 1); };
 
 const copyPreviousLine = (line, index) => {
+// ... (código existente sin cambios)
     if (index <= 0 || !lines.value[index - 1]) return;
     const prev = lines.value[index - 1];
     line.is_portability = prev.is_portability;
@@ -182,12 +223,13 @@ const copyPreviousLine = (line, index) => {
 
 // --- INICIO CÓDIGO NUEVO: Watcher para líneas de internet adicionales ---
 const addWatchersToAdditionalLine = (line) => {
+// ... (código existente sin cambios)
     watch(() => line.selected_centralita_id, (isCentralita) => {
         if (isCentralita) { // Si hay ID de centralita, marcar IP Fija
             line.has_ip_fija = true;
         } else { // Si se quita la centralita, desmarcar IP Fija
             // No lo desmarcamos automáticamente, puede que la quieran sin centralita
-              line.has_ip_fija = false; 
+             line.has_ip_fija = false; 
         }
     });
 };
@@ -195,6 +237,7 @@ const addWatchersToAdditionalLine = (line) => {
 
 // --- INICIO CÓDIGO MODIFICADO Y CORREGIDO ---
 const addInternetLine = () => {
+// ... (código existente sin cambios)
     const newLine = {
         id: Date.now(),
         addon_id: null,
@@ -211,6 +254,7 @@ const addInternetLine = () => {
 const removeInternetLine = (index) => additionalInternetLines.value.splice(index, 1);
 const getDurationsForModel = (line) => [...new Set(availableTerminals.value.filter(t => t.id === line.selected_model_id).map(t => t.pivot.duration_months))].sort((a, b) => a - b);
 const getO2oDiscountsForLine = (line, index) => {
+// ... (código existente sin cambios)
     if (!mobileAddonInfo.value) return availableO2oDiscounts.value;
     const promoLimit = mobileAddonInfo.value.pivot.line_limit ?? 0; // Usar ?? 0 por si no viene
     const extraLinesBeforeThis = lines.value.slice(0, index).filter(l => l.is_extra).length;
@@ -221,6 +265,7 @@ const getO2oDiscountsForLine = (line, index) => {
     return availableO2oDiscounts.value;
 };
 const saveOffer = () => {
+// ... (código existente sin cambios)
     if (!form.client_id) { alert("Por favor, selecciona un cliente."); return; }
     if (!selectedPackage.value) { alert("Por favor, selecciona un paquete."); return; }
     try {
@@ -255,6 +300,11 @@ const saveOffer = () => {
                 selected_centralita_id: l.selected_centralita_id // <-- AÑADIDO
             }));
         // --- FIN CÓDIGO MODIFICADO ---
+
+        // --- INICIO MODIFICACIÓN BENEFICIOS ---
+        form.applied_benefit_ids = selectedBenefitIds.value; // Pasa el array de IDs [1, 5, 7]
+        // --- FIN MODIFICACIÓN BENEFICIOS ---
+
         form.centralita = {
             id: selectedCentralitaId.value || includedCentralita.value?.id || null,
             operadora_automatica_selected: isOperadoraAutomaticaSelected.value,
@@ -268,16 +318,23 @@ const saveOffer = () => {
 };
 
 const addWatchersToLine = (line) => {
+// ... (código existente sin cambios)
     watch(() => line.is_portability, (isPortability, old) => { if (old && !isPortability) { line.has_vap = false; line.selected_brand = null; line.selected_model_id = null; line.selected_duration = null; assignTerminalPrices(line); line.source_operator = null; } });
     watch(() => line.has_vap, (hasVap, old) => { if (old && !hasVap) { line.selected_brand = null; line.selected_model_id = null; line.selected_duration = null; assignTerminalPrices(line); } });
     watch(() => [line.selected_model_id, line.selected_duration], () => assignTerminalPrices(line));
 };
 
 watch(selectedPackageId, (newPackageId) => {
+// ... (código existente sin cambios)
     lines.value = []; selectedInternetAddonId.value = null; additionalInternetLines.value = []; selectedCentralitaId.value = null;
     centralitaExtensionQuantities.value = {}; isOperadoraAutomaticaSelected.value = false; selectedTvAddonIds.value = [];
     form.is_ip_fija_selected = false; // Resetea IP fija al cambiar paquete
     form.is_fibra_oro_selected = false; // <-- AÑADIDO (Línea 261)
+    
+    // --- INICIO MODIFICACIÓN BENEFICIOS ---
+    selectedBenefitIds.value = []; // <-- ¡NUEVO! Resetea la selección
+    // --- FIN MODIFICACIÓN BENEFICIOS ---
+
     if (!newPackageId) return;
     const defaultOption = [...internetAddonOptions.value].sort((a, b) => (a.pivot.price ?? 0) - (b.pivot.price ?? 0))[0];
     if (defaultOption) selectedInternetAddonId.value = defaultOption.id;
@@ -292,6 +349,7 @@ watch(selectedPackageId, (newPackageId) => {
 });
 
 watch(
+// ... (código existente sin cambios)
     () => form.client_id,
     (newClientId) => {
         if (newClientId) {
@@ -306,6 +364,7 @@ watch(
 // --- INICIO CÓDIGO AÑADIDO ---
 // Watcher para marcar/desmarcar IP Fija según la centralita (para la línea PRINCIPAL)
 watch(isCentralitaActive, (isActive) => {
+// ... (código existente sin cambios)
     if (isActive) {
         form.is_ip_fija_selected = true;
     } else {
@@ -440,6 +499,60 @@ watch(isCentralitaActive, (isActive) => {
                             <!-- --- FIN: CAMBIO --- -->
                            
                         </div>
+
+                        <!-- --- INICIO: NUEVO APARTADO DE BENEFICIOS (CON LÍMITES) --- -->
+                        <div v-if="availableBenefits.length > 0" class="bg-white shadow-sm sm:rounded-lg p-8 -my-6 border-t border-b">
+                            
+                            <h3 class="text-lg font-semibold text-gray-800 mb-2">
+                                Beneficios a Elegir (Selecciona {{ benefitLimit }})
+                            </h3>
+                            <p v-if="isTotalLimitReached" class="text-sm font-medium text-red-600">
+                                Has alcanzado el límite de {{ benefitLimit }} beneficios.
+                            </p>
+                            <p v-else class="text-sm text-gray-500">
+                                Te quedan {{ benefitLimit - totalSelectedCount }} por elegir.
+                            </p>
+
+                            <!-- Categoría Empresa -->
+                            <div class="mt-4">
+                                <h4 class="font-semibold text-gray-700 border-b pb-2">Categoría Empresa</h4>
+                                <div class="space-y-2 mt-3">
+                                    <!-- Usamos benefit.description como texto y benefit.id como valor -->
+                                    <label v-for="benefit in benefitsEmpresa" :key="benefit.id" class="flex items-center p-2 rounded hover:bg-gray-50">
+                                        <input 
+                                            type="checkbox"
+                                            :value="benefit.id"
+                                            v-model="selectedBenefitIds"
+                                            :disabled="!selectedBenefitIds.includes(benefit.id) && isTotalLimitReached"
+                                            class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500 disabled:opacity-50"
+                                        />
+                                        <span class="ml-3 text-sm text-gray-700">{{ benefit.description }}</span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <!-- Categoría Hogar -->
+                            <div class="mt-6">
+                                <h4 class="font-semibold text-gray-700 border-b pb-2">Categoría Hogar</h4>
+                                <p class="text-xs text-gray-500 mt-1">(Máximo 1 beneficio de esta categoría)</p>
+                                <p v-if="isHogarLimitReached && !isTotalLimitReached" class="text-sm font-medium text-yellow-600">
+                                    Has alcanzado el límite de 1 beneficio de Hogar.
+                                </p>
+                                <div class="space-y-2 mt-3">
+                                    <label v-for="benefit in benefitsHogar" :key="benefit.id" class="flex items-center p-2 rounded hover:bg-gray-50">
+                                        <input 
+                                            type="checkbox"
+                                            :value="benefit.id"
+                                            v-model="selectedBenefitIds"
+                                            :disabled="(!selectedBenefitIds.includes(benefit.id) && isTotalLimitReached) || (!selectedBenefitIds.includes(benefit.id) && isHogarLimitReached)"
+                                            class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500 disabled:opacity-50"
+                                        />
+                                        <span class="ml-3 text-sm text-gray-700">{{ benefit.description }}</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- --- FIN: NUEVO APARTADO DE BENEFICIOS --- -->
 
                         <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                             <div v-if="tvAddonOptions.length > 0" class="space-y-4 p-6 bg-slate-50 rounded-lg h-full">

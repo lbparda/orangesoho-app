@@ -39,4 +39,8 @@ class Addon extends Model
             ])
             ->withTimestamps();
     }
+    public function benefits()
+    {
+        return $this->hasMany(Benefit::class);
+    }
 }

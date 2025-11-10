@@ -25,7 +25,9 @@ class OfferController extends Controller
     {
         $user = $request->user();
         
-        $query = Offer::with(['package', 'user.team','client'])->latest();
+        // --- INICIO MODIFICACIÓN BENEFICIOS (Cargar 'benefits' en index) ---
+        $query = Offer::with(['package', 'user.team','client', 'benefits.addon'])->latest();
+        // --- FIN MODIFICACIÓN BENEFICIOS ---
 
         if ($user->isManager()) { 
             if ($user->team_id) {
@@ -47,7 +49,18 @@ class OfferController extends Controller
     {
         $user = Auth::user();
 
-        $packages = Package::with(['addons', 'o2oDiscounts', 'terminals'])->get();
+        // --- INICIO MODIFICACIÓN BENEFICIOS ---
+        // 1. Cargar todos los addons (incluyendo productos-beneficio como MS 365, Disney+, etc.)
+        $allAddons = Addon::all(); 
+
+        // 2. Cargar paquetes con sus reglas de beneficio y el addon al que apuntan
+        $packages = Package::with([
+            'addons', 
+            'o2oDiscounts', 
+            'terminals',
+            'benefits.addon' // Carga la regla Y el producto al que apunta
+        ])->get();
+        // --- FIN MODIFICACIÓN BENEFICIOS ---
         
         // --- CORRECCIÓN: SOLO DESCUENTOS ACTIVOS ---
         $discounts = Discount::where('is_active', true)->get();
@@ -69,8 +82,8 @@ class OfferController extends Controller
             $clientsQuery->where('user_id', $user->id);
         }
         $clients = $clientsQuery->select('id', 'name', 'cif_nif') 
-                                 ->orderBy('name')
-                                 ->get();
+                                    ->orderBy('name')
+                                    ->get();
 
         $probabilityOptions = [0, 25, 50, 75, 90, 100]; 
 
@@ -78,6 +91,9 @@ class OfferController extends Controller
 
         return Inertia::render('Offers/Create', [
             'packages' => $packages,
+            // --- INICIO MODIFICACIÓN BENEFICIOS ---
+            'allAddons' => $allAddons, // <- Pasar todos los addons
+            // --- FIN MODIFICACIÓN BENEFICIOS ---
             'discounts' => $discounts,
             'operators' => $operators,
             'portabilityCommission' => $portabilityCommission,
@@ -119,6 +135,11 @@ class OfferController extends Controller
             'probability' => 'nullable|integer|in:0,25,50,75,90,100',
             'signing_date' => 'nullable|date',
             'processing_date' => 'nullable|date',
+
+            // --- INICIO MODIFICACIÓN BENEFICIOS ---
+            'applied_benefit_ids' => 'nullable|array', // Valida que sea un array
+            'applied_benefit_ids.*' => 'exists:benefits,id', // Valida que cada ID exista
+            // --- FIN MODIFICACIÓN BENEFICIOS ---
         ]);
         // --- FIN: VALIDACIÓN ACTUALIZADA ---
 
@@ -140,6 +161,12 @@ class OfferController extends Controller
                     'package_commission' => $package->commission_amount ?? 0, 
                     'status' => 'borrador', 
                 ]);
+
+                // --- INICIO MODIFICACIÓN BENEFICIOS ---
+                // Sincroniza los beneficios seleccionados (ej: [1, 5, 7])
+                $appliedBenefitIds = $validated['applied_benefit_ids'] ?? [];
+                $offer->benefits()->sync($appliedBenefitIds);
+                // --- FIN MODIFICACIÓN BENEFICIOS ---
 
                 foreach ($validated['lines'] as $lineData) {
                     $o2oDiscount = null;
@@ -316,14 +343,21 @@ class OfferController extends Controller
     public function edit(Offer $offer)
     {
         if ($offer->status === 'finalizada' && Auth::user()->role !== 'admin') { 
-             return redirect()->route('offers.show', $offer)->with('warning', 'Esta oferta está finalizada y no se puede editar.');
+            return redirect()->route('offers.show', $offer)->with('warning', 'Esta oferta está finalizada y no se puede editar.');
         }
 
+        // --- INICIO MODIFICACIÓN BENEFICIOS ---
+        // 1. Cargar todos los addons (incluyendo productos-beneficio)
+        $allAddons = Addon::all(); 
+
+        // 2. Cargar paquetes con sus reglas de beneficio y el addon al que apuntan
         $packages = Package::with([
             'addons',
             'o2oDiscounts',
-            'terminals' => fn($query) => $query->select('terminals.*', 'package_terminal.id as pivot_id', 'package_terminal.duration_months', 'package_terminal.initial_cost', 'package_terminal.monthly_cost')
+            'terminals' => fn($query) => $query->select('terminals.*', 'package_terminal.id as pivot_id', 'package_terminal.duration_months', 'package_terminal.initial_cost', 'package_terminal.monthly_cost'),
+            'benefits.addon' // Carga la regla Y el producto
         ])->get();
+        // --- FIN MODIFICACIÓN BENEFICIOS ---
         
         // --- CORRECCIÓN: SOLO DESCUENTOS ACTIVOS ---
         $discounts = Discount::where('is_active', true)->get();
@@ -349,8 +383,12 @@ class OfferController extends Controller
 
         $probabilityOptions = [0, 25, 50, 75, 90, 100];
 
-        // --- INICIO: CARGAR PIVOTES (ACTUALIZADO) ---
-        $offer->load(['lines', 'client', 'addons' => function ($query) {
+        // --- INICIO: CARGAR PIVOTES (ACTUALIZADO CON BENEFICIOS) ---
+        $offer->load([
+            'lines', 
+            'client',
+            'benefits', // <-- ¡AÑADIDO! Carga los beneficios ya seleccionados
+            'addons' => function ($query) {
                 $query->withPivot(
                     'quantity', 'has_ip_fija', 'selected_centralita_id',
                     'addon_name', 'addon_price', 'addon_commission',
@@ -400,6 +438,9 @@ class OfferController extends Controller
         return Inertia::render('Offers/Edit', [
             'offer' => $offer,
             'packages' => $packages,
+            // --- INICIO MODIFICACIÓN BENEFICIOS ---
+            'allAddons' => $allAddons, // <- Pasar todos los addons
+            // --- FIN MODIFICACIÓN BENEFICIOS ---
             'discounts' => $discounts,
             'operators' => $operators,
             'portabilityCommission' => $portabilityCommission,
@@ -435,8 +476,8 @@ class OfferController extends Controller
                                      ->exists();
              $canAccessClient = $clientExists;
          } else { 
-              $clientExists = Client::where('id', $clientId)->where('user_id', $user->id)->exists();
-              $canAccessClient = $clientExists;
+             $clientExists = Client::where('id', $clientId)->where('user_id', $user->id)->exists();
+             $canAccessClient = $clientExists;
          }
 
          if (!$canAccessClient) {
@@ -468,6 +509,11 @@ class OfferController extends Controller
              'probability' => 'nullable|integer|in:0,25,50,75,90,100',
              'signing_date' => 'nullable|date',
              'processing_date' => 'nullable|date',
+
+            // --- INICIO MODIFICACIÓN BENEFICIOS ---
+            'applied_benefit_ids' => 'nullable|array',
+            'applied_benefit_ids.*' => 'exists:benefits,id',
+            // --- FIN MODIFICACIÓN BENEFICIOS ---
          ]);
         // --- FIN: VALIDACIÓN ACTUALIZADA ---
 
@@ -489,6 +535,12 @@ class OfferController extends Controller
                     'package_price' => $package->base_price ?? 0, // Usamos base_price
                     'package_commission' => $package->commission_amount ?? 0,
                 ]);
+
+                // --- INICIO MODIFICACIÓN BENEFICIOS ---
+                // Sincroniza los beneficios (borra los viejos, añade los nuevos)
+                $appliedBenefitIds = $validated['applied_benefit_ids'] ?? [];
+                $offer->benefits()->sync($appliedBenefitIds);
+                // --- FIN MODIFICACIÓN BENEFICIOS ---
 
                 $offer->lines()->delete();
                 foreach ($validated['lines'] as $lineData) {
@@ -670,12 +722,13 @@ class OfferController extends Controller
 
     public function show(Offer $offer)
     {
-        // --- INICIO: CARGAR PIVOTES (ACTUALIZADO) ---
+        // --- INICIO: CARGAR PIVOTES (ACTUALIZADO CON BENEFICIOS) ---
         $offer->load([
             'package.addons', 
             'user.team', 
             'lines', 
             'client',
+            'benefits.addon', // <-- ¡AÑADIDO!
             'addons' => function ($query) {
                 $query->withPivot(
                     'quantity', 'has_ip_fija', 'selected_centralita_id',
@@ -710,12 +763,13 @@ class OfferController extends Controller
     {
         set_time_limit(300);
 
-        // --- INICIO: CARGAR PIVOTES (ACTUALIZADO) ---
+        // --- INICIO: CARGAR PIVOTES (ACTUALIZADO CON BENEFICIOS) ---
         $offer->load([
             'package.addons', 
             'user', 
             'lines', 
             'client',
+            'benefits.addon', // <-- ¡AÑADIDO!
             'addons' => function ($query) {
                 $query->withPivot(
                     'quantity', 'has_ip_fija', 'selected_centralita_id',
@@ -752,6 +806,7 @@ class OfferController extends Controller
             DB::transaction(function () use ($offer) {
                  $offer->lines()->delete();
                  $offer->addons()->detach();
+                 $offer->benefits()->detach(); // <-- INCLUIDO PARA LIMPIEZA
                  $offer->delete();
             });
             return redirect()->route('offers.index')->with('success', 'Oferta eliminada correctamente.');
@@ -760,7 +815,7 @@ class OfferController extends Controller
              return redirect()->route('offers.index')->with('error', 'No se pudo eliminar la oferta. Puede tener elementos asociados.');
         }
     }
- 
+
     public function lock(Request $request, Offer $offer)
     {
         try {
@@ -782,8 +837,8 @@ class OfferController extends Controller
         }
         
         $query = Offer::with(['user.team','client']) 
-                        ->withCount('lines')
-                        ->latest();
+                            ->withCount('lines')
+                            ->latest();
 
         if ($user->role === 'jefe de ventas' || $user->role === 'team_lead') {
              if ($user->team_id) {

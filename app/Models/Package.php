@@ -32,5 +32,9 @@ class Package extends Model
     {
         return $this->belongsToMany(O2oDiscount::class, 'o2o_discount_package')->withPivot('subsidy_percentage', 'dho_payment', 'osp_payment')->withTimestamps();
     }
+    public function benefits()
+    {
+        return $this->belongsToMany(Benefit::class, 'benefit_package');
+    }
 }
 

@@ -103,4 +103,8 @@ class Offer extends Model
     {
         return $this->belongsTo(Client::class);
     }
+    public function benefits()
+    {
+        return $this->belongsToMany(Benefit::class, 'benefit_offer');
+    }
 }

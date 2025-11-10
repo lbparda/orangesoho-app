@@ -1,19 +1,47 @@
 import { computed } from 'vue';
 
+// --- INICIO MODIFICACIÓN BENEFICIOS ---
+/**
+ * Aplica una regla de beneficio a un precio original.
+ * @param {number} originalPrice - El precio base del addon.
+ * @param {object | null} benefit - El objeto de beneficio (de la BBDD).
+ * @returns {number} - El precio final después de aplicar el beneficio.
+ */
+function applyBenefit(originalPrice, benefit) {
+    if (!benefit) {
+        return originalPrice; // Sin beneficio, devuelve el precio original
+    }
+
+    switch (benefit.apply_type) {
+        case 'free':
+            return 0; // El producto es gratis
+        case 'percentage_discount':
+            const discount = originalPrice * (parseFloat(benefit.apply_value || 0) / 100);
+            return Math.max(0, originalPrice - discount); // Precio - X%
+        case 'fixed_discount':
+            return Math.max(0, originalPrice - parseFloat(benefit.apply_value || 0)); // Precio - X€
+        default:
+            return originalPrice;
+    }
+}
+// --- FIN MODIFICACIÓN BENEFICIOS ---
+
+
 // Recibe las props y refs necesarios *específicamente* para el cálculo.
 export function useOfferCalculations(
-    props, // Necesita: packages, discounts, portabilityCommission, auth, centralitaExtensions, additionalInternetAddons, fiberFeatures
+    props, // Necesita: packages, discounts, portabilityCommission, auth, centralitaExtensions, additionalInternetAddons, fiberFeatures, allAddons
     selectedPackageId, // ref
     lines, // ref
     selectedInternetAddonId, // ref
-    // --- CAMBIO (Comentario): Añadido 'has_fibra_oro' ---
-    additionalInternetLines, // ref <-- Ahora contiene objetos con { addon_id, has_ip_fija, selected_centralita_id, has_fibra_oro }
+    additionalInternetLines, // ref
     selectedCentralitaId, // ref
     centralitaExtensionQuantities, // ref
     isOperadoraAutomaticaSelected, // ref
     selectedTvAddonIds, // ref
-    // --- CAMBIO (Comentario): Añadido 'is_fibra_oro_selected' ---
-    form // <-- Recibe el objeto 'form' completo (incluye form.is_ip_fija_selected y form.is_fibra_oro_selected)
+    form, // <-- Recibe el objeto 'form' completo
+    // --- INICIO MODIFICACIÓN BENEFICIOS ---
+    selectedBenefits // <-- ¡NUEVO ARGUMENTO! Un computed ref de los objetos de beneficio seleccionados
+    // --- FIN MODIFICACIÓN BENEFICIOS ---
 ) {
 
     // --- Computeds auxiliares INTERNAS al cálculo ---
@@ -29,8 +57,27 @@ export function useOfferCalculations(
         return internetAddonOptions.value.find(a => a.id === selectedInternetAddonId.value);
     });
     const tvAddonOptions = computed(() => { // Necesario para cálculo TV
-        if (!selectedPackage.value?.addons) return [];
-        return selectedPackage.value.addons.filter(a => a.type === 'tv');
+        // --- INICIO MODIFICACIÓN BENEFICIOS ---
+        // Ahora buscamos en TODOS los addons, no solo en los del paquete
+        if (!props.allAddons) return [];
+        // Filtra los addons de tipo 'tv' que NO son beneficios de 'Hogar' (Disney/Amazon)
+        // para no duplicarlos en la sección "Televisión".
+        const benefitHogarAddonIds = selectedPackage.value?.benefits
+            ?.filter(b => b.category === 'Hogar')
+            .map(b => b.addon_id) || [];
+        
+        // Muestra los addons de TV que están en el paquete (como 'Futbol Bares')
+        const packageTvAddons = selectedPackage.value?.addons.filter(a => a.type === 'tv') || [];
+        // Opcional: Muestra addons de TV globales que no son beneficios
+        // const globalTvAddons = props.allAddons.filter(a => 
+        //     a.type === 'tv' && 
+        //     !benefitHogarAddonIds.includes(a.id) &&
+        //     !packageTvAddons.some(pkgAddon => pkgAddon.id === a.id)
+        // );
+        
+        // Devolvemos solo los que están explícitamente en el paquete
+        return packageTvAddons;
+        // --- FIN MODIFICACIÓN BENEFICIOS ---
     });
     const centralitaAddonOptions = computed(() => { // Necesario para cálculo Centralita
         if (!selectedPackage.value?.addons) return [];
@@ -61,10 +108,16 @@ export function useOfferCalculations(
         if (!selectedPackage.value?.addons) return null;
         return selectedPackage.value.addons.find(a => a.type === 'centralita_feature');
     });
+
+    // --- INICIO CORRECCIÓN DE BUG ---
+    // Volvemos a la lógica original. El Addon "mobile_line" se define EN EL PAQUETE,
+    // ya que necesitamos sus datos del PIVOT (precio, límite de líneas).
     const mobileAddonInfo = computed(() => { // Necesario para cálculo Líneas Móviles
         if (!selectedPackage.value?.addons) return null;
         return selectedPackage.value.addons.find(a => a.type === 'mobile_line');
     });
+    // --- FIN CORRECCIÓN DE BUG ---
+
     const availableO2oDiscounts = computed(() => { // Necesario para cálculo O2O
         if (!selectedPackage.value) return [];
         return selectedPackage.value.o2o_discounts || [];
@@ -73,8 +126,7 @@ export function useOfferCalculations(
     // --- Computed para IP Fija (Addon principal) ---
     const ipFijaAddonInfo = computed(() => {
         if (!props.fiberFeatures || props.fiberFeatures.length === 0) return null;
-        // Asumimos que solo hay una, la primera que encuentre con el nombre exacto
-        return props.fiberFeatures.find(f => f.name === 'IP Fija'); // Más seguro buscar por nombre
+        return props.fiberFeatures.find(f => f.name === 'IP Fija');
     });
     // --- FIN ---
 
@@ -85,37 +137,44 @@ export function useOfferCalculations(
     });
     // --- FIN: AÑADIDO PARA FIBRA ORO ---
 
+    // --- INICIO MODIFICACIÓN BENEFICIOS ---
+    /**
+     * Crea un Map de los beneficios seleccionados para búsquedas rápidas.
+     * La clave es el 'addon_id' y el valor es el objeto 'benefit'.
+     */
+    const activeBenefitsMap = computed(() => {
+        const map = new Map();
+        if (!selectedBenefits.value) return map;
+        
+        for (const benefit of selectedBenefits.value) {
+            // benefit.addon_id es la clave (el producto al que aplica)
+            map.set(benefit.addon_id, benefit);
+        }
+        return map;
+    });
+    // --- FIN MODIFICACIÓN BENEFICIOS ---
+
     // =================================================================
-    // =========== LÓGICA DE DESCUENTOS (VERSIÓN CON DEBUG) ============
+    // =========== LÓGICA DE DESCUENTOS (Tarifa) ============
     // =================================================================
     const appliedDiscount = computed(() => {
-        // --- INICIO CÓDIGO RESTAURADO ---
-        if (!lines.value || lines.value.length === 0 || !selectedPackage.value) { // Añadida comprobación para lines.value
+        if (!lines.value || lines.value.length === 0 || !selectedPackage.value) {
             return null;
         }
 
         const principalLine = lines.value[0];
-        // Comprobar si principalLine existe antes de acceder a sus propiedades
         if (!principalLine) return null;
-        // --- FIN CÓDIGO RESTAURADO ---
 
         const packageName = selectedPackage.value.name;
 
         const hasTVBares = selectedTvAddonIds.value.some(id => {
-            const tvAddon = tvAddonOptions.value.find(a => a.id === id);
+            // Buscamos en TODOS los addons, no solo en los del paquete
+            const tvAddon = props.allAddons.find(a => a.id === id);
             return tvAddon && tvAddon.name.includes('Futbol Bares');
         });
 
-        // console.clear(); // Limpia la consola en cada recálculo - Puedes descomentar si quieres
-        // console.log("===== INICIO DEBUG DESCUENTOS =====");
-        // console.log(`Paquete: ${packageName}`);
-        // console.log(`Línea Principal:`, { is_portability: principalLine.is_portability, has_vap: principalLine.has_vap, source_operator: principalLine.source_operator });
-        // console.log(`¿Tiene TV Bares?: ${hasTVBares}`);
-        // console.log("-------------------------------------");
-
         // 1. Si se ha contratado TV Bares
         if (hasTVBares) {
-            // console.log("Modo: TV BARES. Buscando descuento prioritario...");
             const matchingTvDiscount = props.discounts.find(d => {
                 const conditions = d.conditions;
                 if (!conditions.requires_tv_bares) return false;
@@ -125,67 +184,41 @@ export function useOfferCalculations(
                 const vapMatch = conditions.requires_vap === principalLine.has_vap;
 
                 if(packageMatch && portabilityMatch && vapMatch) {
-                    // console.log(`%c[MATCH] ${d.name}`, "color: green; font-weight: bold;");
                     return true;
                 }
                 return false;
             });
-            // console.log("===== FIN DEBUG =====");
             return matchingTvDiscount || null;
         }
 
         // 2. Si NO se ha contratado TV Bares
         else {
-            // console.log("Modo: GENERAL. Buscando descuentos aplicables...");
             const applicableGeneralDiscounts = props.discounts.filter(d => {
                 const conditions = d.conditions;
-                // console.log(`\nEvaluando: "${d.name}"`);
-
                 if (conditions.requires_tv_bares) {
-                    // console.log(` -> DESCARTADO: Es para TV Bares.`);
                     return false;
                 }
                 if (!conditions.package_names || !conditions.package_names.includes(packageName)) {
-                    // console.log(` -> DESCARTADO: No aplica a este paquete.`);
                     return false;
                 }
-
                 if (conditions.hasOwnProperty('requires_vap') && conditions.requires_vap !== principalLine.has_vap) {
-                    // console.log(` -> DESCARTADO: Condición de VAP no cumplida (Req: ${conditions.requires_vap}, Tiene: ${principalLine.has_vap})`);
                     return false;
                 }
-
                 if (conditions.hasOwnProperty('requires_portability') && conditions.requires_portability !== principalLine.is_portability) {
-                    // console.log(` -> DESCARTADO: Condición de Portabilidad no cumplida (Req: ${conditions.requires_portability}, Es: ${principalLine.is_portability})`);
                     return false;
                 }
-
-                // --- INICIO CÓDIGO RESTAURADO ---
                 if (conditions.hasOwnProperty('source_operators') && conditions.source_operators && !conditions.source_operators.includes(principalLine.source_operator)) {
-                    // console.log(` -> DESCARTADO: Operador de origen no permitido (Req: ${conditions.source_operators.join(', ')}, Viene de: ${principalLine.source_operator})`);
                     return false;
                 }
-
                 if (conditions.hasOwnProperty('excluded_operators') && conditions.excluded_operators && conditions.excluded_operators.includes(principalLine.source_operator)) {
-                    // console.log(` -> DESCARTADO: Operador de origen EXCLUIDO (Excluye: ${conditions.excluded_operators.join(', ')}, Viene de: ${principalLine.source_operator})`);
                     return false;
                 }
-                // --- FIN CÓDIGO RESTAURADO ---
-
-
-                // console.log(` -> CUMPLE TODAS LAS CONDICIONES`);
                 return true;
             });
 
             if (applicableGeneralDiscounts.length > 0) {
-                // console.log("\nDescuentos aplicables encontrados:", applicableGeneralDiscounts.map(d => d.name));
                 const bestDiscount = applicableGeneralDiscounts.sort((a, b) => b.percentage - a.percentage)[0];
-                // console.log(`%c[SELECCIONADO] El mejor es: ${bestDiscount.name} (${bestDiscount.percentage}%)`, "color: blue; font-weight: bold;");
-                // console.log("===== FIN DEBUG =====");
                 return bestDiscount;
-            } else {
-                // console.log("\nNo se encontraron descuentos aplicables.");
-                // console.log("===== FIN DEBUG =====");
             }
         }
 
@@ -206,7 +239,9 @@ export function useOfferCalculations(
         const basePrice = parseFloat(selectedPackage.value.base_price) || 0;
         let price = basePrice;
         let summaryBreakdown = [{ description: `Paquete Base: ${selectedPackage.value.name}`, price: basePrice }];
-        let commissionDetails = { Fibra: [], Televisión: [], Centralita: [], "Líneas Móviles": [], Terminales: [], Ajustes: [] };
+        // --- INICIO MODIFICACIÓN BENEFICIOS ---
+        let commissionDetails = { Fibra: [], Televisión: [], Centralita: [], "Líneas Móviles": [], Terminales: [], Ajustes: [], "Servicios": [] }; // <-- AÑADIDO "Servicios"
+        // --- FIN MODIFICACIÓN BENEFICIOS ---
 
         if (appliedDiscount.value) {
             const discountAmount = basePrice * (parseFloat(appliedDiscount.value.percentage) / 100);
@@ -215,7 +250,12 @@ export function useOfferCalculations(
         }
 
         if (selectedInternetAddonInfo.value) {
-            const itemPrice = parseFloat(selectedInternetAddonInfo.value.pivot.price) || 0;
+            // --- INICIO MODIFICACIÓN BENEFICIOS ---
+            const originalPrice = parseFloat(selectedInternetAddonInfo.value.pivot.price) || 0;
+            const benefit = activeBenefitsMap.value.get(selectedInternetAddonInfo.value.id);
+            const itemPrice = applyBenefit(originalPrice, benefit);
+            // --- FIN MODIFICACIÓN BENEFICIOS ---
+
             price += itemPrice;
             if (itemPrice > 0) summaryBreakdown.push({ description: `Mejora Fibra (${selectedInternetAddonInfo.value.name})`, price: itemPrice });
             commissionDetails.Fibra.push({ description: `Fibra Principal (${selectedInternetAddonInfo.value.name})`, amount: parseFloat(selectedInternetAddonInfo.value.pivot.included_line_commission) || 0 });
@@ -226,24 +266,41 @@ export function useOfferCalculations(
             if (line.addon_id) {
                 const addonInfo = props.additionalInternetAddons.find(a => a.id === line.addon_id);
                 if (addonInfo) {
-                    // Precio de la línea adicional
-                    const linePrice = parseFloat(addonInfo.price) || 0;
+                    // --- INICIO MODIFICACIÓN BENEFICIOS ---
+                    const originalPrice = parseFloat(addonInfo.price) || 0;
+                    const benefit = activeBenefitsMap.value.get(addonInfo.id);
+                    const linePrice = applyBenefit(originalPrice, benefit);
+                    const description = benefit ? `Internet Adicional ${index + 1} (Beneficio)` : `Internet Adicional ${index + 1} (${addonInfo.name})`;
+                    const commission = (benefit && benefit.apply_type === 'free') ? 0 : (parseFloat(addonInfo.commission) || 0);
+                    // --- FIN MODIFICACIÓN BENEFICIOS ---
+
                     price += linePrice;
-                    summaryBreakdown.push({ description: `Internet Adicional ${index + 1} (${addonInfo.name})`, price: linePrice });
-                    commissionDetails.Fibra.push({ description: `Internet Adicional ${index + 1} (${addonInfo.name})`, amount: parseFloat(addonInfo.commission) || 0 });
+                    summaryBreakdown.push({ description: description, price: linePrice });
+                    commissionDetails.Fibra.push({ description: `Internet Adicional ${index + 1} (${addonInfo.name})`, amount: commission });
 
                     // --- INICIO LÓGICA MODIFICADA: IP Fija gratis si hay centralita multisede ---
-                    // Precio/Comisión de la IP Fija para esta línea adicional
                     if (line.has_ip_fija && ipFijaAddonInfo.value) {
-                        const isIncluded = !!line.selected_centralita_id; // <-- Gratis si hay centralita en ESTA línea
-                        const ipFijaPrice = isIncluded ? 0 : (parseFloat(ipFijaAddonInfo.value.price) || 0); // <-- Precio 0 si está incluida
-                        const description = isIncluded ? `IP Fija Adicional ${index + 1} (Incluida por Centralita)` : `IP Fija Adicional ${index + 1}`; // <-- Descripción dinámica
+                        const isIncluded = !!line.selected_centralita_id; 
                         
-                        const ipFijaCommission = parseFloat(ipFijaAddonInfo.value.commission) || 0;
+                        // --- INICIO MODIFICACIÓN BENEFICIOS ---
+                        const originalIpFijaPrice = parseFloat(ipFijaAddonInfo.value.price) || 0;
+                        const benefitIpFija = activeBenefitsMap.value.get(ipFijaAddonInfo.value.id);
+                        const priceAfterBenefit = applyBenefit(originalIpFijaPrice, benefitIpFija);
+                        
+                        const ipFijaPrice = isIncluded ? 0 : priceAfterBenefit; 
+                        const description = isIncluded 
+                            ? `IP Fija Adicional ${index + 1} (Incluida por Centralita)` 
+                            : benefitIpFija 
+                                ? `IP Fija Adicional ${index + 1} (Beneficio)` 
+                                : `IP Fija Adicional ${index + 1}`;
+                        
+                        const ipFijaCommission = (benefitIpFija && benefitIpFija.apply_type === 'free') ? 0 : (parseFloat(ipFijaAddonInfo.value.commission) || 0);
+                        // --- FIN MODIFICACIÓN BENEFICIOS ---
+
                         price += ipFijaPrice;
                         summaryBreakdown.push({ description: description, price: ipFijaPrice });
                         
-                        if (ipFijaCommission > 0) { // Solo añadir si hay comisión definida
+                        if (ipFijaCommission > 0) {
                             commissionDetails.Fibra.push({ description: `IP Fija Adicional ${index + 1}`, amount: ipFijaCommission });
                         }
                     }
@@ -251,11 +308,16 @@ export function useOfferCalculations(
 
                     // --- INICIO: AÑADIDO PARA FIBRA ORO ADICIONAL ---
                     if (line.has_fibra_oro && fibraOroAddonInfo.value) {
-                        const itemPrice = parseFloat(fibraOroAddonInfo.value.price) || 0;
-                        const commission = parseFloat(fibraOroAddonInfo.value.commission) || 0;
+                        // --- INICIO MODIFICACIÓN BENEFICIOS ---
+                        const originalPrice = parseFloat(fibraOroAddonInfo.value.price) || 0;
+                        const benefit = activeBenefitsMap.value.get(fibraOroAddonInfo.value.id);
+                        const itemPrice = applyBenefit(originalPrice, benefit);
+                        const description = benefit ? `Fibra Oro Adicional ${index + 1} (Beneficio)` : `Fibra Oro Adicional ${index + 1}`;
+                        const commission = (benefit && benefit.apply_type === 'free') ? 0 : (parseFloat(fibraOroAddonInfo.value.commission) || 0);
+                        // --- FIN MODIFICACIÓN BENEFICIOS ---
                         
                         price += itemPrice;
-                        summaryBreakdown.push({ description: `Fibra Oro Adicional ${index + 1}`, price: itemPrice });
+                        summaryBreakdown.push({ description: description, price: itemPrice });
 
                         if (commission > 0) {
                             commissionDetails.Fibra.push({ description: `Fibra Oro Adicional ${index + 1}`, amount: commission });
@@ -267,27 +329,32 @@ export function useOfferCalculations(
                     if (line.selected_centralita_id) {
                         const centralitaInfo = centralitaAddonOptions.value.find(c => c.id === line.selected_centralita_id);
                         if (centralitaInfo) {
-                            // 1. Añadir precio y comisión de la centralita en sí
-                            const itemPrice = parseFloat(centralitaInfo.pivot.price) || 0;
-                            const commission = parseFloat(centralitaInfo.commission) || 0;
+                            // --- INICIO MODIFICACIÓN BENEFICIOS ---
+                            const originalPrice = parseFloat(centralitaInfo.pivot.price) || 0;
+                            const benefit = activeBenefitsMap.value.get(centralitaInfo.id);
+                            const itemPrice = applyBenefit(originalPrice, benefit);
+                            const description = benefit ? `Centralita Multisede ${index + 1} (Beneficio)` : `Centralita Multisede ${index + 1} (${centralitaInfo.name})`;
+                            const commission = (benefit && benefit.apply_type === 'free') ? 0 : (parseFloat(centralitaInfo.commission) || 0);
+                            // --- FIN MODIFICACIÓN BENEFICIOS ---
+                            
                             const decommission = parseFloat(centralitaInfo.decommission) || 0;
                             const totalAmount = commission + decommission;
                             
                             price += itemPrice;
-                            summaryBreakdown.push({ description: `Centralita Multisede ${index + 1} (${centralitaInfo.name})`, price: itemPrice });
+                            summaryBreakdown.push({ description: description, price: itemPrice });
                             
                             commissionDetails.Centralita.push({ 
                                 description: `Centralita Multisede ${index + 1} (${centralitaInfo.name})`, 
                                 amount: totalAmount 
                             });
 
-                            // 2. Añadir comisión de la extensión auto-incluida (precio 0)
-                            const centralitaType = centralitaInfo.name.split(' ')[1]; // 'Básica', 'Inalámbrica', 'Avanzada'
+                            // ... (lógica de extensión auto-incluida para multisede)
+                            const centralitaType = centralitaInfo.name.split(' ')[1];
                             if (centralitaType) {
                                 const autoExt = props.centralitaExtensions.find(ext => ext.name.includes(centralitaType));
                                 if (autoExt) {
                                     const extCommission = parseFloat(autoExt.commission) || 0;
-                                    if (extCommission > 0) { // Solo añadir si hay comisión
+                                    if (extCommission > 0) {
                                         commissionDetails.Centralita.push({ 
                                             description: `1x ${autoExt.name} (Por Multisede ${index + 1})`, 
                                             amount: extCommission 
@@ -306,21 +373,30 @@ export function useOfferCalculations(
         // ===================================================
         // --- LÓGICA DE IP FIJA (Línea Principal) ---
         // ===================================================
-        // Accedemos a form.is_ip_fija_selected directamente
         if (form.is_ip_fija_selected && ipFijaAddonInfo.value) {
             const isIncluded = isCentralitaActive.value;
-            const itemPrice = isIncluded ? 0 : (parseFloat(ipFijaAddonInfo.value.price) || 0);
-            const description = isIncluded ? 'IP Fija Principal (Incluida por Centralita)' : 'IP Fija Principal'; // Añadido 'Principal'
-            const commission = parseFloat(ipFijaAddonInfo.value.commission) || 0;
+            
+            // --- INICIO MODIFICACIÓN BENEFICIOS ---
+            const originalPrice = parseFloat(ipFijaAddonInfo.value.price) || 0;
+            const benefit = activeBenefitsMap.value.get(ipFijaAddonInfo.value.id);
+            const priceAfterBenefit = applyBenefit(originalPrice, benefit);
+            
+            const itemPrice = isIncluded ? 0 : priceAfterBenefit; 
+            const description = isIncluded 
+                ? 'IP Fija Principal (Incluida por Centralita)' 
+                : benefit 
+                    ? 'IP Fija Principal (Beneficio)' 
+                    : 'IP Fija Principal';
+            
+            const commission = (benefit && benefit.apply_type === 'free') ? 0 : (parseFloat(ipFijaAddonInfo.value.commission) || 0);
+            // --- FIN MODIFICACIÓN BENEFICIOS ---
 
             price += itemPrice;
             summaryBreakdown.push({ description: description, price: itemPrice });
 
             if (commission > 0) {
-                 // Añadir comisión (si la definiste en el Seeder)
                 commissionDetails.Fibra.push({ description: 'IP Fija Principal', amount: commission });
             }
-        // Accedemos a form.is_ip_fija_selected directamente
         } else if (form.is_ip_fija_selected) {
              console.log("IP Fija principal seleccionada, pero ipFijaAddonInfo es null/undefined.");
         }
@@ -330,11 +406,16 @@ export function useOfferCalculations(
 
         // --- INICIO: AÑADIDO PARA FIBRA ORO PRINCIPAL ---
         if (form.is_fibra_oro_selected && fibraOroAddonInfo.value) {
-            const itemPrice = parseFloat(fibraOroAddonInfo.value.price) || 0;
-            const commission = parseFloat(fibraOroAddonInfo.value.commission) || 0;
+            // --- INICIO MODIFICACIÓN BENEFICIOS ---
+            const originalPrice = parseFloat(fibraOroAddonInfo.value.price) || 0;
+            const benefit = activeBenefitsMap.value.get(fibraOroAddonInfo.value.id);
+            const itemPrice = applyBenefit(originalPrice, benefit);
+            const description = benefit ? 'Fibra Oro Principal (Beneficio)' : 'Fibra Oro Principal';
+            const commission = (benefit && benefit.apply_type === 'free') ? 0 : (parseFloat(fibraOroAddonInfo.value.commission) || 0);
+            // --- FIN MODIFICACIÓN BENEFICIOS ---
             
             price += itemPrice;
-            summaryBreakdown.push({ description: 'Fibra Oro Principal', price: itemPrice });
+            summaryBreakdown.push({ description: description, price: itemPrice });
 
             if (commission > 0) {
                 commissionDetails.Fibra.push({ description: 'Fibra Oro Principal', amount: commission });
@@ -342,37 +423,52 @@ export function useOfferCalculations(
         }
         // --- FIN: AÑADIDO PARA FIBRA ORO PRINCIPAL ---
 
-        tvAddonOptions.value.forEach(addon => {
-            if (selectedTvAddonIds.value.includes(addon.id)) {
-                const itemPrice = parseFloat(addon.pivot?.price ?? addon.price) || 0;
+        // --- INICIO MODIFICACIÓN BENEFICIOS (TV Addons) ---
+        // Itera sobre los addons de TV seleccionados
+        selectedTvAddonIds.value.forEach(addonId => {
+            // Busca el addon en la lista completa (props.allAddons)
+            const addon = props.allAddons.find(a => a.id === addonId);
+            if (addon) {
+                // Busca el pivot si está en el paquete (para precio/comisión especial del paquete)
+                const pivot = tvAddonOptions.value.find(a => a.id === addonId)?.pivot;
+                
+                const originalPrice = parseFloat(pivot?.price ?? addon.price) || 0;
+                const benefit = activeBenefitsMap.value.get(addon.id);
+                const itemPrice = applyBenefit(originalPrice, benefit);
+                const description = benefit ? `${addon.name} (Beneficio)` : `TV: ${addon.name}`;
+                
+                const commission = (benefit && benefit.apply_type === 'free') ? 0 : (parseFloat(pivot?.included_line_commission ?? addon.commission) || 0);
+                
                 price += itemPrice;
-                if (itemPrice > 0) summaryBreakdown.push({ description: `TV: ${addon.name}`, price: itemPrice });
-                commissionDetails.Televisión.push({ description: addon.name, amount: parseFloat(addon.pivot?.included_line_commission ?? addon.commission) || 0 });
+                if (itemPrice > 0 || (benefit && benefit.apply_type === 'free')) { 
+                    summaryBreakdown.push({ description: description, price: itemPrice });
+                }
+                commissionDetails.Televisión.push({ description: addon.name, amount: commission });
             }
         });
+        // --- FIN MODIFICACIÓN BENEFICIOS ---
 
         if (includedCentralita.value) {
-            // 1. Obtenemos la comisión normal
             const commission = parseFloat(includedCentralita.value.pivot.included_line_commission) || 0;
-            
-            // 2. Obtenemos la NUEVA decomisión (que vendrá en negativo)
-            const decommission = parseFloat(includedCentralita.value.pivot.included_line_decommission) || 0; // <-- ¡AQUÍ!
-
-            // 3. Los sumamos para obtener el total
+            const decommission = parseFloat(includedCentralita.value.pivot.included_line_decommission) || 0; 
             const totalAmount = commission + decommission;
-
-        //_MODIFIED 
             commissionDetails.Centralita.push({ 
                 description: `Centralita Incluida (${includedCentralita.value.name})`, 
-                amount: totalAmount // <-- Usamos el total
+                amount: totalAmount
             });
         } else if (selectedCentralitaId.value) {
             const selectedCentralita = centralitaAddonOptions.value.find(c => c.id === selectedCentralitaId.value);
             if (selectedCentralita) {
-                const itemPrice = parseFloat(selectedCentralita.pivot.price) || 0;
+                // --- INICIO MODIFICACIÓN BENEFICIOS ---
+                const originalPrice = parseFloat(selectedCentralita.pivot.price) || 0;
+                const benefit = activeBenefitsMap.value.get(selectedCentralita.id);
+                const itemPrice = applyBenefit(originalPrice, benefit);
+                const description = benefit ? `Centralita: ${selectedCentralita.name} (Beneficio)` : `Centralita: ${selectedCentralita.name}`;
+                const commission = (benefit && benefit.apply_type === 'free') ? 0 : (parseFloat(selectedCentralita.commission) || 0);
+                // --- FIN MODIFICACIÓN BENEFICIOS ---
+
                 price += itemPrice;
-                summaryBreakdown.push({ description: `Centralita: ${selectedCentralita.name}`, price: itemPrice });
-                const commission = parseFloat(selectedCentralita.commission) || 0;
+                summaryBreakdown.push({ description: description, price: itemPrice });
                 const decommission = parseFloat(selectedCentralita.decommission) || 0;
                 const totalAmount = commission+decommission;
                 commissionDetails.Centralita.push({ description: `Centralita Contratada (${selectedCentralita.name})`, amount: totalAmount  });
@@ -384,10 +480,17 @@ export function useOfferCalculations(
             if (operadoraAutomaticaInfo.value.pivot.is_included) {
                 commissionDetails.Centralita.push({ description: 'Operadora Automática (Incluida)', amount: commission });
             } else if (isOperadoraAutomaticaSelected.value) {
-                const itemPrice = parseFloat(operadoraAutomaticaInfo.value.pivot.price) || 0;
+                 // --- INICIO MODIFICACIÓN BENEFICIOS ---
+                const originalPrice = parseFloat(operadoraAutomaticaInfo.value.pivot.price) || 0;
+                const benefit = activeBenefitsMap.value.get(operadoraAutomaticaInfo.value.id);
+                const itemPrice = applyBenefit(originalPrice, benefit);
+                const description = benefit ? 'Operadora Automática (Beneficio)' : 'Operadora Automática';
+                const commissionFinal = (benefit && benefit.apply_type === 'free') ? 0 : commission;
+                // --- FIN MODIFICACIÓN BENEFICIOS ---
+
                 price += itemPrice;
-                summaryBreakdown.push({ description: 'Operadora Automática', price: itemPrice });
-                commissionDetails.Centralita.push({ description: 'Operadora Automática (Contratada)', amount: commission });
+                summaryBreakdown.push({ description: description, price: itemPrice });
+                commissionDetails.Centralita.push({ description: 'Operadora Automática (Contratada)', amount: commissionFinal });
             }
         }
 
@@ -400,10 +503,8 @@ export function useOfferCalculations(
                 }
             });
 
-            if (autoIncludedExtension.value && !includedCentralita.value) { // Modificado para que no añada si ya está incluida la centralita
+            if (autoIncludedExtension.value && !includedCentralita.value) { 
                 const commission = parseFloat(autoIncludedExtension.value.commission) || 0;
-
-
                 commissionDetails.Centralita.push({ description: `1x ${autoIncludedExtension.value.name} (Por Centralita)`, amount: commission });
             }
 
@@ -412,10 +513,20 @@ export function useOfferCalculations(
                 if (quantity > 0) {
                     const addonInfo = props.centralitaExtensions.find(ext => ext.id == addonId);
                     if (addonInfo) {
-                        const itemPrice = quantity * (parseFloat(addonInfo.price) || 0);
+                        // --- INICIO MODIFICACIÓN BENEFICIOS ---
+                        const originalPrice = parseFloat(addonInfo.price) || 0;
+                        const benefit = activeBenefitsMap.value.get(addonInfo.id);
+                        const finalUnitPrice = applyBenefit(originalPrice, benefit);
+                        const itemPrice = quantity * finalUnitPrice;
+                        const description = benefit 
+                            ? `${quantity}x ${addonInfo.name} (Beneficio)`
+                            : `${quantity}x ${addonInfo.name} (Adicional)`;
+                        const commission = (benefit && benefit.apply_type === 'free') ? 0 : (parseFloat(addonInfo.commission) || 0);
+                        // --- FIN MODIFICACIÓN BENEFICIOS ---
+
                         price += itemPrice;
-                        summaryBreakdown.push({ description: `${quantity}x ${addonInfo.name} (Adicional)`, price: itemPrice });
-                        commissionDetails.Centralita.push({ description: `${quantity}x ${addonInfo.name} (Adicional)`, amount: quantity * (parseFloat(addonInfo.commission) || 0) });
+                        summaryBreakdown.push({ description: description, price: itemPrice });
+                        commissionDetails.Centralita.push({ description: `${quantity}x ${addonInfo.name} (Adicional)`, amount: quantity * commission });
                     }
                 }
             }
@@ -427,43 +538,60 @@ export function useOfferCalculations(
         let extraLinesCost = 0;
 
         if (mobileAddonInfo.value) {
-            const promoLimit = mobileAddonInfo.value.pivot.line_limit ?? 0; // Añadido ?? 0
-            const promoPrice = 8.22;
-            const standardPrice = mobileAddonInfo.value.pivot.price ?? 0; // Añadido ?? 0
-            const includedCommission = parseFloat(mobileAddonInfo.value.pivot.included_line_commission) || 0;
-            const additionalCommission = parseFloat(mobileAddonInfo.value.pivot.additional_line_commission) || 0;
+            // --- INICIO CORRECCIÓN DE BUG ---
+            // 'promoLimit' y 'standardPrice' DEBEN leerse del PIVOT del paquete
+            const promoLimit = mobileAddonInfo.value.pivot?.line_limit ?? 0;
+            const promoPrice = 8.22; // TODO: Esto debería venir también del pivot si es variable
+            const standardPrice = mobileAddonInfo.value.pivot?.price ?? 0; // Usar el precio del PIVOT
+            
+            const includedCommission = parseFloat(mobileAddonInfo.value.pivot?.included_line_commission) || 0;
+            // Usar la comisión del pivot o, si no existe, la comisión base del addon
+            const additionalCommission = parseFloat(mobileAddonInfo.value.pivot?.additional_line_commission || mobileAddonInfo.value.commission) || 0;
+            // --- FIN CORRECCIÓN DE BUG ---
+
             let extraLinesCounter = 0;
+
+            // --- INICIO MODIFICACIÓN BENEFICIOS (Lógica para LA Extra) ---
+            const freeLineBenefit = activeBenefitsMap.value.get(mobileAddonInfo.value.id);
+            const freeExtraLinesQty = freeLineBenefit ? (freeLineBenefit.apply_data?.quantity || 0) : 0;
+            // --- FIN MODIFICACIÓN BENEFICIOS ---
 
             lines.value.forEach((line, index) => {
                 const lineName = index === 0 ? 'Línea Principal' : `Línea Adicional ${index+1}`;
                 
-                // --- INICIO DE LA MODIFICACIÓN (Lógica de descuento eliminada) ---
-                
-                // Los valores de 'line' ya vienen descontados desde Create/Edit.vue
                 let initialCost = parseFloat(line.initial_cost || 0);
                 let monthlyCost = parseFloat(line.monthly_cost || 0);
 
-                // --- MANTENEMOS EL DEBUGGING PERO LO ADAPTAMOS ---
-                console.log(`[Calculo Línea ${index}]`, line);
-                console.log(`  -> Costes YA DESCONTADOS (v-model): Inicial=${initialCost}, Mensual=${monthlyCost}`);
-                if (index === 0 && line.terminal_pivot) {
-                    console.log(`  -> (Línea Principal con terminal)`);
-                    console.log(`  -> Descuentos Leídos: Inicial=${line.initial_cost_discount}, Mensual=${line.monthly_cost_discount}`);
-                    console.log(`  -> Costes Originales (para comisión): Inicial=${line.original_initial_cost}, Mensual=${line.original_monthly_cost}`);
-                }
-                // --- FIN DEBUGGING ---
-
-                // La resta ya no se hace aquí. Simplemente sumamos los valores que ya vienen descontados.
                 totalTerminalFee += monthlyCost;
                 totalInitialPayment += initialCost;
-                // --- FIN DE LA MODIFICACIÓN ---
 
                 if (line.is_extra) {
                     extraLinesCounter++;
-                    const itemPrice = (extraLinesCounter <= promoLimit) ? promoPrice : parseFloat(standardPrice);
+
+                    // --- INICIO MODIFICACIÓN BENEFICIOS (Aplicar Lógica LA Extra) ---
+                    let itemPrice;
+                    let description;
+                    let commissionAmount = additionalCommission; 
+
+                    if (extraLinesCounter <= freeExtraLinesQty) {
+                        itemPrice = 0; // El servicio de la línea es gratis
+                        description = `Línea Móvil Adicional ${extraLinesCounter} (Beneficio)`;
+                        commissionAmount = 0; // El servicio gratis no da comisión de línea
+                    } else {
+                        const paidExtraLinesCounter = extraLinesCounter - freeExtraLinesQty;
+                        
+                        // --- INICIO CORRECCIÓN DE BUG ---
+                        // Asegurarse de que se usa el standardPrice leído del pivot
+                        itemPrice = (promoLimit > 0 && paidExtraLinesCounter <= promoLimit) ? promoPrice : parseFloat(standardPrice);
+                        // --- FIN CORRECCIÓN DE BUG ---
+                        description = `Línea Móvil Adicional ${extraLinesCounter}`;
+                        // commissionAmount ya es 'additionalCommission'
+                    }
+                    // --- FIN MODIFICACIÓN BENEFICIOS ---
+
                     extraLinesCost += itemPrice;
-                    summaryBreakdown.push({ description: `Línea Móvil Adicional ${extraLinesCounter}`, price: itemPrice });
-                    commissionDetails["Líneas Móviles"].push({ description: `Comisión ${lineName}`, amount: additionalCommission });
+                    summaryBreakdown.push({ description: description, price: itemPrice });
+                    commissionDetails["Líneas Móviles"].push({ description: `Comisión ${lineName}`, amount: commissionAmount });
                 } else {
                     commissionDetails["Líneas Móviles"].push({ description: `Comisión ${lineName}`, amount: includedCommission });
                 }
@@ -479,15 +607,8 @@ export function useOfferCalculations(
                 }
 
                 if (line.terminal_pivot && line.selected_duration) {
-                    // --- INICIO DE LA MODIFICACIÓN (Cálculo de Comisión) ---
-                    // La comisión se calcula sobre el precio ORIGINAL, no el descontado
                     const terminalTotalPrice = (parseFloat(line.original_initial_cost) || 0) + (parseFloat(line.original_monthly_cost || 0) * parseInt(line.selected_duration, 10));
                     
-                    // --- DEBUGGING PARA COMISIÓN ---
-                    console.log(`  -> Cálculo Comisión (Línea ${index}): Precio Total Original = ${terminalTotalPrice}`);
-                    // --- FIN DEBUGGING ---
-
-                    // --- FIN DE LA MODIFICACIÓN ---
                     let terminalCommission = 0;
                     if (terminalTotalPrice < 40) terminalCommission = 15;
                     else if (terminalTotalPrice >= 40 && terminalTotalPrice < 350) terminalCommission = 45;
@@ -502,7 +623,6 @@ export function useOfferCalculations(
                         price -= monthlyValue;
                         appliedO2oList.push({ line: index === 0 ? 'Línea Principal' : `Línea ${index + 1}`, name: o2o.name, value: monthlyValue.toFixed(2) });
                         summaryBreakdown.push({ description: `Subvención O2O (${o2o.name})`, price: -monthlyValue });
-                        // Ajuste DHO ahora se busca en la relación pivote de o2o_discount_package
                         const packageO2oPivot = selectedPackage.value?.o2o_discounts?.find(d => d.id === o2o.id)?.pivot;
                         if (packageO2oPivot && packageO2oPivot.dho_payment) {
                              commissionDetails.Ajustes.push({ description: `Ajuste DHO ${lineName}`, amount: -parseFloat(packageO2oPivot.dho_payment) });
@@ -514,14 +634,47 @@ export function useOfferCalculations(
 
         price += totalTerminalFee;
         
-        // --- INICIO DE LA MODIFICACIÓN (Bug de Resumen) ---
-        // El total puede ser negativo si hay un descuento, así que usamos '!=' en lugar de '>'
         if(totalTerminalFee !== 0) { 
             summaryBreakdown.push({ description: 'Cuotas mensuales de Terminales', price: totalTerminalFee });
         }
-        // --- FIN DE LA MODIFICACIÓN ---
         
-        price += extraLinesCost; // Este ya estaba
+        price += extraLinesCost;
+
+        // --- INICIO MODIFICACIÓN BENEFICIOS (Cálculo de otros addons de servicio) ---
+        // Esta sección calcula el precio de addons como MS365, Disney+, etc.
+        // que no se seleccionan en ninguna otra parte del formulario.
+        // ¡¡¡ ESTA ES LA PARTE QUE FALTA IMPLEMENTAR EN CREATE.VUE !!!
+        
+        /*
+        // 1. Necesitas un nuevo ref en Create.vue: const selectedServiceAddons = ref([]);
+        // 2. Necesitas una UI (checkboxes) para que el usuario seleccione estos addons.
+        // 3. Pasa 'selectedServiceAddons' a este composable.
+        
+        if (props.allAddons && selectedServiceAddons.value) { // <--- CAMBIAR selectedServiceAddons
+            const serviceTypes = ['service', 'software']; // Tipos de addons que son "beneficios"
+            
+            selectedServiceAddons.value.forEach(addonId => { // <--- CAMBIAR selectedServiceAddons
+                const addonInfo = props.allAddons.find(a => a.id === addonId);
+                
+                // Solo calcula los que NO son de TV (porque TV ya se calculó arriba)
+                if (addonInfo && serviceTypes.includes(addonInfo.type)) {
+                    const originalPrice = parseFloat(addonInfo.price) || 0;
+                    const benefit = activeBenefitsMap.value.get(addonInfo.id);
+                    const itemPrice = applyBenefit(originalPrice, benefit);
+                    const description = benefit 
+                        ? `${addonInfo.name} (Beneficio)` 
+                        : addonInfo.name;
+                    // Comisión 0 si es gratis
+                    const commission = (benefit && benefit.apply_type === 'free') ? 0 : (parseFloat(addonInfo.commission) || 0);
+
+                    price += itemPrice;
+                    summaryBreakdown.push({ description: description, price: itemPrice });
+                    commissionDetails.Servicios.push({ description: addonInfo.name, amount: commission });
+                }
+            });
+        }
+        */
+        // --- FIN MODIFICACIÓN BENEFICIOS ---
 
         Object.keys(commissionDetails).forEach(key => {
             if (commissionDetails[key].length === 0) {
@@ -551,7 +704,7 @@ export function useOfferCalculations(
         else { // user sin equipo
             const userPercentage = currentUser.commission_percentage || 0;
             userCommission = totalCommission * (parseFloat(userPercentage) / 100);
-            teamCommission = 0; // O quizás la comisión bruta si no hay equipo? Depende de reglas de negocio
+            teamCommission = 0; 
         }
 
         return {
