@@ -11,6 +11,7 @@ class Benefit extends Model
         'apply_type',
         'apply_value',
         'addon_id',
+        
     ];
 
     // Un beneficio ES un producto

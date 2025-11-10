@@ -16,6 +16,8 @@ return new class extends Migration
             $table->enum('apply_type', ['free', 'percentage_discount', 'fixed_discount']);
             $table->decimal('apply_value', 8, 2)->nullable(); // 100 (para free), 50 (para 50%), 5 (para 5€ dto)
 
+            
+
             // Conecta la 'Regla' con el 'Producto'
             $table->foreignId('addon_id')->constrained('addons')->onDelete('cascade');
 

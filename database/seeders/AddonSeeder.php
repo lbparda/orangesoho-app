@@ -124,7 +124,7 @@ class AddonSeeder extends Seeder
                 'type' => 'internet_feature', // Lo ponemos como "feature" igual que la IP Fija
                 'price' => 5.00,
                 'commission' => 20.00,
-                'decommission' => 0.00,
+                'decommission' => 10.00,
                 'created_at' => now(),
                 'updated_at' => now() ]
             );

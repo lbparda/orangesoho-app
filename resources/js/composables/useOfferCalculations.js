@@ -553,7 +553,7 @@ export function useOfferCalculations(
 
             // --- INICIO MODIFICACIÓN BENEFICIOS (Lógica para LA Extra) ---
             const freeLineBenefit = activeBenefitsMap.value.get(mobileAddonInfo.value.id);
-            const freeExtraLinesQty = freeLineBenefit ? (freeLineBenefit.apply_data?.quantity || 0) : 0;
+            const freeExtraLinesQty = freeLineBenefit ? (freeLineBenefit.apply_data?.quantity || 1) : 0;
             // --- FIN MODIFICACIÓN BENEFICIOS ---
 
             lines.value.forEach((line, index) => {

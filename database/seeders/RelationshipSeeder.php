@@ -32,7 +32,7 @@ class RelationshipSeeder extends Seeder
         // --- 2. RELACIONES DE LÍNEAS MÓVILES ---
         if ($mobileAddon) {
             $packages['Base Plus']->addons()->attach($mobileAddon->id, ['price' => 15.00, 'is_included' => true, 'included_quantity' => 1, 'line_limit' => 4,'included_line_commission' => 50.00, 'additional_line_commission' => 50.00]);
-            $packages['NEGOCIO Extra 1']->addons()->attach($mobileAddon->id, ['price' => 13.00, 'is_included' => true, 'included_quantity' => 1, 'line_limit' => 4,'included_line_commission' => 70.00, 'additional_line_commission' => 70.00]);
+            $packages['NEGOCIO Extra 1']->addons()->attach($mobileAddon->id, ['price' => 15.00, 'is_included' => true, 'included_quantity' => 1, 'line_limit' => 4,'included_line_commission' => 70.00, 'additional_line_commission' => 70.00]);
             $packages['NEGOCIO Extra 3']->addons()->attach($mobileAddon->id, ['price' => 13.00, 'is_included' => true, 'included_quantity' => 3, 'line_limit' => 4,'included_line_commission' => 85.00, 'additional_line_commission' => 85.00]);
             $packages['NEGOCIO Extra 5']->addons()->attach($mobileAddon->id, ['price' => 13.00, 'is_included' => true, 'included_quantity' => 5, 'line_limit' => 4,'included_line_commission' => 95.00, 'additional_line_commission' => 95.00]);
             $packages['NEGOCIO Extra 10']->addons()->attach($mobileAddon->id, ['price' => 13.00, 'is_included' => true, 'included_quantity' => 10, 'line_limit' => 9,'included_line_commission' => 170.00, 'additional_line_commission' => 170.00]);
