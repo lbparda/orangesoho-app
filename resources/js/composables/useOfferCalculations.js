@@ -243,6 +243,15 @@ export function useOfferCalculations(
         let commissionDetails = { Fibra: [], Televisión: [], Centralita: [], "Líneas Móviles": [], Terminales: [], Ajustes: [], "Servicios": [] }; // <-- AÑADIDO "Servicios"
         // --- FIN MODIFICACIÓN BENEFICIOS ---
 
+        // --- INICIO MODIFICACIÓN FIBRA ORO (Límite 1) ---
+        // 1. Buscamos el ID del addon de Fibra Oro.
+        const fibraOroAddonId = fibraOroAddonInfo.value?.id || null;
+        // 2. Comprobamos si el beneficio de Fibra Oro está activo en la oferta.
+        const isFibraOroBenefitActive = activeBenefitsMap.value.has(fibraOroAddonId);
+        // 3. Este flag controlará que solo se aplique una vez.
+        let isFibraOroBenefitApplied = false; 
+        // --- FIN MODIFICACIÓN FIBRA ORO ---
+
         if (appliedDiscount.value) {
             const discountAmount = basePrice * (parseFloat(appliedDiscount.value.percentage) / 100);
             price -= discountAmount;
@@ -306,24 +315,46 @@ export function useOfferCalculations(
                     }
                     // --- FIN LÓGICA MODIFICADA ---
 
-                    // --- INICIO: AÑADIDO PARA FIBRA ORO ADICIONAL ---
+                    // --- INICIO: AÑADIDO PARA FIBRA ORO ADICIONAL (MODIFICADO) ---
                     if (line.has_fibra_oro && fibraOroAddonInfo.value) {
-                        // --- INICIO MODIFICACIÓN BENEFICIOS ---
+                        
                         const originalPrice = parseFloat(fibraOroAddonInfo.value.price) || 0;
-                        const benefit = activeBenefitsMap.value.get(fibraOroAddonInfo.value.id);
-                        const itemPrice = applyBenefit(originalPrice, benefit);
-                        const description = benefit ? `Fibra Oro Adicional ${index + 1} (Beneficio)` : `Fibra Oro Adicional ${index + 1}`;
-                        const commission = (benefit && benefit.apply_type === 'free') ? 0 : (parseFloat(fibraOroAddonInfo.value.commission) || 0);
-                        // --- FIN MODIFICACIÓN BENEFICIOS ---
+                        const baseCommission = parseFloat(fibraOroAddonInfo.value.commission) || 0;
+                        const decommission = parseFloat(fibraOroAddonInfo.value.decommission) || 0;
+
+                        let itemPrice = originalPrice;
+                        let description = `Fibra Oro Adicional ${index + 1}`;
+                        let commissionAmount = baseCommission; // <-- Se paga la comisión base por defecto
+
+                        // --- INICIO MODIFICACIÓN FIBRA ORO (Límite 1) ---
+                        if (isFibraOroBenefitActive && !isFibraOroBenefitApplied) {
+                            const benefit = activeBenefitsMap.value.get(fibraOroAddonId);
+                            itemPrice = applyBenefit(originalPrice, benefit);
+                            description = `Fibra Oro Adicional ${index + 1} (Beneficio)`;
+                            
+                            // --- INICIO MODIFICACIÓN COMISIÓN (Petición Usuario) ---
+                            if (benefit && benefit.apply_type === 'free') {
+                                // commissionAmount se queda como baseCommission (Positivo)
+                                if (decommission > 0) {
+                                    // Pero se aplica la decomisión como un ajuste negativo
+                                    commissionDetails.Ajustes.push({ description: `Ajuste Decomisión (Fibra Oro Ad.)`, amount: -decommission });
+                                }
+                            }
+                            // --- FIN MODIFICACIÓN COMISIÓN ---
+
+                            isFibraOroBenefitApplied = true; // ¡MARCAR COMO USADO!
+                        }
+                        // --- FIN MODIFICACIÓN FIBRA ORO ---
                         
                         price += itemPrice;
                         summaryBreakdown.push({ description: description, price: itemPrice });
 
-                        if (commission > 0) {
-                            commissionDetails.Fibra.push({ description: `Fibra Oro Adicional ${index + 1}`, amount: commission });
+                        // Añadir la comisión (positiva) si es mayor que 0
+                        if (commissionAmount > 0) {
+                            commissionDetails.Fibra.push({ description: `Fibra Oro Adicional ${index + 1}`, amount: commissionAmount });
                         }
                     }
-                    // --- FIN: AÑADIDO PARA FIBRA ORO ADICIONAL ---
+                    // --- FIN: AÑADIDO PARA FIBRA ORO ADICIONAL (MODIFICADO) ---
 
                     // --- INICIO CÓDIGO NUEVO: Cálculo Centralita Multisede ---
                     if (line.selected_centralita_id) {
@@ -404,24 +435,46 @@ export function useOfferCalculations(
         // --- FIN LÓGICA IP FIJA PRINCIPAL ---
         // ===================================================
 
-        // --- INICIO: AÑADIDO PARA FIBRA ORO PRINCIPAL ---
+        // --- INICIO: AÑADIDO PARA FIBRA ORO PRINCIPAL (MODIFICADO) ---
         if (form.is_fibra_oro_selected && fibraOroAddonInfo.value) {
-            // --- INICIO MODIFICACIÓN BENEFICIOS ---
+            
             const originalPrice = parseFloat(fibraOroAddonInfo.value.price) || 0;
-            const benefit = activeBenefitsMap.value.get(fibraOroAddonInfo.value.id);
-            const itemPrice = applyBenefit(originalPrice, benefit);
-            const description = benefit ? 'Fibra Oro Principal (Beneficio)' : 'Fibra Oro Principal';
-            const commission = (benefit && benefit.apply_type === 'free') ? 0 : (parseFloat(fibraOroAddonInfo.value.commission) || 0);
-            // --- FIN MODIFICACIÓN BENEFICIOS ---
+            const baseCommission = parseFloat(fibraOroAddonInfo.value.commission) || 0;
+            const decommission = parseFloat(fibraOroAddonInfo.value.decommission) || 0;
+
+            let itemPrice = originalPrice;
+            let description = 'Fibra Oro Principal';
+            let commissionAmount = baseCommission; // <-- Se paga la comisión base por defecto
+
+            // --- INICIO MODIFICACIÓN FIBRA ORO (Límite 1) ---
+            if (isFibraOroBenefitActive && !isFibraOroBenefitApplied) {
+                const benefit = activeBenefitsMap.value.get(fibraOroAddonId);
+                itemPrice = applyBenefit(originalPrice, benefit);
+                description = 'Fibra Oro Principal (Beneficio)';
+                
+                // --- INICIO MODIFICACIÓN COMISIÓN (Petición Usuario) ---
+                if (benefit && benefit.apply_type === 'free') {
+                    // commissionAmount se queda como baseCommission (Positivo)
+                    if (decommission > 0) {
+                        // Pero se aplica la decomisión como un ajuste negativo
+                        commissionDetails.Ajustes.push({ description: `Ajuste Decomisión (Fibra Oro Pr.)`, amount: -decommission });
+                    }
+                }
+                // --- FIN MODIFICACIÓN COMISIÓN ---
+                
+                isFibraOroBenefitApplied = true; // ¡MARCAR COMO USADO!
+            }
+            // --- FIN MODIFICACIÓN FIBRA ORO ---
             
             price += itemPrice;
             summaryBreakdown.push({ description: description, price: itemPrice });
 
-            if (commission > 0) {
-                commissionDetails.Fibra.push({ description: 'Fibra Oro Principal', amount: commission });
+            // Añadir la comisión (positiva) si es mayor que 0
+            if (commissionAmount > 0) {
+                commissionDetails.Fibra.push({ description: 'Fibra Oro Principal', amount: commissionAmount });
             }
         }
-        // --- FIN: AÑADIDO PARA FIBRA ORO PRINCIPAL ---
+        // --- FIN: AÑADIDO PARA FIBRA ORO PRINCIPAL (MODIFICADO) ---
 
         // --- INICIO MODIFICACIÓN BENEFICIOS (TV Addons) ---
         // Itera sobre los addons de TV seleccionados
@@ -553,6 +606,7 @@ export function useOfferCalculations(
 
             // --- INICIO MODIFICACIÓN BENEFICIOS (Lógica para LA Extra) ---
             const freeLineBenefit = activeBenefitsMap.value.get(mobileAddonInfo.value.id);
+            // --- TU CAMBIO (|| 1) ---
             const freeExtraLinesQty = freeLineBenefit ? (freeLineBenefit.apply_data?.quantity || 1) : 0;
             // --- FIN MODIFICACIÓN BENEFICIOS ---
 
