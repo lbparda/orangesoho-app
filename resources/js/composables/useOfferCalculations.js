@@ -38,6 +38,7 @@ export function useOfferCalculations(
     centralitaExtensionQuantities, // ref
     isOperadoraAutomaticaSelected, // ref
     selectedTvAddonIds, // ref
+    selectedDigitalAddonIds, // <-- AÑADIDO
     form, // <-- Recibe el objeto 'form' completo
     // --- INICIO MODIFICACIÓN BENEFICIOS ---
     selectedBenefits // <-- ¡NUEVO ARGUMENTO! Un computed ref de los objetos de beneficio seleccionados
@@ -257,7 +258,6 @@ export function useOfferCalculations(
             price -= discountAmount;
             summaryBreakdown.push({ description: `Descuento Tarifa (${appliedDiscount.value.percentage}%)`, price: -discountAmount });
         }
-
         if (selectedInternetAddonInfo.value) {
             // --- INICIO MODIFICACIÓN BENEFICIOS ---
             const originalPrice = parseFloat(selectedInternetAddonInfo.value.pivot.price) || 0;
@@ -424,7 +424,6 @@ export function useOfferCalculations(
 
             price += itemPrice;
             summaryBreakdown.push({ description: description, price: itemPrice });
-
             if (commission > 0) {
                 commissionDetails.Fibra.push({ description: 'IP Fija Principal', amount: commission });
             }
@@ -546,7 +545,6 @@ export function useOfferCalculations(
                 commissionDetails.Centralita.push({ description: 'Operadora Automática (Contratada)', amount: commissionFinal });
             }
         }
-
         if (isCentralitaActive.value) {
             includedCentralitaExtensions.value.forEach(ext => {
                 const commissionPerUnit = parseFloat(ext.pivot.included_line_commission) || 0;
@@ -685,9 +683,7 @@ export function useOfferCalculations(
                     }
                 }
                 // --- FIN MODIFICACIÓN LA EXTRA ---
-
-
-                if (line.terminal_pivot && line.selected_duration) {
+  if (line.terminal_pivot && line.selected_duration) {
                     const terminalTotalPrice = (parseFloat(line.original_initial_cost) || 0) + (parseFloat(line.original_monthly_cost || 0) * parseInt(line.selected_duration, 10));
                     
                     let terminalCommission = 0;
@@ -724,17 +720,11 @@ export function useOfferCalculations(
         // --- INICIO MODIFICACIÓN BENEFICIOS (Cálculo de otros addons de servicio) ---
         // Esta sección calcula el precio de addons como MS365, Disney+, etc.
         // que no se seleccionan en ninguna otra parte del formulario.
-        // ¡¡¡ ESTA ES LA PARTE QUE FALTA IMPLEMENTAR EN CREATE.VUE !!!
         
-        /*
-        // 1. Necesitas un nuevo ref en Create.vue: const selectedServiceAddons = ref([]);
-        // 2. Necesitas una UI (checkboxes) para que el usuario seleccione estos addons.
-        // 3. Pasa 'selectedServiceAddons' a este composable.
-        
-        if (props.allAddons && selectedServiceAddons.value) { // <--- CAMBIAR selectedServiceAddons
+        if (props.allAddons && selectedDigitalAddonIds.value) { // <--- CAMBIADO
             const serviceTypes = ['service', 'software']; // Tipos de addons que son "beneficios"
             
-            selectedServiceAddons.value.forEach(addonId => { // <--- CAMBIAR selectedServiceAddons
+            selectedDigitalAddonIds.value.forEach(addonId => { // <--- CAMBIADO
                 const addonInfo = props.allAddons.find(a => a.id === addonId);
                 
                 // Solo calcula los que NO son de TV (porque TV ya se calculó arriba)
@@ -754,7 +744,6 @@ export function useOfferCalculations(
                 }
             });
         }
-        */
         // --- FIN MODIFICACIÓN BENEFICIOS ---
 
         Object.keys(commissionDetails).forEach(key => {
@@ -811,4 +800,4 @@ export function useOfferCalculations(
         fibraOroAddonInfo, 
     };
     // --- FIN: AÑADIDO ---
-}
+}              

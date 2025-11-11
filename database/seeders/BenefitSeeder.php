@@ -13,7 +13,8 @@ class BenefitSeeder extends Seeder
         // --- 1. BUSCAR LOS ADDONS (PRODUCTOS) QUE CREASTE ---
         // (Usamos firstOrFail para detenernos si falta un addon)
         $addon_fibra_oro = Addon::where('name', 'Fibra Oro')->firstOrFail();
-        $addon_ms365 = Addon::where('name', 'Microsoft 365')->firstOrFail();
+        $addon_ms365basic = Addon::where('name', 'Microsoft 365 Empresa Basica')->firstOrFail();
+        $addon_ms365standard = Addon::where('name', 'Microsoft 365 Empresa Standard')->firstOrFail();
         $addon_presencia = Addon::where('name', 'Presencia Digital')->firstOrFail();
         $addon_factura = Addon::where('name', 'Factura electrónica')->firstOrFail();
         // Asumo que "LA Extra" es tu addon "Líneas adicionales móviles"
@@ -33,9 +34,13 @@ class BenefitSeeder extends Seeder
             ['description' => 'LA Extra (Gratis)', 'category' => 'Empresa', 'apply_type' => 'free']
         );
 
-        $b_ms365 = Benefit::updateOrCreate(
-            ['addon_id' => $addon_ms365->id, 'apply_type' => 'percentage_discount'],
-            ['description' => 'Microsoft 365 (50% dto.)', 'category' => 'Empresa', 'apply_type' => 'percentage_discount', 'apply_value' => 50]
+        $b_ms365basic = Benefit::updateOrCreate(
+            ['addon_id' => $addon_ms365basic->id, 'apply_type' => 'percentage_discount'],
+            ['description' => 'Microsoft 365 Empresa Basica (50% dto.)', 'category' => 'Empresa', 'apply_type' => 'percentage_discount', 'apply_value' => 50]
+        );
+        $b_ms365standard = Benefit::updateOrCreate(
+            ['addon_id' => $addon_ms365standard->id, 'apply_type' => 'percentage_discount'],
+            ['description' => 'Microsoft 365 Empresa Standard (50% dto.)', 'category' => 'Empresa', 'apply_type' => 'percentage_discount', 'apply_value' => 50]
         );
 
         $b_presencia = Benefit::updateOrCreate(
@@ -61,7 +66,7 @@ class BenefitSeeder extends Seeder
         // --- 3. ASIGNAR BENEFICIOS Y LÍMITES A PAQUETES ---
 
         // Listas de beneficios
-        $empresa_comun = [$b_fibra_oro->id, $b_ms365->id, $b_presencia->id, $b_factura->id];
+        $empresa_comun = [$b_fibra_oro->id, $b_ms365basic->id,$b_ms365standard->id, $b_presencia->id, $b_factura->id];
         $hogar_comun = [$b_disney->id, $b_amazon->id];
         $empresa_10_20 = array_merge($empresa_comun, [$b_la_extra->id]);
 

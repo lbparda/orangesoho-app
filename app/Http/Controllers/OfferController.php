@@ -107,8 +107,7 @@ class OfferController extends Controller
             'probabilityOptions' => $probabilityOptions, 
         ]);
     }
-
-    public function store(Request $request)
+   public function store(Request $request)
     {
         // --- INICIO: VALIDACIÓN ACTUALIZADA ---
         $validated = $request->validate([
@@ -130,6 +129,12 @@ class OfferController extends Controller
             'centralita' => 'present|array',
             'tv_addons' => 'nullable|array',
             'tv_addons.*' => 'exists:addons,id',
+
+            // --- INICIO: AÑADIR VALIDACIÓN ---
+            'digital_addons' => 'nullable|array',
+            'digital_addons.*' => 'exists:addons,id',
+            // --- FIN: AÑADIR VALIDACIÓN ---
+
             'is_ip_fija_selected' => 'nullable|boolean',
             'is_fibra_oro_selected' => 'nullable|boolean', // <-- AÑADIDO
             'probability' => 'nullable|integer|in:0,25,50,75,90,100',
@@ -216,9 +221,8 @@ class OfferController extends Controller
                             'addon_commission' => $ipFijaAddon->commission, 
                         ]);
                     }
-                }
-
-                // 1.b. (AÑADIDO) Fibra Oro Principal
+                } 
+ // 1.b. (AÑADIDO) Fibra Oro Principal
                 if (!empty($validated['is_fibra_oro_selected'])) {
                     $fibraOroAddon = Addon::where('name', 'Fibra Oro')->where('type', 'internet_feature')->first();
                     if ($fibraOroAddon) {
@@ -329,6 +333,24 @@ class OfferController extends Controller
                         }
                     }
                 }
+
+                // --- INICIO: AÑADIR LÓGICA DE GUARDADO ---
+                // 7. Soluciones Digitales (Addons de tipo 'service')
+                if (!empty($validated['digital_addons'])) {
+                    foreach ($validated['digital_addons'] as $digitalAddonId) {
+                        $digitalAddon = Addon::find($digitalAddonId);
+                        if ($digitalAddon) {
+                             $offer->addons()->attach($digitalAddon->id, [
+                                'quantity' => 1,
+                                'addon_name' => $digitalAddon->name,
+                                'addon_price' => $digitalAddon->price,
+                                'addon_commission' => $digitalAddon->commission,
+                            ]);
+                        }
+                    }
+                }
+                // --- FIN: AÑADIR LÓGICA DE GUARDADO ---
+                
                 // --- FIN LÓGICA DE ADDONS ---
             });
 
@@ -339,8 +361,7 @@ class OfferController extends Controller
              return back()->withInput()->with('error', 'Error al guardar la oferta. Revisa los datos e inténtalo de nuevo.');
         }
     }
-
-    public function edit(Offer $offer)
+ public function edit(Offer $offer)
     {
         if ($offer->status === 'finalizada' && Auth::user()->role !== 'admin') { 
             return redirect()->route('offers.show', $offer)->with('warning', 'Esta oferta está finalizada y no se puede editar.');
@@ -432,6 +453,15 @@ class OfferController extends Controller
                     'selected_centralita_id' => $addon->pivot->selected_centralita_id, 
                 ];
             })->toArray();
+            
+        // --- INICIO: AÑADIR CARGA DE SOLUCIONES DIGITALES ---
+        // 3. Soluciones Digitales
+        $initialDigitalAddonIds = $offer->addons()
+            ->whereIn('type', ['service', 'software']) // Usamos los tipos de tu AddonSeeder
+            ->pluck('addons.id') // Pluck 'addons.id' para evitar ambigüedad
+            ->toArray();
+        // --- FIN: AÑADIR CARGA ---
+            
         // --- FIN: PREPARAR DATOS VUE ---
 
 
@@ -454,11 +484,13 @@ class OfferController extends Controller
             'initialAdditionalInternetLines' => $additionalInternetLinesData, 
             'initialMainIpFijaSelected' => $mainIpFijaSelected,
             'initialMainFibraOroSelected' => $mainFibraOroSelected, // <-- AÑADIDO
+            
+            // --- INICIO: AÑADIR PROP ---
+            'initialDigitalAddonIds' => $initialDigitalAddonIds,
+            // --- FIN: AÑADIR PROP ---
         ]);
     }
-
-
-    public function update(Request $request, Offer $offer)
+   public function update(Request $request, Offer $offer)
     {
          if ($offer->status === 'finalizada' && Auth::user()->role !== 'admin') {
              return back()->with('error', 'Esta oferta está finalizada y no se puede editar.');
@@ -504,6 +536,12 @@ class OfferController extends Controller
              'centralita' => 'present|array',
              'tv_addons' => 'nullable|array',
              'tv_addons.*' => 'exists:addons,id',
+             
+             // --- INICIO: AÑADIR VALIDACIÓN ---
+             'digital_addons' => 'nullable|array',
+             'digital_addons.*' => 'exists:addons,id',
+             // --- FIN: AÑADIR VALIDACIÓN ---
+             
              'is_ip_fija_selected' => 'nullable|boolean',
              'is_fibra_oro_selected' => 'nullable|boolean', // <-- AÑADIDO
              'probability' => 'nullable|integer|in:0,25,50,75,90,100',
@@ -580,8 +618,7 @@ class OfferController extends Controller
                         'terminal_name' => $terminalName,
                     ]);
                 }
-
-                // --- INICIO: LÓGICA DE ADDONS ACTUALIZADA ---
+    // --- INICIO: LÓGICA DE ADDONS ACTUALIZADA ---
                 $offer->addons()->detach();
 
                 // 1. IP Fija Principal
@@ -707,6 +744,24 @@ class OfferController extends Controller
                         }
                     }
                 }
+                
+                // --- INICIO: AÑADIR LÓGICA DE GUARDADO ---
+                // 7. Soluciones Digitales (Addons de tipo 'service')
+                if (!empty($validated['digital_addons'])) {
+                    foreach ($validated['digital_addons'] as $digitalAddonId) {
+                        $digitalAddon = Addon::find($digitalAddonId);
+                        if ($digitalAddon) {
+                             $offer->addons()->attach($digitalAddon->id, [
+                                'quantity' => 1,
+                                'addon_name' => $digitalAddon->name,
+                                'addon_price' => $digitalAddon->price,
+                                'addon_commission' => $digitalAddon->commission,
+                            ]);
+                        }
+                    }
+                }
+                // --- FIN: AÑADIR LÓGICA DE GUARDADO ---
+                
                 // --- FIN LÓGICA DE ADDONS ---
 
             });
@@ -718,9 +773,7 @@ class OfferController extends Controller
             return back()->withInput()->with('error', 'No se pudo actualizar la oferta. Revisa los datos.');
         }
     }
-
-
-    public function show(Offer $offer)
+   public function show(Offer $offer)
     {
         // --- INICIO: CARGAR PIVOTES (ACTUALIZADO CON BENEFICIOS) ---
         $offer->load([
@@ -894,3 +947,4 @@ class OfferController extends Controller
         return Response::stream($callback, 200, $headers);
     }
 }
+                                

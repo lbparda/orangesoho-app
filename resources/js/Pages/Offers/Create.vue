@@ -63,6 +63,7 @@ const form = useForm({
     // --- FIN CÓDIGO MODIFICADO ---
     centralita: null,
     tv_addons: [],
+    digital_addons: [],
     is_ip_fija_selected: false, // <-- Estado IP Fija (línea principal)
     is_fibra_oro_selected: false, // <-- AÑADIDO (Línea 71)
     summary: null,
@@ -84,13 +85,13 @@ const selectedCentralitaId = ref(null);
 const centralitaExtensionQuantities = ref({});
 const isOperadoraAutomaticaSelected = ref(false);
 const selectedTvAddonIds = ref([]);
+const selectedDigitalAddonIds = ref([]);
 const showCommissionDetails = ref(false);
 
 // --- INICIO MODIFICACIÓN BENEFICIOS ---
 // Almacena los IDs de los beneficios seleccionados: [1, 5, 7]
-const selectedBenefitIds = ref([]); 
+const selectedBenefitIds = ref([]);
 // --- FIN MODIFICACIÓN BENEFICIOS ---
-
 const selectedPackage = computed(() => props.packages.find(p => p.id === selectedPackageId.value) || null);
 
 // --- INICIO MODIFICACIÓN BENEFICIOS: Computeds de Lógica ---
@@ -102,12 +103,12 @@ const benefitsEmpresa = computed(() => availableBenefits.value.filter(b => b.cat
 const benefitsHogar = computed(() => availableBenefits.value.filter(b => b.category === 'Hogar'));
 
 // Lógica de Reglas de Selección
-const selectedBenefits = computed(() => 
+const selectedBenefits = computed(() =>
     availableBenefits.value.filter(b => selectedBenefitIds.value.includes(b.id))
 );
 
 const totalSelectedCount = computed(() => selectedBenefitIds.value.length);
-const hogarSelectedCount = computed(() => 
+const hogarSelectedCount = computed(() =>
     selectedBenefits.value.filter(b => b.category === 'Hogar').length
 );
 
@@ -138,17 +139,28 @@ const availableTerminals = computed(() => selectedPackage.value?.terminals || []
 const availableO2oDiscounts = computed(() => selectedPackage.value?.o2o_discounts || []);
 const brandsForSelectedPackage = computed(() => [...new Set(availableTerminals.value.map(t => t.brand))]);
 const availableAdditionalExtensions = computed(() => props.centralitaExtensions);
+const digitalSolutionAddons = computed(() => {
+    if (!props.allAddons) return [];
+    // Filtramos por el 'type' que definiste en tu AddonSeeder
+    return props.allAddons.filter(a => a.type === 'service');
+});
 
-// --- INICIO: MODIFICACIÓN BENEFICIOS (Línea 131) ---
-// Pasamos el objeto 'form' completo y el ref 'additionalInternetLines' al composable
-// AÑADIMOS: ipFijaAddonInfo y fibraOroAddonInfo
+// --- INICIO: MODIFICACIÓN (Añadir selectedDigitalAddonIds) ---
 const { calculationSummary, ipFijaAddonInfo, fibraOroAddonInfo } = useOfferCalculations(
-    props, selectedPackageId, lines, selectedInternetAddonId, additionalInternetLines, // <-- Pasamos el ref actualizado
-    selectedCentralitaId, centralitaExtensionQuantities, isOperadoraAutomaticaSelected, selectedTvAddonIds,
-    form, // <-- Pasar el objeto form completo
-    selectedBenefits // <-- ¡NUEVO! Pasa la lista de objetos de beneficio seleccionados
+    props,
+    selectedPackageId,
+    lines,
+    selectedInternetAddonId,
+    additionalInternetLines,
+    selectedCentralitaId,
+    centralitaExtensionQuantities,
+    isOperadoraAutomaticaSelected,
+    selectedTvAddonIds,
+    selectedDigitalAddonIds, // <-- AÑADIDO
+    form,
+    selectedBenefits
 );
-// --- FIN: MODIFICACIÓN BENEFICIOS ---
+// --- FIN: MODIFICACIÓN ---
 
 const modelsByBrand = (brand) => availableTerminals.value.filter(t => t.brand === brand).filter((v, i, a) => a.findIndex(t => t.model === v.model) === i);
 // Ahora usamos pivot.id (que viene de package_terminal.id)
@@ -211,7 +223,7 @@ const copyPreviousLine = (line, index) => {
     if (index <= 0 || !lines.value[index - 1]) return;
     const prev = lines.value[index - 1];
     line.is_portability = prev.is_portability;
-    line.source_operator = prev.source_operator;
+  line.source_operator = prev.source_operator;
     line.has_vap = prev.has_vap;
     line.o2o_discount_id = prev.o2o_discount_id;
     line.selected_brand = prev.selected_brand;
@@ -229,7 +241,7 @@ const addWatchersToAdditionalLine = (line) => {
             line.has_ip_fija = true;
         } else { // Si se quita la centralita, desmarcar IP Fija
             // No lo desmarcamos automáticamente, puede que la quieran sin centralita
-             line.has_ip_fija = false; 
+             line.has_ip_fija = false;
         }
     });
 };
@@ -311,6 +323,11 @@ const saveOffer = () => {
             operadora_automatica_id: operadoraAutomaticaInfo.value?.id || null, extensions: finalExtensions,
         };
         form.tv_addons = selectedTvAddonIds.value;
+        
+        // --- INICIO: MODIFICACIÓN (Añadir digital_addons) ---
+        form.digital_addons = selectedDigitalAddonIds.value; // <-- AÑADIDO
+        // --- FIN: MODIFICACIÓN ---
+
         form.summary = calculationSummary.value;
 
         form.post(route('offers.store'), { onSuccess: () => alert('¡Oferta guardada!'), onError: (e) => { console.error(e); alert('Error al guardar.'); } });
@@ -333,6 +350,7 @@ watch(selectedPackageId, (newPackageId) => {
     
     // --- INICIO MODIFICACIÓN BENEFICIOS ---
     selectedBenefitIds.value = []; // <-- ¡NUEVO! Resetea la selección
+    selectedDigitalAddonIds.value = []; // <-- AÑADIDO: Resetea Soluciones Digitales
     // --- FIN MODIFICACIÓN BENEFICIOS ---
 
     if (!newPackageId) return;
@@ -374,8 +392,7 @@ watch(isCentralitaActive, (isActive) => {
 }, { immediate: true }); // immediate: true para que se ejecute al cargar si ya hay centralita
 // --- FIN CÓDIGO AÑADIDO ---
 
-</script>
-
+</script>  
 <template>
     <Head title="Crear Oferta" />
     <AuthenticatedLayout>
@@ -468,10 +485,8 @@ watch(isCentralitaActive, (isActive) => {
                                 </label>
                             </div>
                             
-                            <!-- --- INICIO: CAMBIO (Línea 322) --- -->
-                            <!-- Envolvemos las features en un div flex para que se pongan una al lado de la otra -->
                             <div class="mt-4 flex flex-wrap gap-x-6 gap-y-2">
-                                <div v-if="ipFijaAddonInfo"> <!-- Usamos el computed del composable -->
+                                <div v-if="ipFijaAddonInfo">
                                     <label class="flex items-center">
                                         <Checkbox v-model:checked="form.is_ip_fija_selected" />
                                         <span class="ml-2 text-sm text-gray-600">
@@ -483,21 +498,15 @@ watch(isCentralitaActive, (isActive) => {
                                     </p>
                                 </div>
 
-                                <!-- --- INICIO: AÑADIDO (Línea 331) --- -->
-                                <div v-if="fibraOroAddonInfo"> <!-- Usamos el computed del composable -->
+                                <div v-if="fibraOroAddonInfo">
                                     <label class="flex items-center">
                                         <Checkbox v-model:checked="form.is_fibra_oro_selected" />
                                         <span class="ml-2 text-sm text-gray-600">
                                             Añadir Fibra Oro ({{ fibraOroAddonInfo.price }}€)
                                         </span>
                                     </label>
-                                    <!-- <p class="text-xs text-gray-500 ml-6">Opcional: texto de ayuda</p> -->
                                 </div>
-                                <!-- --- FIN: AÑADIDO --- -->
-
                             </div>
-                            <!-- --- FIN: CAMBIO --- -->
-                           
                         </div>
 
                         <!-- --- INICIO: NUEVO APARTADO DE BENEFICIOS (CON LÍMITES) --- -->
@@ -517,9 +526,8 @@ watch(isCentralitaActive, (isActive) => {
                             <div class="mt-4">
                                 <h4 class="font-semibold text-gray-700 border-b pb-2">Categoría Empresa</h4>
                                 <div class="space-y-2 mt-3">
-                                    <!-- Usamos benefit.description como texto y benefit.id como valor -->
                                     <label v-for="benefit in benefitsEmpresa" :key="benefit.id" class="flex items-center p-2 rounded hover:bg-gray-50">
-                                        <input 
+                                        <input
                                             type="checkbox"
                                             :value="benefit.id"
                                             v-model="selectedBenefitIds"
@@ -530,8 +538,7 @@ watch(isCentralitaActive, (isActive) => {
                                     </label>
                                 </div>
                             </div>
-
-                            <!-- Categoría Hogar -->
+<!-- Categoría Hogar -->
                             <div class="mt-6">
                                 <h4 class="font-semibold text-gray-700 border-b pb-2">Categoría Hogar</h4>
                                 <p class="text-xs text-gray-500 mt-1">(Máximo 1 beneficio de esta categoría)</p>
@@ -540,7 +547,7 @@ watch(isCentralitaActive, (isActive) => {
                                 </p>
                                 <div class="space-y-2 mt-3">
                                     <label v-for="benefit in benefitsHogar" :key="benefit.id" class="flex items-center p-2 rounded hover:bg-gray-50">
-                                        <input 
+                                        <input
                                             type="checkbox"
                                             :value="benefit.id"
                                             v-model="selectedBenefitIds"
@@ -607,7 +614,7 @@ watch(isCentralitaActive, (isActive) => {
 
                             <div class="space-y-4 p-6 bg-slate-50 rounded-lg h-full">
                                 <h3 class="text-lg font-semibold text-gray-800">6. Internet Adicional</h3>
-                                <div v-for="(line, index) in additionalInternetLines" :key="line.id" class="p-3 border rounded-lg bg-blue-50 border-blue-200 space-y-2"> 
+                                <div v-for="(line, index) in additionalInternetLines" :key="line.id" class="p-3 border rounded-lg bg-blue-50 border-blue-200 space-y-2">
                                     <div class="flex-1">
                                         <div class="flex justify-between items-center mb-1">
                                             <label class="block text-xs font-medium text-gray-500">Línea Adicional {{ index + 1 }}</label>
@@ -620,17 +627,15 @@ watch(isCentralitaActive, (isActive) => {
                                     </div>
 
                                     <div v-if="line.addon_id && centralitaAddonOptions.length > 0">
-                                         <label :for="`multi_centralita_${line.id}`" class="block text-xs font-medium text-gray-500">Centralita Multisede</label>
-                                         <select v-model="line.selected_centralita_id" :id="`multi_centralita_${line.id}`" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-indigo-500 focus:ring-indigo-500">
-                                             <option :value="null">-- Sin Centralita Multisede --</option>
-                                             <option v-for="centralita in centralitaAddonOptions" :key="centralita.id" :value="centralita.id">
-                                                 {{ centralita.name }} (+{{ parseFloat(centralita.pivot.price).toFixed(2) }}€)
-                                             </option>
-                                         </select>
+                                        <label :for="`multi_centralita_${line.id}`" class="block text-xs font-medium text-gray-500">Centralita Multisede</label>
+                                        <select v-model="line.selected_centralita_id" :id="`multi_centralita_${line.id}`" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                            <option :value="null">-- Sin Centralita Multisede --</option>
+                                            <option v-for="centralita in centralitaAddonOptions" :key="centralita.id" :value="centralita.id">
+                                                {{ centralita.name }} (+{{ parseFloat(centralita.pivot.price).toFixed(2) }}€)
+                                            </option>
+                                        </select>
                                     </div>
                                     
-                                    <!-- --- INICIO: CAMBIO (Línea 436) --- -->
-                                    <!-- Envolvemos las features en un div flex para que se pongan una al lado de la otra -->
                                     <div v-if="line.addon_id" class="mt-2 flex flex-wrap gap-x-6 gap-y-1">
                                         <div v-if="ipFijaAddonInfo">
                                             <label class="flex items-center">
@@ -641,7 +646,6 @@ watch(isCentralitaActive, (isActive) => {
                                             </label>
                                         </div>
 
-                                        <!-- --- INICIO: AÑADIDO (Línea 445) --- -->
                                         <div v-if="fibraOroAddonInfo">
                                             <label class="flex items-center">
                                                 <Checkbox v-model:checked="line.has_fibra_oro" />
@@ -650,10 +654,7 @@ watch(isCentralitaActive, (isActive) => {
                                                 </span>
                                             </label>
                                         </div>
-                                        <!-- --- FIN: AÑADIDO --- -->
-
                                     </div>
-                                    <!-- --- FIN: CAMBIO --- -->
                                     
                                 </div>
                                 <PrimaryButton @click="addInternetLine" type="button" class="w-full justify-center">Añadir Internet</PrimaryButton>
@@ -661,85 +662,108 @@ watch(isCentralitaActive, (isActive) => {
                         </div>
                     </div>
 
-                    <div v-if="selectedPackage" class="bg-white shadow-sm sm:rounded-lg p-8 space-y-6">
+                    <!-- --- INICIO: NUEVO APARTADO DE SOLUCIONES DIGITALES --- -->
+                    <div v-if="selectedPackage && digitalSolutionAddons.length > 0" class="bg-white shadow-sm sm:rounded-lg p-8 space-y-6">
+                        <h3 class="text-lg font-semibold text-gray-800 text-center">Soluciones Digitales</h3>
+                        <p class="text-sm text-gray-600 text-center -mt-4 mb-4">
+                            Selecciona los productos. Si has elegido el beneficio correspondiente, el descuento se aplicará en el resumen.
+                        </p>
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            <div v-for="addon in digitalSolutionAddons" :key="addon.id" class="flex items-center p-3 border rounded-md hover:bg-gray-50">
+                                <input
+                                    :id="'digital_addon_' + addon.id"
+                                    type="checkbox"
+                                    :value="addon.id"
+                                    v-model="selectedDigitalAddonIds"
+                                    class="h-4 w-4 text-orange-600 border-gray-300 rounded focus:ring-orange-500"
+                                />
+                                <label :for="'digital_addon_' + addon.id" class="ml-3 block text-sm font-medium text-gray-700">
+                                    {{ addon.name }}
+                                    <span class="text-xs text-gray-500">({{ parseFloat(addon.price).toFixed(2) }}€/mes)</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- --- FIN: NUEVO APARTADO DE SOLUCIONES DIGITALES --- -->
+<div v-if="selectedPackage" class="bg-white shadow-sm sm:rounded-lg p-8 space-y-6">
                         <h3 class="text-lg font-semibold text-gray-800 text-center">7. Líneas Móviles</h3>
                         <div v-if="lines.length === 0" class="text-gray-500 text-sm text-center">
                             Este paquete no incluye líneas móviles de base. Puedes añadirlas manualmente.
                         </div>
                         <div v-for="(line, index) in lines" :key="line.id" class="p-6 border rounded-lg max-w-full mx-auto" :class="{'bg-gray-50 border-gray-200': !line.is_extra, 'bg-green-50 border-green-200': line.is_extra}">
-                           <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-center mb-4">
-                               <div class="md:col-span-2 flex justify-between items-center">
-                                   <span class="font-medium text-gray-700">
-                                       {{ line.is_extra ? `Línea Adicional ${index + 1 - lines.filter(l => !l.is_extra).length}` : `Línea Principal ${index + 1}` }}
-                                   </span>
-                                   <div class="flex space-x-2">
-                                       <button
-                                           v-if="index > 0"
-                                           @click="copyPreviousLine(line, index)"
-                                           type="button"
-                                           class="text-blue-600 hover:text-blue-800 p-1 rounded-full hover:bg-blue-100"
-                                           title="Copiar configuración de la línea anterior"
-                                       >
-                                           <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                                           </svg>
-                                       </button>
-                                       <button
-                                           v-if="line.is_extra"
-                                           @click="removeLine(index)"
-                                           type="button"
-                                           class="text-red-500 hover:text-red-700 p-1 rounded-full hover:bg-red-100"
-                                       >
+                            <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-center mb-4">
+                                <div class="md:col-span-2 flex justify-between items-center">
+                                    <span class="font-medium text-gray-700">
+                                        {{ line.is_extra ? `Línea Adicional ${index + 1 - lines.filter(l => !l.is_extra).length}` : `Línea Principal ${index + 1}` }}
+                                    </span>
+                                    <div class="flex space-x-2">
+                                        <button
+                                            v-if="index > 0"
+                                            @click="copyPreviousLine(line, index)"
+                                            type="button"
+                                            class="text-blue-600 hover:text-blue-800 p-1 rounded-full hover:bg-blue-100"
+                                            title="Copiar configuración de la línea anterior"
+                                        >
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                            </svg>
+                                        </button>
+                                        <button
+                                            v-if="line.is_extra"
+                                            @click="removeLine(index)"
+                                            type="button"
+                                            class="text-red-500 hover:text-red-700 p-1 rounded-full hover:bg-red-100"
+                                        >
                                             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                                                 <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
                                             </svg>
-                                       </button>
-                                   </div>
-                               </div>
-                               <div class="md:col-span-4">
-                                   <label class="block text-xs font-medium text-gray-500">Nº Teléfono</label>
-                                   <input v-model="line.phone_number" type="tel" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-indigo-500 focus:ring-indigo-500" placeholder="Ej: 612345678">
-                               </div>
-                               <div class="md:col-span-2 flex items-end pb-1">
-                                   <div class="flex items-center h-full">
-                                       <input v-model="line.is_portability" :id="`portability_${line.id}`" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
-                                       <label :for="`portability_${line.id}`" class="ml-2 block text-sm text-gray-900">Portabilidad</label>
-                                   </div>
-                               </div>
-                           </div>
-                           <div v-if="line.is_portability" class="space-y-4 border-t pt-4 mt-4">
-                               <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
-                                   <div class="md:col-span-4">
-                                       <label class="block text-xs font-medium text-gray-500">Operador Origen</label>
-                                       <select v-model="line.source_operator" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-indigo-500 focus:ring-indigo-500">
-                                           <option :value="null" disabled>-- Selecciona --</option>
-                                           <option v-for="op in operators" :key="op" :value="op">{{ op }}</option>
-                                       </select>
-                                   </div>
-                                   <div class="md:col-span-2 flex items-end pb-1">
-                                       <div class="flex items-center h-full">
-                                           <input v-model="line.has_vap" :id="`vap_${line.id}`" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
-                                           <label :for="`vap_${line.id}`" class="ml-2 block text-sm text-gray-900">con VAP</label>
-                                       </div>
-                                   </div>
-                                   <div class="md:col-span-4">
-                                       <label class="block text-xs font-medium text-gray-500">Descuento O2O</label>
-                                       <select v-model="line.o2o_discount_id" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-indigo-500 focus:ring-indigo-500">
-                                           <option :value="null">-- Sin subvención --</option>
-                                           <option v-for="o2o in getO2oDiscountsForLine(line, index)" :key="o2o.id" :value="o2o.id">{{ o2o.name }}</option>
-                                       </select>
-                                   </div>
-                               </div>
-                               <div v-if="line.has_vap" class="space-y-4 pt-4 border-t border-dashed">
-                                   <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
-                                       <div class="md:col-span-2"><label class="block text-xs font-medium text-gray-500">Marca</label><select v-model="line.selected_brand" @change="line.selected_model_id = null; line.selected_duration = null; assignTerminalPrices(line);" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-indigo-500 focus:ring-indigo-500"><option :value="null">-- Marca --</option><option v-for="brand in brandsForSelectedPackage" :key="brand" :value="brand">{{ brand }}</option></select></div>
-                                       <div class="md:col-span-3"><label class="block text-xs font-medium text-gray-500">Modelo</label><select v-model="line.selected_model_id" @change="line.selected_duration = null; assignTerminalPrices(line);" :disabled="!line.selected_brand" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-indigo-500 focus:ring-indigo-500"><option :value="null">-- Modelo --</option><option v-for="terminal in modelsByBrand(line.selected_brand)" :key="terminal.id" :value="terminal.id">{{ terminal.model }}</option></select></div>
-                                       <div class="md:col-span-2"><label class="block text-xs font-medium text-gray-500">Meses</label><select v-model="line.selected_duration" @change="assignTerminalPrices(line)" :disabled="!line.selected_model_id" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-indigo-500 focus:ring-indigo-500"><option :value="null">-- Meses --</option><option v-for="duration in getDurationsForModel(line)" :key="duration" :value="duration">{{ duration }} meses</option></select></div>
-                                       <div class="md:col-span-2"><label class="block text-xs font-medium text-gray-500">Pago Inicial (€)</label><input v-model.number="line.initial_cost" type="number" step="0.01" min="0" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-indigo-500 focus:ring-indigo-500"></div>
-                                       <div class="md:col-span-2"><label class="block text-xs font-medium text-gray-500">Cuota Mensual (€)</label><input v-model.number="line.monthly_cost" type="number" step="0.01" min="0" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-indigo-500 focus:ring-indigo-500"></div>
-                                   </div>
-                               </div>
-                           </div>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="md:col-span-4">
+                                    <label class="block text-xs font-medium text-gray-500">Nº Teléfono</label>
+                                    <input v-model="line.phone_number" type="tel" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-indigo-500 focus:ring-indigo-500" placeholder="Ej: 612345678">
+                                </div>
+                                <div class="md:col-span-2 flex items-end pb-1">
+                                    <div class="flex items-center h-full">
+                                        <input v-model="line.is_portability" :id="`portability_${line.id}`" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                                        <label :for="`portability_${line.id}`" class="ml-2 block text-sm text-gray-900">Portabilidad</label>
+                                    </div>
+                                </div>
+                            </div>
+                            <div v-if="line.is_portability" class="space-y-4 border-t pt-4 mt-4">
+                                <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
+                                    <div class="md:col-span-4">
+                                        <label class="block text-xs font-medium text-gray-500">Operador Origen</label>
+                                        <select v-model="line.source_operator" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                            <option :value="null" disabled>-- Selecciona --</option>
+                                            <option v-for="op in operators" :key="op" :value="op">{{ op }}</option>
+                                        </select>
+                                    </div>
+                                    <div class="md:col-span-2 flex items-end pb-1">
+                                        <div class="flex items-center h-full">
+                                            <input v-model="line.has_vap" :id="`vap_${line.id}`" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                                            <label :for="`vap_${line.id}`" class="ml-2 block text-sm text-gray-900">con VAP</label>
+                                        </div>
+                                    </div>
+                                    <div class="md:col-span-4">
+                                        <label class="block text-xs font-medium text-gray-500">Descuento O2O</label>
+                                        <select v-model="line.o2o_discount_id" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                            <option :value="null">-- Sin subvención --</option>
+                                            <option v-for="o2o in getO2oDiscountsForLine(line, index)" :key="o2o.id" :value="o2o.id">{{ o2o.name }}</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div v-if="line.has_vap" class="space-y-4 pt-4 border-t border-dashed">
+                                    <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
+                                        <div class="md:col-span-2"><label class="block text-xs font-medium text-gray-500">Marca</label><select v-model="line.selected_brand" @change="line.selected_model_id = null; line.selected_duration = null; assignTerminalPrices(line);" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-indigo-500 focus:ring-indigo-500"><option :value="null">-- Marca --</option><option v-for="brand in brandsForSelectedPackage" :key="brand" :value="brand">{{ brand }}</option></select></div>
+                                        <div class="md:col-span-3"><label class="block text-xs font-medium text-gray-500">Modelo</label><select v-model="line.selected_model_id" @change="line.selected_duration = null; assignTerminalPrices(line);" :disabled="!line.selected_brand" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-indigo-500 focus:ring-indigo-500"><option :value="null">-- Modelo --</option><option v-for="terminal in modelsByBrand(line.selected_brand)" :key="terminal.id" :value="terminal.id">{{ terminal.model }}</option></select></div>
+                                        <div class="md:col-span-2"><label class="block text-xs font-medium text-gray-500">Meses</label><select v-model="line.selected_duration" @change="assignTerminalPrices(line)" :disabled="!line.selected_model_id" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-indigo-500 focus:ring-indigo-500"><option :value="null">-- Meses --</option><option v-for="duration in getDurationsForModel(line)" :key="duration" :value="duration">{{ duration }} meses</option></select></div>
+                                        <div class="md:col-span-2"><label class="block text-xs font-medium text-gray-500">Pago Inicial (€)</label><input v-model.number="line.initial_cost" type="number" step="0.01" min="0" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-indigo-500 focus:ring-indigo-500"></div>
+                                        <div class="md:col-span-2"><label class="block text-xs font-medium text-gray-500">Cuota Mensual (€)</label><input v-model.number="line.monthly_cost" type="number" step="0.01" min="0" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-indigo-500 focus:ring-indigo-500"></div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                         <div class="flex justify-center pt-4">
                             <PrimaryButton @click="addLine" type="button">Añadir Línea Móvil Adicional</PrimaryButton>
@@ -762,12 +786,12 @@ watch(isCentralitaActive, (isActive) => {
                 <div class="sticky top-10 space-y-6">
                     <div class="p-6 bg-white rounded-lg shadow-sm space-y-3">
                         <h2 class="text-xl font-semibold text-gray-800 text-center">Resumen de la Oferta</h2>
-                         <div v-if="calculationSummary.summaryBreakdown && calculationSummary.summaryBreakdown.length > 0" class="space-y-2 border-t pt-4 mt-4">
-                             <div v-for="(item, index) in calculationSummary.summaryBreakdown" :key="'sum-'+index" class="flex justify-between text-sm" :class="{'text-gray-700': item.price >= 0, 'text-red-600': item.price < 0}">
-                                 <span>{{ item.description }}</span>
-                                 <span class="font-medium">{{ item.price >= 0 ? '+' : '' }}{{ item.price.toFixed(2) }}€</span>
-                             </div>
-                         </div>
+                        <div v-if="calculationSummary.summaryBreakdown && calculationSummary.summaryBreakdown.length > 0" class="space-y-2 border-t pt-4 mt-4">
+                            <div v-for="(item, index) in calculationSummary.summaryBreakdown" :key="'sum-'+index" class="flex justify-between text-sm" :class="{'text-gray-700': item.price >= 0, 'text-red-600': item.price < 0}">
+                                <span>{{ item.description }}</span>
+                                <span class="font-medium">{{ item.price >= 0 ? '+' : '' }}{{ item.price.toFixed(2) }}€</span>
+                            </div>
+                        </div>
                         <div class="border-t pt-4 mt-4 space-y-3">
                             <div class="flex justify-between text-lg font-bold text-gray-800">
                                 <span>Pago Inicial Total:</span>
@@ -779,40 +803,40 @@ watch(isCentralitaActive, (isActive) => {
                             </div>
                         </div>
                     </div>
-                     <div class="p-6 bg-white rounded-lg shadow-sm space-y-3">
+                    <div class="p-6 bg-white rounded-lg shadow-sm space-y-3">
                         <h2 class="text-xl font-semibold text-gray-800 text-center">Resumen Comisión</h2>
                         <div class="border-t pt-4 mt-4 space-y-2">
-                             <p v-if="$page.props.auth.user.role === 'admin' || $page.props.auth.user.role === 'team_lead'" class="text-md text-gray-500 text-center">
-                                 Comisión Bruta (100%): {{ calculationSummary.totalCommission }}€
-                             </p>
-                             <p v-if="$page.props.auth.user.role === 'team_lead'" class="text-lg text-gray-600 text-center">
-                                 Comisión Equipo ({{ auth.user?.team?.commission_percentage || 0 }}%): {{ calculationSummary.teamCommission }}€
-                             </p>
-                             <p class="text-xl font-bold text-emerald-600 text-center mt-2">
-                                 Tu Comisión: {{ calculationSummary.userCommission }}€
-                             </p>
-                             <div class="text-center pt-2">
-                                 <SecondaryButton @click="showCommissionDetails = !showCommissionDetails">
-                                     {{ showCommissionDetails ? 'Ocultar Detalle' : 'Ver Detalle' }}
-                                 </SecondaryButton>
-                             </div>
-                             <div v-if="showCommissionDetails" class="mt-4 border-t pt-4 text-left">
-                                 <h4 class="text-md font-semibold text-gray-700 mb-2">Desglose de Comisiones</h4>
-                                 <div v-for="(items, category) in calculationSummary.commissionDetails" :key="'com-'+category" class="mb-3">
-                                     <h5 class="font-bold text-sm text-gray-600">{{ category }}</h5>
-                                     <ul class="list-disc list-inside text-xs text-gray-600 space-y-1 mt-1">
-                                         <li v-for="(item, index) in items" :key="'com-item-'+index" class="flex justify-between">
-                                             <span>{{ item.description }}</span>
-                                             <span class="font-mono" :class="{'text-red-500': item.amount < 0}">{{ item.amount.toFixed(2) }}€</span>
-                                         </li>
-                                     </ul>
-                                 </div>
-                             </div>
-                         </div>
-                     </div>
+                            <p v-if="$page.props.auth.user.role === 'admin' || $page.props.auth.user.role === 'team_lead'" class="text-md text-gray-500 text-center">
+                                Comisión Bruta (100%): {{ calculationSummary.totalCommission }}€
+                            </p>
+                            <p v-if="$page.props.auth.user.role === 'team_lead'" class="text-lg text-gray-600 text-center">
+                                Comisión Equipo ({{ auth.user?.team?.commission_percentage || 0 }}%): {{ calculationSummary.teamCommission }}€
+                            </p>
+                            <p class="text-xl font-bold text-emerald-600 text-center mt-2">
+                                Tu Comisión: {{ calculationSummary.userCommission }}€
+                            </p>
+                            <div class="text-center pt-2">
+                                <SecondaryButton @click="showCommissionDetails = !showCommissionDetails">
+                                    {{ showCommissionDetails ? 'Ocultar Detalle' : 'Ver Detalle' }}
+                                </SecondaryButton>
+                            </div>
+                            <div v-if="showCommissionDetails" class="mt-4 border-t pt-4 text-left">
+                                <h4 class="text-md font-semibold text-gray-700 mb-2">Desglose de Comisiones</h4>
+                                <div v-for="(items, category) in calculationSummary.commissionDetails" :key="'com-'+category" class="mb-3">
+                                    <h5 class="font-bold text-sm text-gray-600">{{ category }}</h5>
+                                    <ul class="list-disc list-inside text-xs text-gray-600 space-y-1 mt-1">
+                                        <li v-for="(item, index) in items" :key="'com-item-'+index" class="flex justify-between">
+                                            <span>{{ item.description }}</span>
+                                            <span class="font-mono" :class="{'text-red-500': item.amount < 0}">{{ item.amount.toFixed(2) }}€</span>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
         </div>
-     </AuthenticatedLayout>
-</template>
+    </AuthenticatedLayout>
+</template>                                                 
