@@ -345,7 +345,7 @@ watch(selectedPackageId, (newPackageId) => {
 // ... (código existente sin cambios)
     lines.value = []; selectedInternetAddonId.value = null; additionalInternetLines.value = []; selectedCentralitaId.value = null;
     centralitaExtensionQuantities.value = {}; isOperadoraAutomaticaSelected.value = false; selectedTvAddonIds.value = [];
-    form.is_ip_fija_selected = false; // Resetea IP fija al cambiar paquete
+    //form.is_ip_fija_selected = false; // Resetea IP fija al cambiar paquete
     form.is_fibra_oro_selected = false; // <-- AÑADIDO (Línea 261)
     
     // --- INICIO MODIFICACIÓN BENEFICIOS ---
