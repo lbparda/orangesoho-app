@@ -466,7 +466,7 @@ class OfferController extends Controller
             
         // --- INICIO: AÑADIR CARGA DE SOLUCIONES DIGITALES ---
         // 3. Soluciones Digitales
-        $initialDigitalAddonIds = $offer->addons()
+        $initialSelectedDigitalAddonIds = $offer->addons()
             ->whereIn('type', ['service', 'software']) // Usamos los tipos de tu AddonSeeder
             ->pluck('addons.id') // Pluck 'addons.id' para evitar ambigüedad
             ->toArray();
@@ -502,7 +502,7 @@ class OfferController extends Controller
             'initialMainFibraOroSelected' => $mainFibraOroSelected, // <-- AÑADIDO
             
             // --- INICIO: AÑADIR PROP ---
-            'initialDigitalAddonIds' => $initialDigitalAddonIds,
+            'initialSelectedDigitalAddonIds' => $initialSelectedDigitalAddonIds,
             // --- FIN: AÑADIR PROP ---
             
             // ***** INICIO DE LA CORRECCIÓN (Pasar la prop) *****

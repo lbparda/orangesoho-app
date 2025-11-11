@@ -191,8 +191,8 @@ const availableAdditionalExtensions = computed(() => props.centralitaExtensions)
 // --- INICIO MODIFICACIÓN SOLUCIONES ---
 const digitalSolutionAddons = computed(() => {
     if (!props.allAddons) return [];
-    // Filtramos por el 'type' que definiste en tu AddonSeeder
-    return props.allAddons.filter(a => a.type === 'service');
+    // CORRECCIÓN: Incluir los tipos 'service' y 'software' para reflejar la lógica del controlador.
+    return props.allAddons.filter(a => ['service', 'software'].includes(a.type));
 });
 // --- FIN MODIFICACIÓN SOLUCIONES ---
 
@@ -855,7 +855,7 @@ watch(isCentralitaActive, (isActive) => {
                              <p v-if="$page.props.auth.user.role === 'team_lead'" class="text-lg text-gray-600 text-center">
                                  Comisión Equipo ({{ auth.user?.team?.commission_percentage || 0 }}%): {{ calculationSummary.teamCommission }}€
                              </p>
-                             <p class="text-xl font-bold text-emerald-600 text-center mt-2">
+                             <p class_="text-xl font-bold text-emerald-600 text-center mt-2">
                                  Tu Comisión: {{ calculationSummary.userCommission }}€
                              </p>
                              <div class="text-center pt-2">
