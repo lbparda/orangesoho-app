@@ -613,6 +613,11 @@ export function useOfferCalculations(
             lines.value.forEach((line, index) => {
                 const lineName = index === 0 ? 'Línea Principal' : `Línea Adicional ${index+1}`;
                 
+                // --- INICIO MODIFICACIÓN LA EXTRA (Flag) ---
+                // Este flag nos dirá si estamos en la línea gratis
+                let isFreeExtraLineBenefitActive = false;
+                // --- FIN MODIFICACIÓN LA EXTRA (Flag) ---
+
                 let initialCost = parseFloat(line.initial_cost || 0);
                 let monthlyCost = parseFloat(line.monthly_cost || 0);
 
@@ -631,6 +636,11 @@ export function useOfferCalculations(
                         itemPrice = 0; // El servicio de la línea es gratis
                         description = `Línea Móvil Adicional ${extraLinesCounter} (Beneficio)`;
                         commissionAmount = 0; // El servicio gratis no da comisión de línea
+                        
+                        // --- INICIO MODIFICACIÓN LA EXTRA (Flag) ---
+                        isFreeExtraLineBenefitActive = true; // ¡Activamos el flag!
+                        // --- FIN MODIFICACIÓN LA EXTRA (Flag) ---
+
                     } else {
                         const paidExtraLinesCounter = extraLinesCounter - freeExtraLinesQty;
                         
@@ -650,15 +660,32 @@ export function useOfferCalculations(
                     commissionDetails["Líneas Móviles"].push({ description: `Comisión ${lineName}`, amount: includedCommission });
                 }
 
+                // --- INICIO MODIFICACIÓN LA EXTRA (No pagar Portabilidad) ---
+                // Calculamos la comisión de portabilidad por separado
+                const exceptions = props.portabilityExceptions || [];
+                const isException = exceptions.includes(line.source_operator);
+                const portabilityCommissionAmount = isException ? 0 : (parseFloat(props.portabilityCommission) || 0);
+
                 if (line.is_portability) {
-                    const exceptions = props.portabilityExceptions || [];
-                    const isException = exceptions.includes(line.source_operator);
-                    const commissionAmount = isException ? 0 : (parseFloat(props.portabilityCommission) || 0);
-                    commissionDetails["Líneas Móviles"].push({
-                        description: `Portabilidad ${lineName}`,
-                        amount: commissionAmount
-                    });
+                    if (isFreeExtraLineBenefitActive) {
+                        // Si la línea es gratis por el beneficio, no se paga comisión de portabilidad.
+                        // El usuario pidió dejar el código original comentado.
+                        /*
+                        commissionDetails["Líneas Móviles"].push({
+                            description: `Portabilidad ${lineName}`,
+                            amount: portabilityCommissionAmount
+                        });
+                        */
+                    } else {
+                        // Si NO es la línea del beneficio, se paga la portabilidad normal.
+                        commissionDetails["Líneas Móviles"].push({
+                            description: `Portabilidad ${lineName}`,
+                            amount: portabilityCommissionAmount
+                        });
+                    }
                 }
+                // --- FIN MODIFICACIÓN LA EXTRA ---
+
 
                 if (line.terminal_pivot && line.selected_duration) {
                     const terminalTotalPrice = (parseFloat(line.original_initial_cost) || 0) + (parseFloat(line.original_monthly_cost || 0) * parseInt(line.selected_duration, 10));

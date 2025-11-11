@@ -129,10 +129,22 @@ class AddonSeeder extends Seeder
                 'updated_at' => now() ]
             );
         Addon::updateOrCreate(
-            ['name' => 'Microsoft 365'],
+            ['name' => 'Microsoft 365 Empresa Basica'],
             [
                 'type' => 'service', // O 'software', como prefieras
-                'price' => 5.99, // Precio real (el beneficio dará 50% dto.)
+                'price' => 5.60, // Precio real (el beneficio dará 50% dto.)
+                'commission' => 1.00, // Ajusta la comisión
+                'decommission' => 0.00,
+                'description' => 'Producto Microsoft 365 (para beneficio)',
+                'created_at' => now(),
+                'updated_at' => now()
+            ]
+        );
+        Addon::updateOrCreate(
+            ['name' => 'Microsoft 365 Empresa Standard'],
+            [
+                'type' => 'service', // O 'software', como prefieras
+                'price' => 11.70, // Precio real (el beneficio dará 50% dto.)
                 'commission' => 1.00, // Ajusta la comisión
                 'decommission' => 0.00,
                 'description' => 'Producto Microsoft 365 (para beneficio)',
