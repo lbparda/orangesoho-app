@@ -250,7 +250,7 @@ export function useOfferCalculations(
         // 2. Comprobamos si el beneficio de Fibra Oro está activo en la oferta.
         const isFibraOroBenefitActive = activeBenefitsMap.value.has(fibraOroAddonId);
         // 3. Este flag controlará que solo se aplique una vez.
-        let isFibraOroBenefitApplied = false; 
+        let isFibraOroBenefitAvailable = isFibraOroBenefitActive; // Flag para controlar que el beneficio se aplique solo una vez
         // --- FIN MODIFICACIÓN FIBRA ORO ---
 
         if (appliedDiscount.value) {
@@ -269,6 +269,41 @@ export function useOfferCalculations(
             if (itemPrice > 0) summaryBreakdown.push({ description: `Mejora Fibra (${selectedInternetAddonInfo.value.name})`, price: itemPrice });
             commissionDetails.Fibra.push({ description: `Fibra Principal (${selectedInternetAddonInfo.value.name})`, amount: parseFloat(selectedInternetAddonInfo.value.pivot.included_line_commission) || 0 });
         }
+
+        // --- INICIO: LÓGICA DE FIBRA ORO PRINCIPAL (MOVIDA PARA PRIORIDAD) ---
+        if (form.is_fibra_oro_selected && fibraOroAddonInfo.value) {
+            
+            const originalPrice = parseFloat(fibraOroAddonInfo.value.price) || 0;
+            const baseCommission = parseFloat(fibraOroAddonInfo.value.commission) || 0;
+            const decommission = parseFloat(fibraOroAddonInfo.value.decommission) || 0;
+
+            let itemPrice = originalPrice;
+            let description = 'Fibra Oro Principal';
+            let commissionAmount = baseCommission; 
+
+            // Aplicar el beneficio si está disponible
+            if (isFibraOroBenefitAvailable) {
+                const benefit = activeBenefitsMap.value.get(fibraOroAddonId);
+                itemPrice = applyBenefit(originalPrice, benefit);
+                description = 'Fibra Oro Principal (Beneficio)';
+                
+                if (benefit && benefit.apply_type === 'free') {
+                    if (decommission > 0) {
+                        commissionDetails.Ajustes.push({ description: `Ajuste Decomisión (Fibra Oro Pr.)`, amount: -decommission });
+                    }
+                }
+                
+                isFibraOroBenefitAvailable = false; // ¡MARCAR COMO USADO!
+            }
+            
+            price += itemPrice;
+            summaryBreakdown.push({ description: description, price: itemPrice });
+
+            if (commissionAmount > 0) {
+                commissionDetails.Fibra.push({ description: 'Fibra Oro Principal', amount: commissionAmount });
+            }
+        }
+        // --- FIN: LÓGICA DE FIBRA ORO PRINCIPAL ---
 
         // --- INICIO CÓDIGO MODIFICADO: Añadir cálculo IP Fija adicional y Centralita Multisede ---
         additionalInternetLines.value.forEach((line, index) => {
@@ -327,7 +362,7 @@ export function useOfferCalculations(
                         let commissionAmount = baseCommission; // <-- Se paga la comisión base por defecto
 
                         // --- INICIO MODIFICACIÓN FIBRA ORO (Límite 1) ---
-                        if (isFibraOroBenefitActive && !isFibraOroBenefitApplied) {
+                        if (isFibraOroBenefitAvailable) { // Comprobar si el beneficio aún no se ha usado
                             const benefit = activeBenefitsMap.value.get(fibraOroAddonId);
                             itemPrice = applyBenefit(originalPrice, benefit);
                             description = `Fibra Oro Adicional ${index + 1} (Beneficio)`;
@@ -342,7 +377,7 @@ export function useOfferCalculations(
                             }
                             // --- FIN MODIFICACIÓN COMISIÓN ---
 
-                            isFibraOroBenefitApplied = true; // ¡MARCAR COMO USADO!
+                            isFibraOroBenefitAvailable = false; // ¡MARCAR COMO USADO!
                         }
                         // --- FIN MODIFICACIÓN FIBRA ORO ---
                         
@@ -433,47 +468,6 @@ export function useOfferCalculations(
         // ===================================================
         // --- FIN LÓGICA IP FIJA PRINCIPAL ---
         // ===================================================
-
-        // --- INICIO: AÑADIDO PARA FIBRA ORO PRINCIPAL (MODIFICADO) ---
-        if (form.is_fibra_oro_selected && fibraOroAddonInfo.value) {
-            
-            const originalPrice = parseFloat(fibraOroAddonInfo.value.price) || 0;
-            const baseCommission = parseFloat(fibraOroAddonInfo.value.commission) || 0;
-            const decommission = parseFloat(fibraOroAddonInfo.value.decommission) || 0;
-
-            let itemPrice = originalPrice;
-            let description = 'Fibra Oro Principal';
-            let commissionAmount = baseCommission; // <-- Se paga la comisión base por defecto
-
-            // --- INICIO MODIFICACIÓN FIBRA ORO (Límite 1) ---
-            if (isFibraOroBenefitActive && !isFibraOroBenefitApplied) {
-                const benefit = activeBenefitsMap.value.get(fibraOroAddonId);
-                itemPrice = applyBenefit(originalPrice, benefit);
-                description = 'Fibra Oro Principal (Beneficio)';
-                
-                // --- INICIO MODIFICACIÓN COMISIÓN (Petición Usuario) ---
-                if (benefit && benefit.apply_type === 'free') {
-                    // commissionAmount se queda como baseCommission (Positivo)
-                    if (decommission > 0) {
-                        // Pero se aplica la decomisión como un ajuste negativo
-                        commissionDetails.Ajustes.push({ description: `Ajuste Decomisión (Fibra Oro Pr.)`, amount: -decommission });
-                    }
-                }
-                // --- FIN MODIFICACIÓN COMISIÓN ---
-                
-                isFibraOroBenefitApplied = true; // ¡MARCAR COMO USADO!
-            }
-            // --- FIN MODIFICACIÓN FIBRA ORO ---
-            
-            price += itemPrice;
-            summaryBreakdown.push({ description: description, price: itemPrice });
-
-            // Añadir la comisión (positiva) si es mayor que 0
-            if (commissionAmount > 0) {
-                commissionDetails.Fibra.push({ description: 'Fibra Oro Principal', amount: commissionAmount });
-            }
-        }
-        // --- FIN: AÑADIDO PARA FIBRA ORO PRINCIPAL (MODIFICADO) ---
 
         // --- INICIO MODIFICACIÓN BENEFICIOS (TV Addons) ---
         // Itera sobre los addons de TV seleccionados
@@ -800,4 +794,4 @@ export function useOfferCalculations(
         fibraOroAddonInfo, 
     };
     // --- FIN: AÑADIDO ---
-}              
+}
