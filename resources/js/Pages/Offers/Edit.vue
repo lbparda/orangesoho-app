@@ -12,6 +12,11 @@ import { useOfferCalculations } from '@/composables/useOfferCalculations.js';
 const props = defineProps({
     offer: Object,
     packages: Array,
+    // --- INICIO MODIFICACIÓN BENEFICIOS/SOLUCIONES ---
+    allAddons: Array, // <-- ¡NUEVO PROP!
+    initialSelectedBenefitIds: Array, // <-- ¡NUEVO PROP!
+    initialSelectedDigitalAddonIds: Array, // <-- ¡NUEVO PROP!
+    // --- FIN MODIFICACIÓN BENEFICIOS/SOLUCIONES ---
     discounts: Array,
     operators: Array,
     portabilityCommission: Number,
@@ -58,6 +63,10 @@ const form = useForm({
     additional_internet_lines: props.initialAdditionalInternetLines, // <-- ¡CORREGIDO!
     centralita: {}, // Se rellena abajo
     tv_addons: getAddons('tv').map(a => a.id),
+    // --- INICIO MODIFICACIÓN BENEFICIOS/SOLUCIONES ---
+    digital_addons: props.initialSelectedDigitalAddonIds || [], // <-- ¡NUEVO!
+    applied_benefit_ids: props.initialSelectedBenefitIds || [], // <-- ¡NUEVO!
+    // --- FIN MODIFICACIÓN BENEFICIOS/SOLUCIONES ---
     // Usar la prop del controlador
     is_ip_fija_selected: props.initialMainIpFijaSelected, // <-- ¡CORREGIDO!
     is_fibra_oro_selected: props.initialMainFibraOroSelected, // <-- AÑADIDO (Línea 60)
@@ -120,6 +129,10 @@ const selectedInternetAddonId = ref(form.internet_addon_id);
 // Usar la prop del controlador
 const additionalInternetLines = ref(props.initialAdditionalInternetLines); // <-- ¡CORREGIDO!
 const selectedTvAddonIds = ref(form.tv_addons); 
+// --- INICIO MODIFICACIÓN BENEFICIOS/SOLUCIONES ---
+const selectedDigitalAddonIds = ref(props.initialSelectedDigitalAddonIds || []);
+const selectedBenefitIds = ref(props.initialSelectedBenefitIds || []);
+// --- FIN MODIFICACIÓN BENEFICIOS/SOLUCIONES ---
 // --- FIN MODIFICACIÓN ---
 
 const isOperadoraAutomaticaSelected = ref(!!getAddonId('centralita_feature'));
@@ -130,6 +143,32 @@ const showCommissionDetails = ref(false);
 
 // Computeds (sin cambios aquí, usan los refs de arriba)
 const selectedPackage = computed(() => props.packages.find(p => p.id === selectedPackageId.value) || null);
+
+// --- INICIO MODIFICACIÓN BENEFICIOS: Computeds de Lógica ---
+const benefitLimit = computed(() => selectedPackage.value?.benefit_limit || 0);
+const availableBenefits = computed(() => selectedPackage.value?.benefits || []);
+
+// Agrupar beneficios por categoría para la UI
+const benefitsEmpresa = computed(() => availableBenefits.value.filter(b => b.category === 'Empresa'));
+const benefitsHogar = computed(() => availableBenefits.value.filter(b => b.category === 'Hogar'));
+
+// Lógica de Reglas de Selección
+const selectedBenefits = computed(() =>
+    availableBenefits.value.filter(b => selectedBenefitIds.value.includes(b.id))
+);
+
+const totalSelectedCount = computed(() => selectedBenefitIds.value.length);
+const hogarSelectedCount = computed(() =>
+    selectedBenefits.value.filter(b => b.category === 'Hogar').length
+);
+
+// Regla 1: Límite total alcanzado
+const isTotalLimitReached = computed(() => totalSelectedCount.value >= benefitLimit.value);
+
+// Regla 2: Límite de "Hogar" alcanzado
+const isHogarLimitReached = computed(() => hogarSelectedCount.value >= 1);
+// --- FIN MODIFICACIÓN BENEFICIOS ---
+
 const mobileAddonInfo = computed(() => selectedPackage.value?.addons.find(a => a.type === 'mobile_line'));
 const internetAddonOptions = computed(() => selectedPackage.value?.addons.filter(a => a.type === 'internet') || []);
 const tvAddonOptions = computed(() => selectedPackage.value?.addons.filter(a => a.type === 'tv') || []);
@@ -149,6 +188,15 @@ const availableO2oDiscounts = computed(() => selectedPackage.value?.o2o_discount
 const brandsForSelectedPackage = computed(() => [...new Set(availableTerminals.value.map(t => t.brand))]);
 const availableAdditionalExtensions = computed(() => props.centralitaExtensions);
 
+// --- INICIO MODIFICACIÓN SOLUCIONES ---
+const digitalSolutionAddons = computed(() => {
+    if (!props.allAddons) return [];
+    // Filtramos por el 'type' que definiste en tu AddonSeeder
+    return props.allAddons.filter(a => a.type === 'service');
+});
+// --- FIN MODIFICACIÓN SOLUCIONES ---
+
+
 // Inicialización de cantidades de extensiones (sin cambios aquí)
 const initialExtensionQuantities = {};
 const savedExtensions = getAddons('centralita_extension');
@@ -164,11 +212,22 @@ const centralitaExtensionQuantities = ref(initialExtensionQuantities);
 // --- INICIO: CAMBIO (Línea 147) ---
 // Pasamos el objeto 'form' completo al composable
 // AÑADIMOS: ipFijaAddonInfo y fibraOroAddonInfo
+// --- INICIO MODIFICACIÓN BENEFICIOS/SOLUCIONES ---
 const { calculationSummary, ipFijaAddonInfo, fibraOroAddonInfo } = useOfferCalculations(
-    props, selectedPackageId, lines, selectedInternetAddonId, additionalInternetLines, // <-- Pasamos el ref actualizado
-    selectedCentralitaId, centralitaExtensionQuantities, isOperadoraAutomaticaSelected, selectedTvAddonIds,
-    form // <-- Pasar el objeto form completo (incluye is_ip_fija_selected para línea principal)
+    props, 
+    selectedPackageId, 
+    lines, 
+    selectedInternetAddonId, 
+    additionalInternetLines, // <-- Pasamos el ref actualizado
+    selectedCentralitaId, 
+    centralitaExtensionQuantities, 
+    isOperadoraAutomaticaSelected, 
+    selectedTvAddonIds,
+    selectedDigitalAddonIds, // <-- ¡NUEVO!
+    form, // <-- Pasar el objeto form completo
+    selectedBenefits // <-- ¡NUEVO!
 );
+// --- FIN MODIFICACIÓN BENEFICIOS/SOLUCIONES ---
 // --- FIN: CAMBIO ---
 
 const modelsByBrand = (brand) => availableTerminals.value.filter(t => t.brand === brand).filter((v, i, a) => a.findIndex(t => t.model === v.model) === i);
@@ -328,6 +387,12 @@ const saveOffer = () => {
         // --- FIN MODIFICACIÓN ---
         form.centralita = { id: selectedCentralitaId.value || includedCentralita.value?.id || null, operadora_automatica_selected: isOperadoraAutomaticaSelected.value, operadora_automatica_id: operadoraAutomaticaInfo.value?.id || null, extensions: finalExt };
         form.tv_addons = selectedTvAddonIds.value;
+        
+        // --- INICIO MODIFICACIÓN BENEFICIOS/SOLUCIONES ---
+        form.digital_addons = selectedDigitalAddonIds.value;
+        form.applied_benefit_ids = selectedBenefitIds.value;
+        // --- FIN MODIFICACIÓN BENEFICIOS/SOLUCIONES ---
+        
         form.summary = calculationSummary.value;
 
         form.put(route('offers.update', props.offer.id), { onSuccess: () => alert('¡Oferta actualizada!'), onError: (e) => { console.error(e); alert('Error al actualizar.'); } });
@@ -366,6 +431,18 @@ watch(() => form.tv_addons, (newVal) => { selectedTvAddonIds.value = newVal; }, 
 watch(() => form.additional_internet_lines, (newVal) => { 
     additionalInternetLines.value = newVal; 
 }, { deep: true });
+
+// --- INICIO MODIFICACIÓN BENEFICIOS/SOLUCIONES ---
+// Sincronizar nuevos refs con el form
+watch(() => form.digital_addons, (newVal) => { 
+    selectedDigitalAddonIds.value = newVal; 
+}, { deep: true });
+
+watch(() => form.applied_benefit_ids, (newVal) => { 
+    selectedBenefitIds.value = newVal; 
+}, { deep: true });
+// --- FIN MODIFICACIÓN BENEFICIOS/SOLUCIONES ---
+
 
 // Watcher para marcar/desmarcar IP Fija según la centralita (para la línea PRINCIPAL)
 watch(isCentralitaActive, (isActive) => {
@@ -463,11 +540,8 @@ watch(isCentralitaActive, (isActive) => {
                                </label>
                            </div>
                            
-                           <!-- --- INICIO: CAMBIO (Línea 407) --- -->
-                           <!-- Envolvemos las features en un div flex y usamos v-if para cada una -->
                            <div class="mt-4 flex flex-wrap gap-x-6 gap-y-2">
-                               <div v-if="ipFijaAddonInfo"> <!-- Usamos el computed del composable -->
-                                   <label class="flex items-center">
+                               <div v-if="ipFijaAddonInfo"> <label class="flex items-center">
                                        <Checkbox v-model:checked="form.is_ip_fija_selected" />
                                        <span class="ml-2 text-sm text-gray-600">
                                            Añadir IP Fija ({{ ipFijaAddonInfo.price }}€)
@@ -478,21 +552,15 @@ watch(isCentralitaActive, (isActive) => {
                                    </p>
                                </div>
 
-                               <!-- --- INICIO: AÑADIDO (Línea 419) --- -->
-                               <div v-if="fibraOroAddonInfo"> <!-- Usamos el computed del composable -->
-                                   <label class="flex items-center">
+                               <div v-if="fibraOroAddonInfo"> <label class="flex items-center">
                                        <Checkbox v-model:checked="form.is_fibra_oro_selected" />
                                        <span class="ml-2 text-sm text-gray-600">
                                            Añadir Fibra Oro ({{ fibraOroAddonInfo.price }}€)
                                        </span>
                                    </label>
                                </div>
-                               <!-- --- FIN: AÑADIDO --- -->
-
+                               </div>
                            </div>
-                           <!-- --- FIN: CAMBIO --- -->
-                           
-                       </div>
 
 
                         <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -570,7 +638,6 @@ watch(isCentralitaActive, (isActive) => {
                                          </select>
                                     </div>
                                     
-                                    <!-- --- INICIO: CAMBIO (Línea 498) --- -->
                                     <div v-if="line.addon_id" class="mt-2 flex flex-wrap gap-x-6 gap-y-1">
                                         <div v-if="ipFijaAddonInfo">
                                             <label class="flex items-center">
@@ -581,7 +648,6 @@ watch(isCentralitaActive, (isActive) => {
                                             </label>
                                         </div>
 
-                                        <!-- --- INICIO: AÑADIDO (Línea 507) --- -->
                                         <div v-if="fibraOroAddonInfo">
                                             <label class="flex items-center">
                                                 <Checkbox v-model:checked="line.has_fibra_oro" />
@@ -590,17 +656,81 @@ watch(isCentralitaActive, (isActive) => {
                                                 </span>
                                             </label>
                                         </div>
-                                        <!-- --- FIN: AÑADIDO --- -->
-
+                                        </div>
                                     </div>
-                                    <!-- --- FIN: CAMBIO --- -->
-                                    
-                                </div>
                                 <PrimaryButton @click="addInternetLine" type="button" class="w-full justify-center">Añadir Internet</PrimaryButton>
                             </div>
                         </div>
                     </div>
 
+                    <div v-if="selectedPackage && digitalSolutionAddons.length > 0" class="bg-white shadow-sm sm:rounded-lg p-8 space-y-6">
+                        <h3 class="text-lg font-semibold text-gray-800 text-center">Soluciones Digitales</h3>
+                        <p class="text-sm text-gray-600 text-center -mt-4 mb-4">
+                            Selecciona los productos. Si has elegido el beneficio correspondiente, el descuento se aplicará en el resumen.
+                        </p>
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            <div v-for="addon in digitalSolutionAddons" :key="addon.id" class="flex items-center p-3 border rounded-md hover:bg-gray-50">
+                                <input
+                                    :id="'digital_addon_' + addon.id"
+                                    type="checkbox"
+                                    :value="addon.id"
+                                    v-model="selectedDigitalAddonIds"
+                                    class="h-4 w-4 text-orange-600 border-gray-300 rounded focus:ring-orange-500"
+                                />
+                                <label :for="'digital_addon_' + addon.id" class="ml-3 block text-sm font-medium text-gray-700">
+                                    {{ addon.name }}
+                                    <span class="text-xs text-gray-500">({{ parseFloat(addon.price).toFixed(2) }}€/mes)</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    <div v-if="availableBenefits.length > 0" class="bg-white shadow-sm sm:rounded-lg p-8 -my-6 border-t border-b">
+                        
+                        <h3 class="text-lg font-semibold text-gray-800 mb-2">
+                            Beneficios a Elegir (Selecciona {{ benefitLimit }})
+                        </h3>
+                        <p v-if="isTotalLimitReached" class="text-sm font-medium text-red-600">
+                            Has alcanzado el límite de {{ benefitLimit }} beneficios.
+                        </p>
+                        <p v-else class="text-sm text-gray-500">
+                            Te quedan {{ benefitLimit - totalSelectedCount }} por elegir.
+                        </p>
+
+                        <div class="mt-4">
+                            <h4 class="font-semibold text-gray-700 border-b pb-2">Categoría Empresa</h4>
+                            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-3">
+                                <label v-for="benefit in benefitsEmpresa" :key="benefit.id" class="flex items-center p-3 border rounded-md hover:bg-gray-50">
+                                    <input
+                                        type="checkbox"
+                                        :value="benefit.id"
+                                        v-model="selectedBenefitIds"
+                                        :disabled="!selectedBenefitIds.includes(benefit.id) && isTotalLimitReached"
+                                        class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500 disabled:opacity-50"
+                                    />
+                                    <span class="ml-3 text-sm text-gray-700">{{ benefit.description }}</span>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="mt-6">
+                            <h4 class="font-semibold text-gray-700 border-b pb-2">Categoría Hogar</h4>
+                            <p class="text-xs text-gray-500 mt-1">(Máximo 1 beneficio de esta categoría)</p>
+                            <p v-if="isHogarLimitReached && !isTotalLimitReached" class="text-sm font-medium text-yellow-600">
+                                Has alcanzado el límite de 1 beneficio de Hogar.
+                            </p>
+                            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-3">
+                                <label v-for="benefit in benefitsHogar" :key="benefit.id" class="flex items-center p-3 border rounded-md hover:bg-gray-50">
+                                    <input
+                                        type="checkbox"
+                                        :value="benefit.id"
+                                        v-model="selectedBenefitIds"
+                                        :disabled="(!selectedBenefitIds.includes(benefit.id) && isTotalLimitReached) || (!selectedBenefitIds.includes(benefit.id) && isHogarLimitReached)"
+                                        class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500 disabled:opacity-50"
+                                    />
+                                    <span class="ml-3 text-sm text-gray-700">{{ benefit.description }}</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
                     <div v-if="selectedPackage" class="bg-white shadow-sm sm:rounded-lg p-8 space-y-6">
                         <h3 class="text-lg font-semibold text-gray-800 text-center">Líneas Móviles</h3>
                         <div v-for="(line, index) in lines" :key="line.id" class="p-6 border rounded-lg max-w-full mx-auto" :class="{'bg-gray-50 border-gray-200': !line.is_extra, 'bg-green-50 border-green-200': line.is_extra}">

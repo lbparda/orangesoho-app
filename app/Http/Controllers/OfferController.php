@@ -204,6 +204,10 @@ class OfferController extends Controller
                         'o2o_discount_name' => $o2oDiscount->name ?? null,
                         'o2o_discount_amount' => $o2oDiscount->discount_amount ?? null, 
                         'terminal_name' => $terminalName,
+                        // --- INICIO: GUARDAR DESCUENTOS (Añadido desde tu Create.vue) ---
+                        'initial_cost_discount' => $lineData['initial_cost_discount'] ?? 0,
+                        'monthly_cost_discount' => $lineData['monthly_cost_discount'] ?? 0,
+                        // --- FIN: GUARDAR DESCUENTOS ---
                     ]);
                 }
                 
@@ -222,7 +226,7 @@ class OfferController extends Controller
                         ]);
                     }
                 } 
- // 1.b. (AÑADIDO) Fibra Oro Principal
+                // 1.b. (AÑADIDO) Fibra Oro Principal
                 if (!empty($validated['is_fibra_oro_selected'])) {
                     $fibraOroAddon = Addon::where('name', 'Fibra Oro')->where('type', 'internet_feature')->first();
                     if ($fibraOroAddon) {
@@ -242,8 +246,8 @@ class OfferController extends Controller
                         $offer->addons()->attach($internetAddon->id, [
                             'quantity' => 1,
                             'addon_name' => $internetAddon->name,
-                            'addon_price' => $internetAddon->price,
-                            'addon_commission' => $internetAddon->commission,
+                            'addon_price' => $internetAddon->price, // Aquí debería ser el precio del pivote
+                            'addon_commission' => $internetAddon->commission, // Aquí debería ser el precio del pivote
                         ]);
                     }
                 }
@@ -277,8 +281,8 @@ class OfferController extends Controller
                         $offer->addons()->attach($centralitaAddon->id, [
                             'quantity' => 1,
                             'addon_name' => $centralitaAddon->name,
-                            'addon_price' => $centralitaAddon->price,
-                            'addon_commission' => $centralitaAddon->commission,
+                            'addon_price' => $centralitaAddon->price, // Aquí debería ser el precio del pivote
+                            'addon_commission' => $centralitaAddon->commission, // Aquí debería ser el precio del pivote
                         ]);
                     }
                 }
@@ -288,8 +292,8 @@ class OfferController extends Controller
                         $offer->addons()->attach($operadoraAddon->id, [
                             'quantity' => 1,
                             'addon_name' => $operadoraAddon->name,
-                            'addon_price' => $operadoraAddon->price,
-                            'addon_commission' => $operadoraAddon->commission,
+                            'addon_price' => $operadoraAddon->price, // Aquí debería ser el precio del pivote
+                            'addon_commission' => $operadoraAddon->commission, // Aquí debería ser el precio del pivote
                         ]);
                     }
                 }
@@ -327,8 +331,8 @@ class OfferController extends Controller
                              $offer->addons()->attach($tvAddon->id, [
                                 'quantity' => 1,
                                 'addon_name' => $tvAddon->name,
-                                'addon_price' => $tvAddon->price,
-                                'addon_commission' => $tvAddon->commission,
+                                'addon_price' => $tvAddon->price, // Aquí debería ser el precio del pivote
+                                'addon_commission' => $tvAddon->commission, // Aquí debería ser el precio del pivote
                             ]);
                         }
                     }
@@ -421,7 +425,13 @@ class OfferController extends Controller
 
         $offer->lines->each(function ($line) {
             if ($line->package_terminal_id) {
-                $pivotData = DB::table('package_terminal')->find($line->package_terminal_id);
+                // --- INICIO CORRECCIÓN PIVOTE TERMINAL ---
+                // Cargar el pivote con los descuentos correctos
+                $pivotData = DB::table('package_terminal')
+                    ->where('id', $line->package_terminal_id)
+                    ->first();
+                // --- FIN CORRECCIÓN PIVOTE TERMINAL ---
+                
                 if ($pivotData) {
                     $pivotData->terminal = Terminal::find($pivotData->terminal_id);
                     $line->terminal_pivot = $pivotData;
@@ -462,6 +472,12 @@ class OfferController extends Controller
             ->toArray();
         // --- FIN: AÑADIR CARGA ---
             
+        // ***** INICIO DE LA CORRECCIÓN *****
+        // 4. Beneficios (¡ESTO FALTABA!)
+        // Ya hemos cargado la relación '$offer->benefits' arriba con load()
+        $initialBenefitIds = $offer->benefits->pluck('id')->toArray();
+        // ***** FIN DE LA CORRECCIÓN *****
+            
         // --- FIN: PREPARAR DATOS VUE ---
 
 
@@ -488,6 +504,10 @@ class OfferController extends Controller
             // --- INICIO: AÑADIR PROP ---
             'initialDigitalAddonIds' => $initialDigitalAddonIds,
             // --- FIN: AÑADIR PROP ---
+            
+            // ***** INICIO DE LA CORRECCIÓN (Pasar la prop) *****
+            'initialSelectedBenefitIds' => $initialBenefitIds, // <-- ¡NUEVA PROP AÑADIDA!
+            // ***** FIN DE LA CORRECCIÓN *****
         ]);
     }
    public function update(Request $request, Offer $offer)
@@ -616,6 +636,10 @@ class OfferController extends Controller
                         'o2o_discount_name' => $o2oDiscount->name ?? null,
                         'o2o_discount_amount' => $o2oDiscount->discount_amount ?? null,
                         'terminal_name' => $terminalName,
+                        // --- INICIO: GUARDAR DESCUENTOS (Añadido desde tu Create.vue) ---
+                        'initial_cost_discount' => $lineData['initial_cost_discount'] ?? 0,
+                        'monthly_cost_discount' => $lineData['monthly_cost_discount'] ?? 0,
+                        // --- FIN: GUARDAR DESCUENTOS ---
                     ]);
                 }
     // --- INICIO: LÓGICA DE ADDONS ACTUALIZADA ---
@@ -654,8 +678,8 @@ class OfferController extends Controller
                         $offer->addons()->attach($internetAddon->id, [
                             'quantity' => 1,
                             'addon_name' => $internetAddon->name,
-                            'addon_price' => $internetAddon->price,
-                            'addon_commission' => $internetAddon->commission,
+                            'addon_price' => $internetAddon->price, // Pivote
+                            'addon_commission' => $internetAddon->commission, // Pivote
                         ]);
                     }
                 }
@@ -688,8 +712,8 @@ class OfferController extends Controller
                         $offer->addons()->attach($centralitaAddon->id, [
                             'quantity' => 1,
                             'addon_name' => $centralitaAddon->name,
-                            'addon_price' => $centralitaAddon->price,
-                            'addon_commission' => $centralitaAddon->commission,
+                            'addon_price' => $centralitaAddon->price, // Pivote
+                            'addon_commission' => $centralitaAddon->commission, // Pivote
                         ]);
                     }
                 }
@@ -699,8 +723,8 @@ class OfferController extends Controller
                         $offer->addons()->attach($operadoraAddon->id, [
                             'quantity' => 1,
                             'addon_name' => $operadoraAddon->name,
-                            'addon_price' => $operadoraAddon->price,
-                            'addon_commission' => $operadoraAddon->commission,
+                            'addon_price' => $operadoraAddon->price, // Pivote
+                            'addon_commission' => $operadoraAddon->commission, // Pivote
                         ]);
                     }
                 }
@@ -738,8 +762,8 @@ class OfferController extends Controller
                              $offer->addons()->attach($tvAddon->id, [
                                 'quantity' => 1,
                                 'addon_name' => $tvAddon->name,
-                                'addon_price' => $tvAddon->price,
-                                'addon_commission' => $tvAddon->commission,
+                                'addon_price' => $tvAddon->price, // Pivote
+                                'addon_commission' => $tvAddon->commission, // Pivote
                             ]);
                         }
                     }
@@ -947,4 +971,3 @@ class OfferController extends Controller
         return Response::stream($callback, 200, $headers);
     }
 }
-                                

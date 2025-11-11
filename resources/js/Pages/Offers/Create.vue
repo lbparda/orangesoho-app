@@ -509,58 +509,6 @@ watch(isCentralitaActive, (isActive) => {
                             </div>
                         </div>
 
-                        <!-- --- INICIO: NUEVO APARTADO DE BENEFICIOS (CON LÍMITES) --- -->
-                        <div v-if="availableBenefits.length > 0" class="bg-white shadow-sm sm:rounded-lg p-8 -my-6 border-t border-b">
-                            
-                            <h3 class="text-lg font-semibold text-gray-800 mb-2">
-                                Beneficios a Elegir (Selecciona {{ benefitLimit }})
-                            </h3>
-                            <p v-if="isTotalLimitReached" class="text-sm font-medium text-red-600">
-                                Has alcanzado el límite de {{ benefitLimit }} beneficios.
-                            </p>
-                            <p v-else class="text-sm text-gray-500">
-                                Te quedan {{ benefitLimit - totalSelectedCount }} por elegir.
-                            </p>
-
-                            <!-- Categoría Empresa -->
-                            <div class="mt-4">
-                                <h4 class="font-semibold text-gray-700 border-b pb-2">Categoría Empresa</h4>
-                                <div class="space-y-2 mt-3">
-                                    <label v-for="benefit in benefitsEmpresa" :key="benefit.id" class="flex items-center p-2 rounded hover:bg-gray-50">
-                                        <input
-                                            type="checkbox"
-                                            :value="benefit.id"
-                                            v-model="selectedBenefitIds"
-                                            :disabled="!selectedBenefitIds.includes(benefit.id) && isTotalLimitReached"
-                                            class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500 disabled:opacity-50"
-                                        />
-                                        <span class="ml-3 text-sm text-gray-700">{{ benefit.description }}</span>
-                                    </label>
-                                </div>
-                            </div>
-<!-- Categoría Hogar -->
-                            <div class="mt-6">
-                                <h4 class="font-semibold text-gray-700 border-b pb-2">Categoría Hogar</h4>
-                                <p class="text-xs text-gray-500 mt-1">(Máximo 1 beneficio de esta categoría)</p>
-                                <p v-if="isHogarLimitReached && !isTotalLimitReached" class="text-sm font-medium text-yellow-600">
-                                    Has alcanzado el límite de 1 beneficio de Hogar.
-                                </p>
-                                <div class="space-y-2 mt-3">
-                                    <label v-for="benefit in benefitsHogar" :key="benefit.id" class="flex items-center p-2 rounded hover:bg-gray-50">
-                                        <input
-                                            type="checkbox"
-                                            :value="benefit.id"
-                                            v-model="selectedBenefitIds"
-                                            :disabled="(!selectedBenefitIds.includes(benefit.id) && isTotalLimitReached) || (!selectedBenefitIds.includes(benefit.id) && isHogarLimitReached)"
-                                            class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500 disabled:opacity-50"
-                                        />
-                                        <span class="ml-3 text-sm text-gray-700">{{ benefit.description }}</span>
-                                    </label>
-                                </div>
-                            </div>
-                        </div>
-                        <!-- --- FIN: NUEVO APARTADO DE BENEFICIOS --- -->
-
                         <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                             <div v-if="tvAddonOptions.length > 0" class="space-y-4 p-6 bg-slate-50 rounded-lg h-full">
                                 <h3 class="text-lg font-semibold text-gray-800">4. Televisión</h3>
@@ -662,7 +610,6 @@ watch(isCentralitaActive, (isActive) => {
                         </div>
                     </div>
 
-                    <!-- --- INICIO: NUEVO APARTADO DE SOLUCIONES DIGITALES --- -->
                     <div v-if="selectedPackage && digitalSolutionAddons.length > 0" class="bg-white shadow-sm sm:rounded-lg p-8 space-y-6">
                         <h3 class="text-lg font-semibold text-gray-800 text-center">Soluciones Digitales</h3>
                         <p class="text-sm text-gray-600 text-center -mt-4 mb-4">
@@ -684,8 +631,54 @@ watch(isCentralitaActive, (isActive) => {
                             </div>
                         </div>
                     </div>
-                    <!-- --- FIN: NUEVO APARTADO DE SOLUCIONES DIGITALES --- -->
-<div v-if="selectedPackage" class="bg-white shadow-sm sm:rounded-lg p-8 space-y-6">
+                    <div v-if="availableBenefits.length > 0" class="bg-white shadow-sm sm:rounded-lg p-8 -my-6 border-t border-b">
+                        
+                        <h3 class="text-lg font-semibold text-gray-800 mb-2">
+                            Beneficios a Elegir (Selecciona {{ benefitLimit }})
+                        </h3>
+                        <p v-if="isTotalLimitReached" class="text-sm font-medium text-red-600">
+                            Has alcanzado el límite de {{ benefitLimit }} beneficios.
+                        </p>
+                        <p v-else class="text-sm text-gray-500">
+                            Te quedan {{ benefitLimit - totalSelectedCount }} por elegir.
+                        </p>
+
+                        <div class="mt-4">
+                            <h4 class="font-semibold text-gray-700 border-b pb-2">Categoría Empresa</h4>
+                            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-3">
+                                <label v-for="benefit in benefitsEmpresa" :key="benefit.id" class="flex items-center p-3 border rounded-md hover:bg-gray-50">
+                                    <input
+                                        type="checkbox"
+                                        :value="benefit.id"
+                                        v-model="selectedBenefitIds"
+                                        :disabled="!selectedBenefitIds.includes(benefit.id) && isTotalLimitReached"
+                                        class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500 disabled:opacity-50"
+                                    />
+                                    <span class="ml-3 text-sm text-gray-700">{{ benefit.description }}</span>
+                                </label>
+                            </div>
+                            </div>
+                        <div class="mt-6">
+                            <h4 class="font-semibold text-gray-700 border-b pb-2">Categoría Hogar</h4>
+                            <p class="text-xs text-gray-500 mt-1">(Máximo 1 beneficio de esta categoría)</p>
+                            <p v-if="isHogarLimitReached && !isTotalLimitReached" class="text-sm font-medium text-yellow-600">
+                                Has alcanzado el límite de 1 beneficio de Hogar.
+                            </p>
+                            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-3">
+                                <label v-for="benefit in benefitsHogar" :key="benefit.id" class="flex items-center p-3 border rounded-md hover:bg-gray-50">
+                                    <input
+                                        type="checkbox"
+                                        :value="benefit.id"
+                                        v-model="selectedBenefitIds"
+                                        :disabled="(!selectedBenefitIds.includes(benefit.id) && isTotalLimitReached) || (!selectedBenefitIds.includes(benefit.id) && isHogarLimitReached)"
+                                        class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500 disabled:opacity-50"
+                                    />
+                                    <span class="ml-3 text-sm text-gray-700">{{ benefit.description }}</span>
+                                </label>
+                            </div>
+                            </div>
+                    </div>
+                    <div v-if="selectedPackage" class="bg-white shadow-sm sm:rounded-lg p-8 space-y-6">
                         <h3 class="text-lg font-semibold text-gray-800 text-center">7. Líneas Móviles</h3>
                         <div v-if="lines.length === 0" class="text-gray-500 text-sm text-center">
                             Este paquete no incluye líneas móviles de base. Puedes añadirlas manualmente.
@@ -839,4 +832,4 @@ watch(isCentralitaActive, (isActive) => {
 
         </div>
     </AuthenticatedLayout>
-</template>                                                 
+</template>
