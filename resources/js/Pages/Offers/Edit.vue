@@ -424,26 +424,6 @@ watch(
     { immediate: true }
 );
 
-// Sincronizar refs locales con cambios en el form
-watch(() => form.internet_addon_id, (newVal) => { selectedInternetAddonId.value = newVal; });
-watch(() => form.tv_addons, (newVal) => { selectedTvAddonIds.value = newVal; }, { deep: true });
-// Sincronizar el ref local con el form (si cambia por otra razón)
-watch(() => form.additional_internet_lines, (newVal) => { 
-    additionalInternetLines.value = newVal; 
-}, { deep: true });
-
-// --- INICIO MODIFICACIÓN BENEFICIOS/SOLUCIONES ---
-// Sincronizar nuevos refs con el form
-watch(() => form.digital_addons, (newVal) => { 
-    selectedDigitalAddonIds.value = newVal; 
-}, { deep: true });
-
-watch(() => form.applied_benefit_ids, (newVal) => { 
-    selectedBenefitIds.value = newVal; 
-}, { deep: true });
-// --- FIN MODIFICACIÓN BENEFICIOS/SOLUCIONES ---
-
-
 // Watcher para marcar/desmarcar IP Fija según la centralita (para la línea PRINCIPAL)
 watch(isCentralitaActive, (isActive) => {
     if (isActive) {
@@ -534,7 +514,7 @@ watch(isCentralitaActive, (isActive) => {
                            <div v-if="internetAddonOptions.length > 0" class="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-4 mt-1">
                                <label v-for="addon in internetAddonOptions" :key="addon.id"
                                    :class="['flex-1 text-center px-4 py-3 rounded-md border cursor-pointer transition', { 'bg-indigo-600 text-white border-indigo-600 shadow-lg': selectedInternetAddonId === addon.id, 'bg-white border-gray-300 hover:bg-gray-50': selectedInternetAddonId !== addon.id }]">
-                                   <input type="radio" :value="addon.id" v-model="selectedInternetAddonId" @change="form.internet_addon_id = $event.target.value" class="sr-only">
+                                   <input type="radio" :value="addon.id" v-model="selectedInternetAddonId" class="sr-only">
                                    <span class="block font-semibold">{{ addon.name }}</span>
                                    <span class="block text-xs mt-1" v-if="parseFloat(addon.pivot.price) > 0">+{{ parseFloat(addon.pivot.price).toFixed(2) }}€/mes</span>
                                </label>
@@ -855,7 +835,7 @@ watch(isCentralitaActive, (isActive) => {
                              <p v-if="$page.props.auth.user.role === 'team_lead'" class="text-lg text-gray-600 text-center">
                                  Comisión Equipo ({{ auth.user?.team?.commission_percentage || 0 }}%): {{ calculationSummary.teamCommission }}€
                              </p>
-                             <p class_="text-xl font-bold text-emerald-600 text-center mt-2">
+                             <p class="text-xl font-bold text-emerald-600 text-center mt-2">
                                  Tu Comisión: {{ calculationSummary.userCommission }}€
                              </p>
                              <div class="text-center pt-2">
