@@ -30,42 +30,12 @@ const canViewCommissions = computed(() => {
 });
 
 
-/**
- * Calcula el multiplicador para el DESGLOSE DETALLADO.
- * - Admin/Team Lead ven el desglose del CREADOR.
- * - User ve SU PROPIO desglose.
- */
-const commissionMultiplier = computed(() => {
-    if (!currentUser.value) return 0;
-    const viewerRole = currentUser.value.role;
+// --- INICIO DE LA MODIFICACIÓN ---
+// El 'commissionMultiplier' se ha eliminado, ya que los valores
+// en 'offer.summary.commissionDetails' ya vienen calculados
+// desde 'useOfferCalculations.js' al guardar la oferta.
+// --- FIN DE LA MODIFICACIÓN ---
 
-    // 1. Si el visitante es un USER, ve SU PROPIO desglose
-    if (viewerRole === 'user') {
-        let multiplier = 1.0;
-        if (currentUser.value.team) {
-            multiplier *= parseFloat(currentUser.value.team.commission_percentage || 0) / 100;
-        }
-        multiplier *= parseFloat(currentUser.value.commission_percentage || 0) / 100;
-        
-        // Si no tiene team ni porcentaje, el multiplier será 0 (0 / 100)
-        return multiplier;
-    }
-
-    // 2. Si el visitante es ADMIN o TEAM LEAF, ve el desglose del CREADOR
-    if (viewerRole === 'admin' || currentUser.value.is_manager) {
-        if (!offerCreator.value) return 0; // No hay creador, no se puede calcular
-
-        let multiplier = 1.0;
-        if (offerCreator.value.team) { // Usamos el equipo del CREADOR
-            multiplier *= parseFloat(offerCreator.value.team.commission_percentage || 0) / 100;
-        }
-        multiplier *= parseFloat(offerCreator.value.commission_percentage || 0) / 100;
-        
-        return multiplier;
-    }
-    
-    return 0; // Por defecto
-});
 
 /**
  * Define qué TOTALES (los guardados en la BBDD) se deben mostrar
@@ -368,7 +338,6 @@ const openDetails = ref({
                          Finalizar y Bloquear
                      </DangerButton>
                      
-                     <!-- BOTÓN DE EMAIL MODIFICADO -->
                      <PrimaryButton @click="confirmSendEmail" :title="'Enviar email'">
                         Email
                      </PrimaryButton>
@@ -479,15 +448,12 @@ const openDetails = ref({
                                             </span>
                                         </div>
                                         
-                                        <!-- INICIO: CÓDIGO AÑADIDO PARA MOSTRAR FIBRA ORO PRINCIPAL -->
                                         <div v-if="fibraOroPrincipal" class="mt-2 pt-2 border-t border-blue-200 ml-4">
                                             <span class="text-xs font-semibold text-gray-700">Fibra Oro Principal:</span>
                                             <span class="ml-1 text-xs">
                                                 Incluida
                                             </span>
                                         </div>
-                                        <!-- FIN: CÓDIGO AÑADIDO -->
-                                        
                                         </div>
                                     
                                     <div v-if="additionalInternetAddons.length > 0">
@@ -568,29 +534,18 @@ const openDetails = ref({
                                             </div>
 
                                             
-                                            <div v-if="multi.contractedExtensions.length > 0" class="mt-2 pt-2 border-t border-indigo-200">
-                                                <span class="font-semibold block text-indigo-800 mb-1">Extensiones Adicionales (Multisede):</span>
-                                                <ul class="list-disc list-inside ml-4 space-y-1">
-                                                    <li v-for="ext in multi.contractedExtensions" :key="ext.id">
-                                                        {{ ext.pivot.addon_name || ext.name }} (x{{ ext.pivot.quantity }})
-                                                    </li>
-                                                </ul>
-                                            </div>
-
+                                            
 
                                             <div v-if="multi.has_ip_fija" class="mt-2 pt-2 border-t border-indigo-200">
                                                 <span class="text-xs font-semibold text-gray-700">IP Fija:</span>
                                                 <span class="ml-1 text-xs">Incluida (Gratis por Centralita)</span>
                                             </div>
 
-                                            <!-- INICIO: CÓDIGO AÑADIDO PARA MOSTRAR FIBRA ORO MULTISEDE -->
                                             <div v-if="multi.has_fibra_oro" class="mt-2 pt-2 border-t border-indigo-200">
                                                 <span class="text-xs font-semibold text-gray-700">Fibra Oro:</span>
                                                 <span class="ml-1 text-xs">Incluida</span>
                                             </div>
-                                            <!-- FIN: CÓDIGO AÑADIDO -->
-
-                                        </div>
+                                            </div>
                                     </div>
 
                                 </div>
@@ -601,7 +556,6 @@ const openDetails = ref({
                             No se incluyó ninguna centralita en esta oferta.
                         </section>
 
-                        <!-- INICIO: NUEVA SECCIÓN DE SOLUCIONES DIGITALES -->
                         <section v-if="digitalSolutions.length > 0" class="bg-white p-6 shadow-sm sm:rounded-lg">
                             <details class="group" :open="openDetails.solutions" @toggle="openDetails.solutions = $event.target.open">
                                 <summary class="flex justify-between items-center font-medium cursor-pointer list-none">
@@ -620,9 +574,6 @@ const openDetails = ref({
                                 </div>
                             </details>
                         </section>
-                        <!-- FIN: NUEVA SECCIÓN DE SOLUCIONES DIGITALES -->
-
-                        <!-- INICIO: NUEVA SECCIÓN DE BENEFICIOS -->
                         <section v-if="appliedBenefits.length > 0" class="bg-white p-6 shadow-sm sm:rounded-lg">
                             <details class="group" :open="openDetails.benefits" @toggle="openDetails.benefits = $event.target.open">
                                 <summary class="flex justify-between items-center font-medium cursor-pointer list-none">
@@ -641,9 +592,7 @@ const openDetails = ref({
                                 </div>
                             </details>
                         </section>
-                        <!-- FIN: NUEVA SECCIÓN DE BENEFICIOS -->
-
-                         </div> 
+                        </div> 
                     
                     <div class="lg:col-span-1 space-y-8">
                          <div class="sticky top-8 space-y-8"> 
@@ -685,10 +634,8 @@ const openDetails = ref({
                                              <div class="space-y-1 border-l-2 border-yellow-400 pl-2 ml-1">
                                                  <div v-for="(commission, index) in commissions" :key="'com-item-'+index" class="flex justify-between">
                                                      <span class="text-gray-600">{{ commission.description }}</span>
-                                                     <!-- INICIO: MODIFICACIÓN AQUÍ -->
-                                                     <span class="font-medium text-gray-800 font-mono">{{ formatCurrency(commission.amount * commissionMultiplier) }}</span>
-                                                     <!-- FIN: MODIFICACIÓN AQUÍ -->
-                                                 </div>
+                                                     <span class="font-medium text-gray-800 font-mono">{{ formatCurrency(commission.amount) }}</span>
+                                                     </div>
                                              </div>
                                          </div>
                                           <p v-if="!offer.summary?.commissionDetails || Object.keys(offer.summary.commissionDetails).length === 0" class="italic text-gray-500">No hay desglose detallado.</p>
@@ -696,7 +643,6 @@ const openDetails = ref({
                                  </details>
 
                                  <div class="space-y-2 text-sm bg-green-50 p-4 rounded-lg border border-green-200 shadow-sm">
-                                      <!-- INICIO: MODIFICACIÓN AQUÍ -->
                                       <div v-if="commissionTotals.showGross" class="flex justify-between font-medium text-gray-600">
                                          <span>Comisión Bruta (100%):</span>
                                          <span class="font-mono">{{ formatCurrency(commissionTotals.gross) }}</span>
@@ -709,8 +655,7 @@ const openDetails = ref({
                                          <span>{{ commissionTotals.userLabel }}</span>
                                          <span class="font-mono">{{ formatCurrency(commissionTotals.user) }}</span>
                                      </div>
-                                     <!-- FIN: MODIFICACIÓN AQUÍ -->
-                                 </div>
+                                     </div>
                              </section>
                              <section v-else class="bg-white p-6 shadow-sm sm:rounded-lg italic text-sm text-gray-500">
                                  El desglose de comisiones no está visible para tu rol.
@@ -744,7 +689,6 @@ const openDetails = ref({
             </div>
         </Modal>
 
-        <!-- INICIO: NUEVO MODAL PARA ENVIAR EMAIL -->
         <Modal :show="confirmingSendEmail" @close="closeEmailModal">
             <div class="p-6">
                 <h2 class="text-lg font-medium text-gray-900">
@@ -780,7 +724,5 @@ const openDetails = ref({
                 </div>
             </div>
         </Modal>
-        <!-- FIN: NUEVO MODAL -->
-
         </AuthenticatedLayout>
 </template>
