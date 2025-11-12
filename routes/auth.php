@@ -54,7 +54,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/offers-export-funnel', [OfferController::class, 'exportFunnel'])
         ->name('offers.exportFunnel');
     // ### ------------------------------------------ ###
-
+Route::post('/offers/{offer}/send', [OfferController::class, 'send'])->name('offers.send');
 
     // --- Rutas de Verificación y Contraseña (Las que ya tenías) ---
     Route::get('verify-email', EmailVerificationPromptController::class)

@@ -4,9 +4,12 @@ import { Head, Link, usePage, useForm } from '@inertiajs/vue3';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-// --- INICIO: IMPORTACIONES AÑADIDAS ---
 import DangerButton from '@/Components/DangerButton.vue';
 import Modal from '@/Components/Modal.vue';
+// --- INICIO: IMPORTACIONES AÑADIDAS ---
+import TextInput from '@/Components/TextInput.vue';
+import InputLabel from '@/Components/InputLabel.vue';
+import InputError from '@/Components/InputError.vue';
 // --- FIN: IMPORTACIONES AÑADIDAS ---
 
 const props = defineProps({
@@ -197,9 +200,38 @@ const formatPrice = (value) => { // Para el desglose
     return value >= 0 ? `+${formatted}` : formatted;
 };
 
-// --- LÓGICA ENVÍO EMAIL ---
-const sendEmailForm = useForm({});
-const sendOfferByEmail = () => { sendEmailForm.post(route('offers.send', props.offer.id), { preserveScroll: true }); };
+// --- INICIO: LÓGICA ENVÍO EMAIL MODIFICADA ---
+const confirmingSendEmail = ref(false); // Nuevo ref para el modal
+const sendEmailForm = useForm({ // Modificar el form
+    email: '', 
+});
+
+// 1. Esta función ABRIRÁ el modal
+const confirmSendEmail = () => {
+    sendEmailForm.email = props.offer.client?.email || ''; // Pone el email del cliente por defecto
+    confirmingSendEmail.value = true;
+};
+
+// 2. Esta función CERRARÁ el modal
+const closeEmailModal = () => {
+    confirmingSendEmail.value = false;
+    sendEmailForm.reset();
+    sendEmailForm.clearErrors();
+};
+
+// 3. Esta función ENVIARÁ el email (llamada desde el modal)
+const sendOfferByEmail = () => { 
+    sendEmailForm.post(route('offers.send', props.offer.id), { 
+        preserveScroll: true,
+        onSuccess: () => closeEmailModal(),
+        // Opcional: onError para mantener el modal abierto si hay un error de validación
+        onError: () => {
+            // No cerramos el modal si hay un error (ej. email inválido)
+        }
+    }); 
+};
+// --- FIN: LÓGICA ENVÍO EMAIL MODIFICADA ---
+
 
 // --- ESTADO PARA DESPLEGABLES ---
 const openDetails = ref({
@@ -230,10 +262,11 @@ const openDetails = ref({
                      <DangerButton @click="confirmLockOffer" v-if="offer.status === 'borrador'">
                          Finalizar y Bloquear
                      </DangerButton>
-                     <PrimaryButton @click="sendOfferByEmail" :disabled="sendEmailForm.processing || !offer.client?.email" :class="{ 'opacity-25': sendEmailForm.processing || !offer.client?.email }" :title="!offer.client?.email ? 'El cliente no tiene email' : 'Enviar email'">
-                         <svg v-if="sendEmailForm.processing" class="animate-spin -ml-1 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A8 8 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                         {{ sendEmailForm.processing ? 'Enviando...' : 'Email' }}
+                     
+                     <PrimaryButton @click="confirmSendEmail" :title="'Enviar email'">
+                        Email
                      </PrimaryButton>
+                     
                      <a :href="route('offers.pdf', offer.id)" target="_blank" download class="inline-flex items-center px-4 py-2 bg-gray-800 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-gray-700 active:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition ease-in-out duration-150">PDF</a>
                  </div>
              </div>
@@ -585,6 +618,42 @@ const openDetails = ref({
                     >
                         Finalizar Oferta
                     </DangerButton>
+                </div>
+            </div>
+        </Modal>
+
+        <Modal :show="confirmingSendEmail" @close="closeEmailModal">
+            <div class="p-6">
+                <h2 class="text-lg font-medium text-gray-900">
+                    Enviar Oferta por Email
+                </h2>
+                <p class="mt-2 text-sm text-gray-600">
+                    Introduce la dirección de correo electrónico a la que quieres enviar la oferta.
+                </p>
+                
+                <div class="mt-6">
+                    <InputLabel for="email" value="Email" />
+                    <TextInput
+                        id="email"
+                        v-model="sendEmailForm.email"
+                        type="email"
+                        class="mt-1 block w-full"
+                        placeholder="ejemplo@cliente.com"
+                    />
+                    <InputError :message="sendEmailForm.errors.email" class="mt-2" />
+                </div>
+
+                <div class="mt-6 flex justify-end">
+                    <SecondaryButton @click="closeEmailModal"> Cancelar </SecondaryButton>
+                    <PrimaryButton
+                        class="ms-3"
+                        :class="{ 'opacity-25': sendEmailForm.processing }"
+                        :disabled="sendEmailForm.processing"
+                        @click="sendOfferByEmail"
+                    >
+                        <svg v-if="sendEmailForm.processing" class="animate-spin -ml-1 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A8 8 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                        {{ sendEmailForm.processing ? 'Enviando...' : 'Enviar Oferta' }}
+                    </PrimaryButton>
                 </div>
             </div>
         </Modal>

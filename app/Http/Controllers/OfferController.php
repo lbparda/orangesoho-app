@@ -10,13 +10,15 @@ use App\Models\Terminal;
 use App\Models\User;
 use Barryvdh\DomPDF\Facade\Pdf;
 use App\Models\Client;
-use Illuminate\Http\Request;
+use Illuminate\Http\Request; // Importación de Request
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Response;
 use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\Mail; // Asegúrate que esta línea existe
+// use App\Mail\OfferPdfMail; // Descomenta si usas un Mailable
 use App\Models\O2oDiscount; // Asegúrate de que esta importación existe
 
 class OfferController extends Controller
@@ -969,5 +971,57 @@ class OfferController extends Controller
         };
 
         return Response::stream($callback, 200, $headers);
+    }
+
+    /**
+     * Envía la oferta por email a la dirección especificada.
+     */
+    public function send(Request $request, Offer $offer)
+    {
+        // 1. Validar que el email recibido es un email válido
+        $validated = $request->validate([
+            'email' => 'required|email|max:255',
+        ]);
+
+        $targetEmail = $validated['email'];
+
+        try {
+            // 2. Cargar todas las relaciones necesarias para el PDF y el Email
+            $offer->load([
+                'package.addons', 
+                'user', 
+                'lines', 
+                'client',
+                'benefits.addon',
+                'addons' => function ($query) {
+                    $query->withPivot(
+                        'quantity', 'has_ip_fija', 'selected_centralita_id',
+                        'addon_name', 'addon_price', 'addon_commission',
+                        'has_fibra_oro'
+                    );
+                }
+            ]);
+            
+            // 3. Genera el PDF primero
+             $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('pdfs.offer_pdf', compact('offer'));
+             $clientName = $offer->client ? \Illuminate\Support\Str::slug($offer->client->name) : 'sin-cliente';
+             $fileName = 'oferta-' . $offer->id . '-' . $clientName . '.pdf';
+
+            // 4. Envía el email adjuntando el PDF
+            Mail::send([], [], function ($message) use ($offer, $pdf, $fileName, $targetEmail) {
+                $message->to($targetEmail)
+                        ->subject('Tu propuesta comercial de Orange - Oferta #' . $offer->id)
+                        ->attachData($pdf->output(), $fileName, [
+                            'mime' => 'application/pdf',
+                        ])
+                        ->html('<p>Adjuntamos tu propuesta comercial. ¡Gracias por confiar en nosotros!</p>');
+            });
+
+            return back()->with('success', '¡Oferta enviada por email a ' . $targetEmail . '!');
+
+        } catch (\Exception $e) {
+            \Log::error('Error enviando email oferta '.$offer->id.': '.$e->getMessage());
+            return back()->with('error', 'No se pudo enviar el email. Inténtalo de nuevo.');
+        }
     }
 }
