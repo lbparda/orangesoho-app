@@ -19,12 +19,117 @@ const props = defineProps({
 
 const page = usePage();
 
-// --- LÓGICA VISIBILIDAD COMISIONES ---
+// --- INICIO: LÓGICA DE CÁLCULO DE COMISIÓN PARA EL VISUALIZADOR ---
+const currentUser = computed(() => page.props.auth.user);
+const offerCreator = computed(() => props.offer.user); // El usuario que CREÓ la oferta
+
+// Define si la sección de comisiones es visible
 const canViewCommissions = computed(() => {
-    const userRole = page.props.auth.user?.role;
-    // Asumiendo que is_manager se pasa correctamente
-    return userRole === 'admin' || page.props.auth.user?.is_manager;
+    const userRole = currentUser.value?.role;
+    return userRole === 'admin' || currentUser.value?.is_manager || userRole === 'user';
 });
+
+
+/**
+ * Calcula el multiplicador para el DESGLOSE DETALLADO.
+ * - Admin/Team Lead ven el desglose del CREADOR.
+ * - User ve SU PROPIO desglose.
+ */
+const commissionMultiplier = computed(() => {
+    if (!currentUser.value) return 0;
+    const viewerRole = currentUser.value.role;
+
+    // 1. Si el visitante es un USER, ve SU PROPIO desglose
+    if (viewerRole === 'user') {
+        let multiplier = 1.0;
+        if (currentUser.value.team) {
+            multiplier *= parseFloat(currentUser.value.team.commission_percentage || 0) / 100;
+        }
+        multiplier *= parseFloat(currentUser.value.commission_percentage || 0) / 100;
+        
+        // Si no tiene team ni porcentaje, el multiplier será 0 (0 / 100)
+        return multiplier;
+    }
+
+    // 2. Si el visitante es ADMIN o TEAM LEAF, ve el desglose del CREADOR
+    if (viewerRole === 'admin' || currentUser.value.is_manager) {
+        if (!offerCreator.value) return 0; // No hay creador, no se puede calcular
+
+        let multiplier = 1.0;
+        if (offerCreator.value.team) { // Usamos el equipo del CREADOR
+            multiplier *= parseFloat(offerCreator.value.team.commission_percentage || 0) / 100;
+        }
+        multiplier *= parseFloat(offerCreator.value.commission_percentage || 0) / 100;
+        
+        return multiplier;
+    }
+    
+    return 0; // Por defecto
+});
+
+/**
+ * Define qué TOTALES (los guardados en la BBDD) se deben mostrar
+ * basándose en el rol del VISITANTE.
+ */
+const commissionTotals = computed(() => {
+    const summary = props.offer.summary;
+    if (!summary || !currentUser.value) {
+        return { showGross: false, gross: 0, showTeam: false, team: 0, teamPerc: 0, showUser: false, user: 0, userLabel: '' };
+    }
+
+    const role = currentUser.value.role;
+    const gross = parseFloat(summary.totalCommission || 0);
+    const savedTeam = parseFloat(summary.teamCommission || 0);
+    const savedUser = parseFloat(summary.userCommission || 0);
+    const creatorTeamPerc = props.offer.user?.team?.commission_percentage || 0;
+
+    // ADMIN: Muestra Bruta, Equipo (del creador), Vendedor (del creador)
+    if (role === 'admin') {
+        return {
+            showGross: true,
+            gross: gross,
+            showTeam: true,
+            team: savedTeam,
+            teamPerc: creatorTeamPerc,
+            showUser: true,
+            user: savedUser,
+            userLabel: 'Comisión Vendedor:'
+        };
+    }
+
+    // TEAM LEAD / MANAGER: Muestra Equipo (del creador) y Vendedor (del creador)
+    if (currentUser.value.is_manager) {
+         return {
+            showGross: false, // Oculta Bruta
+            gross: 0,
+            showTeam: true,
+            team: savedTeam,
+            teamPerc: creatorTeamPerc,
+            showUser: true,
+            user: savedUser,
+            userLabel: 'Comisión Vendedor:'
+        };
+    }
+
+    // USER: Muestra solo "Tu Comisión" (que es el valor guardado del creador,
+    // asumiendo que un user solo ve sus propias ofertas)
+    if (role === 'user') {
+         return {
+            showGross: false,
+            gross: 0,
+            showTeam: false,
+            team: 0,
+            teamPerc: 0,
+            showUser: true,
+            user: savedUser,
+            userLabel: 'Tu Comisión:'
+        };
+    }
+    
+    return { showGross: false, gross: 0, showTeam: false, team: 0, teamPerc: 0, showUser: false, user: 0, userLabel: '' };
+});
+// --- FIN: LÓGICA DE CÁLCULO DE COMISIÓN ---
+
 
 // --- INICIO: LÓGICA DE BLOQUEO (de Show.vue) ---
 const confirmingLockOffer = ref(false);
@@ -263,6 +368,7 @@ const openDetails = ref({
                          Finalizar y Bloquear
                      </DangerButton>
                      
+                     <!-- BOTÓN DE EMAIL MODIFICADO -->
                      <PrimaryButton @click="confirmSendEmail" :title="'Enviar email'">
                         Email
                      </PrimaryButton>
@@ -373,12 +479,15 @@ const openDetails = ref({
                                             </span>
                                         </div>
                                         
+                                        <!-- INICIO: CÓDIGO AÑADIDO PARA MOSTRAR FIBRA ORO PRINCIPAL -->
                                         <div v-if="fibraOroPrincipal" class="mt-2 pt-2 border-t border-blue-200 ml-4">
                                             <span class="text-xs font-semibold text-gray-700">Fibra Oro Principal:</span>
                                             <span class="ml-1 text-xs">
                                                 Incluida
                                             </span>
                                         </div>
+                                        <!-- FIN: CÓDIGO AÑADIDO -->
+                                        
                                         </div>
                                     
                                     <div v-if="additionalInternetAddons.length > 0">
@@ -474,11 +583,14 @@ const openDetails = ref({
                                                 <span class="ml-1 text-xs">Incluida (Gratis por Centralita)</span>
                                             </div>
 
+                                            <!-- INICIO: CÓDIGO AÑADIDO PARA MOSTRAR FIBRA ORO MULTISEDE -->
                                             <div v-if="multi.has_fibra_oro" class="mt-2 pt-2 border-t border-indigo-200">
                                                 <span class="text-xs font-semibold text-gray-700">Fibra Oro:</span>
                                                 <span class="ml-1 text-xs">Incluida</span>
                                             </div>
-                                            </div>
+                                            <!-- FIN: CÓDIGO AÑADIDO -->
+
+                                        </div>
                                     </div>
 
                                 </div>
@@ -489,6 +601,7 @@ const openDetails = ref({
                             No se incluyó ninguna centralita en esta oferta.
                         </section>
 
+                        <!-- INICIO: NUEVA SECCIÓN DE SOLUCIONES DIGITALES -->
                         <section v-if="digitalSolutions.length > 0" class="bg-white p-6 shadow-sm sm:rounded-lg">
                             <details class="group" :open="openDetails.solutions" @toggle="openDetails.solutions = $event.target.open">
                                 <summary class="flex justify-between items-center font-medium cursor-pointer list-none">
@@ -507,6 +620,9 @@ const openDetails = ref({
                                 </div>
                             </details>
                         </section>
+                        <!-- FIN: NUEVA SECCIÓN DE SOLUCIONES DIGITALES -->
+
+                        <!-- INICIO: NUEVA SECCIÓN DE BENEFICIOS -->
                         <section v-if="appliedBenefits.length > 0" class="bg-white p-6 shadow-sm sm:rounded-lg">
                             <details class="group" :open="openDetails.benefits" @toggle="openDetails.benefits = $event.target.open">
                                 <summary class="flex justify-between items-center font-medium cursor-pointer list-none">
@@ -525,7 +641,9 @@ const openDetails = ref({
                                 </div>
                             </details>
                         </section>
-                        </div> 
+                        <!-- FIN: NUEVA SECCIÓN DE BENEFICIOS -->
+
+                         </div> 
                     
                     <div class="lg:col-span-1 space-y-8">
                          <div class="sticky top-8 space-y-8"> 
@@ -567,7 +685,9 @@ const openDetails = ref({
                                              <div class="space-y-1 border-l-2 border-yellow-400 pl-2 ml-1">
                                                  <div v-for="(commission, index) in commissions" :key="'com-item-'+index" class="flex justify-between">
                                                      <span class="text-gray-600">{{ commission.description }}</span>
-                                                     <span class="font-medium text-gray-800 font-mono">{{ formatCurrency(commission.amount) }}</span>
+                                                     <!-- INICIO: MODIFICACIÓN AQUÍ -->
+                                                     <span class="font-medium text-gray-800 font-mono">{{ formatCurrency(commission.amount * commissionMultiplier) }}</span>
+                                                     <!-- FIN: MODIFICACIÓN AQUÍ -->
                                                  </div>
                                              </div>
                                          </div>
@@ -576,18 +696,20 @@ const openDetails = ref({
                                  </details>
 
                                  <div class="space-y-2 text-sm bg-green-50 p-4 rounded-lg border border-green-200 shadow-sm">
-                                      <div class="flex justify-between font-medium text-gray-600">
+                                      <!-- INICIO: MODIFICACIÓN AQUÍ -->
+                                      <div v-if="commissionTotals.showGross" class="flex justify-between font-medium text-gray-600">
                                          <span>Comisión Bruta (100%):</span>
-                                         <span class="font-mono">{{ formatCurrency(offer.summary?.totalCommission) }}</span>
+                                         <span class="font-mono">{{ formatCurrency(commissionTotals.gross) }}</span>
                                      </div>
-                                     <div v-if="page.props.auth.user?.role !== 'admin'" class="flex justify-between font-medium text-gray-700">
-                                         <span>Comisión Equipo:</span>
-                                         <span class="font-mono">{{ formatCurrency(offer.summary?.teamCommission) }}</span>
+                                     <div v-if="commissionTotals.showTeam" class="flex justify-between font-medium text-gray-700">
+                                         <span>Comisión Equipo ({{ commissionTotals.teamPerc }}%):</span>
+                                         <span class="font-mono">{{ formatCurrency(commissionTotals.team) }}</span>
                                      </div>
-                                     <div class="flex justify-between text-lg font-bold text-emerald-700 pt-2 border-t border-green-300 mt-2">
-                                         <span>Comisión Vendedor:</span>
-                                         <span class="font-mono">{{ formatCurrency(offer.summary?.userCommission) }}</span>
+                                     <div v-if="commissionTotals.showUser" class="flex justify-between text-lg font-bold text-emerald-700 pt-2 border-t border-green-300 mt-2">
+                                         <span>{{ commissionTotals.userLabel }}</span>
+                                         <span class="font-mono">{{ formatCurrency(commissionTotals.user) }}</span>
                                      </div>
+                                     <!-- FIN: MODIFICACIÓN AQUÍ -->
                                  </div>
                              </section>
                              <section v-else class="bg-white p-6 shadow-sm sm:rounded-lg italic text-sm text-gray-500">
@@ -622,6 +744,7 @@ const openDetails = ref({
             </div>
         </Modal>
 
+        <!-- INICIO: NUEVO MODAL PARA ENVIAR EMAIL -->
         <Modal :show="confirmingSendEmail" @close="closeEmailModal">
             <div class="p-6">
                 <h2 class="text-lg font-medium text-gray-900">
@@ -657,5 +780,7 @@ const openDetails = ref({
                 </div>
             </div>
         </Modal>
+        <!-- FIN: NUEVO MODAL -->
+
         </AuthenticatedLayout>
 </template>

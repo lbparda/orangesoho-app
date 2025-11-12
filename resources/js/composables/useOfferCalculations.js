@@ -751,25 +751,54 @@ export function useOfferCalculations(
         let teamCommission = 0;
         let userCommission = 0;
 
+        // --- INICIO DE LA MODIFICACIÓN DE CÁLCULO DE PORCENTAJES ---
         if (currentUser.role === 'admin') {
             userCommission = totalCommission;
             teamCommission = totalCommission;
+            // Admin ve 100% (bruto), no es necesario hacer nada al desglose.
         }
         else if (currentUser.team) {
-            const teamPercentage = currentUser.team.commission_percentage || 0;
-            teamCommission = totalCommission * (parseFloat(teamPercentage) / 100);
+            const teamPercentage = parseFloat(currentUser.team.commission_percentage || 0) / 100;
+            teamCommission = totalCommission * teamPercentage;
+
             if (currentUser.role === 'user') {
-                const userPercentage = currentUser.commission_percentage || 0;
-                userCommission = teamCommission * (parseFloat(userPercentage) / 100);
+                const userPercentage = parseFloat(currentUser.commission_percentage || 0) / 100;
+                userCommission = teamCommission * userPercentage;
+
+                // Es un 'user', aplicar su porcentaje final (team * user) al desglose
+                const finalMultiplier = teamPercentage * userPercentage;
+                Object.keys(commissionDetails).forEach(category => {
+                    commissionDetails[category].forEach(item => {
+                        item.amount = item.amount * finalMultiplier;
+                    });
+                });
+
             } else { // team_lead o jefe de ventas
                 userCommission = teamCommission;
+
+                // Es 'team_lead', aplicar el porcentaje del equipo al desglose
+                const finalMultiplier = teamPercentage;
+                Object.keys(commissionDetails).forEach(category => {
+                    commissionDetails[category].forEach(item => {
+                        item.amount = item.amount * finalMultiplier;
+                    });
+                });
             }
         }
         else { // user sin equipo
-            const userPercentage = currentUser.commission_percentage || 0;
-            userCommission = totalCommission * (parseFloat(userPercentage) / 100);
+            const userPercentage = parseFloat(currentUser.commission_percentage || 0) / 100;
+            userCommission = totalCommission * userPercentage;
             teamCommission = 0; 
+            
+            // Es 'user' sin equipo, aplicar su porcentaje al desglose
+            const finalMultiplier = userPercentage;
+            Object.keys(commissionDetails).forEach(category => {
+                commissionDetails[category].forEach(item => {
+                    item.amount = item.amount * finalMultiplier;
+                });
+            });
         }
+        // --- FIN DE LA MODIFICACIÓN DE CÁLCULO DE PORCENTAJES ---
 
         return {
             basePrice: basePrice.toFixed(2),
