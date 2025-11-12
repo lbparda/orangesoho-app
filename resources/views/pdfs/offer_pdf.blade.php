@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
-    <title>Contrato Oferta #{{ $offer->id }}</title>
+    <title>Propuesta Oferta #{{ $offer->id }}</title>
     <style>
         /* Estilos generales */
         @page {
@@ -13,7 +13,7 @@
             font-family: 'Helvetica', DejaVu Sans, sans-serif;
             font-size: 11px;
             color: #333;
-            line-height: 1.5;
+            line-height: 1.4;
         }
 
         /* Encabezado y Pie de página */
@@ -62,8 +62,8 @@
             color: #333;
             border-bottom: 1px solid #ccc;
             padding-bottom: 5px;
-            margin-top: 30px;
-            margin-bottom: 15px;
+            margin-top: 25px;
+            margin-bottom: 10px;
         }
         
         /* Tablas */
@@ -71,34 +71,98 @@
             width: 100%;
             border-collapse: collapse;
             font-size: 10px;
+            margin-bottom: 15px; /* Espacio después de cada tabla */
         }
         th, td {
             padding: 8px;
             text-align: left;
-            vertical-align: middle;
-            border: 1px solid #ddd;
+            vertical-align: top;
+            border-bottom: 1px solid #ddd;
         }
         th {
             background-color: #f2f2f2;
             font-weight: bold;
+            width: 30%; /* Ancho por defecto para la columna de "concepto" */
         }
-        .no-border-table td, .no-border-table th { border: none; padding: 2px 0; }
+        td {
+            width: 70%;
+        }
+        
+        /* Tabla de resumen de precios */
+        .summary-table th {
+            background-color: #f9f9f9;
+            border: 1px solid #ddd;
+        }
+        .summary-table td {
+            border: 1px solid #ddd;
+        }
+        
+        /* Tabla de líneas móviles */
+        .lines-table th, .lines-table td {
+             border: 1px solid #ddd;
+             text-align: center;
+             font-size: 9px;
+             width: auto; /* Dejar que la tabla de líneas se auto-ajuste */
+        }
+        .lines-table th {
+            background-color: #f2f2f2;
+            text-align: center;
+        }
+        .lines-table td:nth-child(4) { /* Columna Terminal */
+            text-align: left;
+        }
+
+        /* Utilidades de texto */
         .text-right { text-align: right; }
         .font-bold { font-weight: bold; }
+        .text-center { text-align: center; }
+        .italic { font-style: italic; }
+        .text-gray { color: #555; }
         
         .summary-total-value { font-size: 20px; font-weight: bold; color: #000; }
         .description-text { font-size: 10px; color: #555; text-align: justify; margin-bottom: 15px; }
+        
+        /* Listas (para beneficios, TV, etc.) */
+        ul {
+            margin: 0;
+            padding-left: 20px;
+        }
+        li {
+            margin-bottom: 3px;
+        }
+
     </style>
 </head>
 <body>
+
+    @php
+        // --- Definimos todas las variables replicando la lógica de Show.vue ---
+        $allAddons = $offer->addons ?? collect();
+        
+        // --- Internet y TV ---
+        $baseInternetAddon = $allAddons->firstWhere('type', 'internet');
+        $ipFijaPrincipal = $allAddons->firstWhere(fn($a) => $a->type === 'internet_feature' && $a->pivot->addon_name === 'IP Fija');
+        $fibraOroPrincipal = $allAddons->firstWhere(fn($a) => $a->type === 'internet_feature' && $a->pivot->addon_name === 'Fibra Oro');
+        $additionalInternetLines = $allAddons->where('type', 'internet_additional');
+        $tvAddons = $allAddons->whereIn('type', ['tv', 'tv_base', 'tv_premium']);
+        
+        // --- Centralita (Agrupación simple por tipo) ---
+        $centralitaBase = $allAddons->firstWhere('type', 'centralita');
+        $centralitaFeature = $allAddons->firstWhere('type', 'centralita_feature');
+        $centralitaExtensions = $allAddons->where('type', 'centralita_extension');
+        
+        // --- Soluciones y Beneficios ---
+        $digitalSolutions = $allAddons->whereIn('type', ['service', 'software']);
+        $appliedBenefits = $offer->benefits ?? collect();
+    @endphp
 
     <header>
         <table class="no-border-table">
             <tr>
                 <td style="width: 50%;" class="header-logo">orange</td>
                 <td style="width: 50%; text-align: right; vertical-align: bottom;">
-                    <b style="font-size: 16px;">Contrato Pack NEGOCIO</b><br>
-                    Código de contrato: {{ $offer->id }}
+                    <b style="font-size: 16px;">Propuesta Pack NEGOCIO</b><br>
+                    Oferta Código: {{ $offer->id }}
                 </td>
             </tr>
         </table>
@@ -111,7 +175,7 @@
     <main>
         <h1>Propuesta Comercial</h1>
         <h2>Datos del Cliente</h2>
-        <table>
+        <table class="summary-table">
             <tr>
                 <th style="width: 25%;">Empresa</th>
                 <td>{{ $offer->client->name ?? 'No asignado' }}</td>
@@ -123,7 +187,7 @@
         </table>
 
         <h2>Resumen Económico</h2>
-        <table>
+        <table class="summary-table">
             <tr>
                 <th style="font-size: 16px;">Cuota Neta Mensual</th>
                 <td class="text-right summary-total-value">{{ number_format($offer->summary['finalPrice'] ?? 0, 2, ',', '.') }} €</td>
@@ -134,6 +198,28 @@
             </tr>
         </table>
         
+        <h2>Desglose de Precios Mensuales</h2>
+        <table class="summary-table">
+             <thead>
+                <tr>
+                    <th>Concepto</th>
+                    <th class="text-right">Importe</th>
+                </tr>
+             </thead>
+             <tbody>
+                @forelse ($offer->summary['summaryBreakdown'] ?? [] as $item)
+                    <tr>
+                        <td>{{ $item['description'] }}</td>
+                        <td class="text-right font-bold {{ $item['price'] < 0 ? 'text-gray' : '' }}">
+                            {{ $item['price'] >= 0 ? '+' : '' }}{{ number_format($item['price'], 2, ',', '.') }} €
+                        </td>
+                    </tr>
+                @empty
+                    <tr><td colspan="2" class="text-center italic">No hay desglose de precios disponible.</td></tr>
+                @endforelse
+             </tbody>
+        </table>
+
     </main>
 
     <div class="page-break"></div>
@@ -141,16 +227,16 @@
     <h1>Detalle de Servicios Contratados</h1>
 
     <h2>Líneas Móviles y Terminales</h2>
-    <table>
+    <table class="lines-table">
         <thead>
             <tr>
                 <th>Nº Línea</th>
                 <th>Nº Teléfono</th>
                 <th>Tipo</th>
+                <th>Operador Origen</th>
                 <th>Terminal Asociado</th>
-                <th class="text-right">Pago Inicial (€)</th>
-                <th class="text-right">Cuota/Mes (€)</th>
-                <th class="text-right">Nº Cuotas</th>
+                <th class="text-right">Pago Inicial</th>
+                <th class="text-right">Cuota/Mes</th>
             </tr>
         </thead>
         <tbody>
@@ -158,67 +244,129 @@
                 <tr>
                     <td>{{ $loop->iteration }}</td>
                     <td>{{ $line->phone_number ?: 'Nuevo' }}</td>
-                    <td>{{ $line->is_portability ? 'Portabilidad' : 'Nuevo' }}</td>
-                    {{-- INICIO CAMBIO: Leer del campo snapshot 'terminal_name' --}}
+                    <td>{{ $line->is_extra ? 'Adicional' : 'Principal' }}</td>
+                    <td>{{ $line->is_portability ? $line->source_operator : 'Nuevo' }}</td>
                     <td>{{ $line->terminal_name ?: 'Sin terminal' }}</td>
-                    {{-- FIN CAMBIO --}}
-                    
-                    <td class="text-right">{{ number_format($line->initial_cost, 2, ',', '.') }}</td>
-                    <td class="text-right">{{ number_format($line->monthly_cost, 2, ',', '.') }}</td>
-
-                    {{-- INICIO CAMBIO: La duración ya no se lee de la relación --}}
-                    <td class="text-right">-</td> 
-                    {{-- NOTA: Si quieres guardar la duración, añade 'terminal_duration' a la migración de 'offer_lines' 
-                         y guárdalo en el OfferController, igual que 'terminal_name'. --}}
-                    {{-- FIN CAMBIO --}}
+                    <td class="text-right">{{ number_format($line->initial_cost, 2, ',', '.') }} €</td>
+                    <td class="text-right">{{ number_format($line->monthly_cost, 2, ',', '.') }} €</td>
                 </tr>
             @empty
-                <tr><td colspan="7" style="text-align: center;">No hay líneas móviles configuradas.</td></tr>
+                <tr><td colspan="7" class="text-center italic">No hay líneas móviles configuradas.</td></tr>
             @endforelse
         </tbody>
     </table>
 
-    {{-- ================================================================ --}}
-    {{-- INICIO CAMBIO: LÓGICA DE CENTRALITA SIMPLIFICADA (USANDO SNAPSHOT) --}}
-    {{-- ================================================================ --}}
-    @php
-        // Ya no es necesario mezclar con 'package->addons'.
-        // Todos los addons (incluidos o contratados) están guardados en '$offer->addons'
-        // con sus nombres y precios "congelados" en el pivote.
-        $centralitaServices = $offer->addons
-            ->whereIn('type', ['centralita', 'centralita_feature', 'centralita_extension']);
-    @endphp
+    <h2>Internet y Televisión</h2>
+    <table>
+        <tr>
+            <th>Fibra Principal</th>
+            <td>
+                {{ $baseInternetAddon->pivot->addon_name ?? 'N/A' }}
+                @if($ipFijaPrincipal)
+                    <br><span class="italic text-gray" style="font-size: 9px;">+ Incluye IP Fija Principal</span>
+                @endif
+                @if($fibraOroPrincipal)
+                    <br><span class="italic text-gray" style="font-size: 9px;">+ Incluye Fibra Oro Principal</span>
+                @endif
+            </td>
+        </tr>
 
-    @if($centralitaServices->isNotEmpty())
+        @if($additionalInternetLines->isNotEmpty())
+            <tr>
+                <th>Internet Adicional</th>
+                <td>
+                    <ul>
+                        @foreach($additionalInternetLines as $line)
+                            <li>
+                                <b>{{ $line->pivot->addon_name }}</b>
+                                @if($line->pivot->has_ip_fija)
+                                    <span class="italic text-gray" style="font-size: 9px;">(con IP Fija)</span>
+                                @endif
+                                @if($line->pivot->has_fibra_oro)
+                                    <span class="italic text-gray" style="font-size: 9px;">(con Fibra Oro)</span>
+                                @endif
+                            </li>
+                        @endforeach
+                    </ul>
+                </td>
+            </tr>
+        @endif
+        
+        @if($tvAddons->isNotEmpty())
+            <tr>
+                <th>Televisión</th>
+                <td>
+                    <ul>
+                        @foreach($tvAddons as $tv)
+                            <li>{{ $tv->pivot->addon_name }}</li>
+                        @endforeach
+                    </ul>
+                </td>
+            </tr>
+        @endif
+    </table>
+
+    @if($centralitaBase || $centralitaFeature || $centralitaExtensions->isNotEmpty())
         <h2>Detalle del Servicio de Centralita</h2>
-        <p class="description-text">
-            Solución de centralita virtual para gestionar todas las llamadas de su negocio, integrando sus líneas fijas y móviles.
-        </p>
         <table>
-            <thead>
+            @if($centralitaBase)
                 <tr>
-                    <th>Componente</th>
-                    <th>Detalle</th>
-                    <th class="text-right">Cantidad</th>
+                    <th>Centralita Base</th>
+                    <td>{{ $centralitaBase->pivot->addon_name }}</td>
                 </tr>
-            </thead>
+            @endif
+            @if($centralitaFeature)
+                <tr>
+                    <th>Operadora</th>
+                    <td>{{ $centralitaFeature->pivot->addon_name }}</td>
+                </tr>
+            @endif
+            @if($centralitaExtensions->isNotEmpty())
+                <tr>
+                    <th>Extensiones</th>
+                    <td>
+                        <ul>
+                            @foreach($centralitaExtensions as $ext)
+                                <li>{{ $ext->pivot->addon_name }} (x{{ $ext->pivot->quantity }})</li>
+                            @endforeach
+                        </ul>
+                    </td>
+                </tr>
+            @endif
+        </table>
+    @endif
+
+    @if($digitalSolutions->isNotEmpty())
+        <h2>Soluciones Digitales</h2>
+        <table>
             <tbody>
-                @foreach($centralitaServices as $service)
+                @foreach($digitalSolutions as $solution)
                     <tr>
-                        {{-- Leer datos del addon (type) --}}
-                        <td><b>{{ ucfirst(str_replace('_', ' ', $service->type)) }}</b></td>
-                        
-                        {{-- Leer datos del SNAPSHOT en el PIVOTE --}}
-                        <td>{{ $service->pivot->addon_name }}</td>
-                        <td class="text-right">{{ $service->pivot->quantity }}</td>
+                        <th style="width: 30%;">{{ $solution->pivot->addon_name }}</th>
+                        <td>Servicio digital ({{ number_format($solution->pivot->addon_price, 2, ',', '.') }} €/mes)</td>
                     </tr>
                 @endforeach
             </tbody>
         </table>
     @endif
-    {{-- ================================================================ --}}
-    {{-- FIN CAMBIO: LÓGICA DE CENTRALITA --}}
-    {{-- ================================================================ --}}
+
+    @if($appliedBenefits->isNotEmpty())
+        <h2>Beneficios Aplicados</h2>
+        <table>
+            <tbody>
+                @foreach($appliedBenefits as $benefit)
+                    <tr>
+                        <td style="border: 1px solid #ddd; padding: 8px;">
+                            <span class="font-bold">✓ {{ $benefit->description }}</span>
+                            @if($benefit->addon)
+                                <span class="italic text-gray" style="font-size: 9px;">(Aplica a: {{ $benefit->addon->name }})</span>
+                            @endif
+                        </td>
+                    </tr>
+                @endforeach
+            </tbody>
+        </table>
+    @endif
     
 </body>
 </html>

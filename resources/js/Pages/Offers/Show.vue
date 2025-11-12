@@ -164,6 +164,19 @@ const centralitasMultisede = computed(() => {
 });
 // --- FIN LÓGICA INTERNET/CENTRALITA ---
 
+// --- INICIO: NUEVOS COMPUTEDS PARA SOLUCIONES Y BENEFICIOS ---
+const digitalSolutions = computed(() => {
+    if (!props.offer?.addons) return [];
+    // Filtra por los tipos que se definen como "Soluciones Digitales"
+    return props.offer.addons.filter(a => ['service', 'software'].includes(a.type));
+});
+
+const appliedBenefits = computed(() => {
+    // La relación 'benefits' se carga desde el controlador
+    return props.offer?.benefits || [];
+});
+// --- FIN: NUEVOS COMPUTEDS ---
+
 
 // --- FUNCIONES FORMATO ---
 const formatDate = (dateString) => {
@@ -193,6 +206,8 @@ const openDetails = ref({
     lines: false,
     internetTv: false,
     centralita: false,
+    benefits: false, // <-- AÑADIDO
+    solutions: false, // <-- AÑADIDO
     commissionBreakdown: false,
 });
 
@@ -206,20 +221,20 @@ const openDetails = ref({
              <div class="flex flex-wrap justify-between items-center gap-4">
                  <h2 class="font-semibold text-xl text-gray-800 leading-tight">Detalle de la Oferta #{{ offer.id }}</h2>
                  <div class="space-x-2 flex items-center flex-wrap">
-                      <Link :href="route('offers.index')"><SecondaryButton>Volver</SecondaryButton></Link>
-                      
-                      <Link v-if="offer.status === 'borrador'" :href="route('offers.edit', offer.id)">
-                          <PrimaryButton>Editar</PrimaryButton>
-                      </Link>
-                      
-                      <DangerButton @click="confirmLockOffer" v-if="offer.status === 'borrador'">
-                           Finalizar y Bloquear
-                      </DangerButton>
-                      <PrimaryButton @click="sendOfferByEmail" :disabled="sendEmailForm.processing || !offer.client?.email" :class="{ 'opacity-25': sendEmailForm.processing || !offer.client?.email }" :title="!offer.client?.email ? 'El cliente no tiene email' : 'Enviar email'">
-                          <svg v-if="sendEmailForm.processing" class="animate-spin -ml-1 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A8 8 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                          {{ sendEmailForm.processing ? 'Enviando...' : 'Email' }}
-                      </PrimaryButton>
-                      <a :href="route('offers.pdf', offer.id)" target="_blank" download class="inline-flex items-center px-4 py-2 bg-gray-800 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-gray-700 active:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition ease-in-out duration-150">PDF</a>
+                     <Link :href="route('offers.index')"><SecondaryButton>Volver</SecondaryButton></Link>
+                     
+                     <Link v-if="offer.status === 'borrador'" :href="route('offers.edit', offer.id)">
+                         <PrimaryButton>Editar</PrimaryButton>
+                     </Link>
+                     
+                     <DangerButton @click="confirmLockOffer" v-if="offer.status === 'borrador'">
+                         Finalizar y Bloquear
+                     </DangerButton>
+                     <PrimaryButton @click="sendOfferByEmail" :disabled="sendEmailForm.processing || !offer.client?.email" :class="{ 'opacity-25': sendEmailForm.processing || !offer.client?.email }" :title="!offer.client?.email ? 'El cliente no tiene email' : 'Enviar email'">
+                         <svg v-if="sendEmailForm.processing" class="animate-spin -ml-1 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A8 8 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                         {{ sendEmailForm.processing ? 'Enviando...' : 'Email' }}
+                     </PrimaryButton>
+                     <a :href="route('offers.pdf', offer.id)" target="_blank" download class="inline-flex items-center px-4 py-2 bg-gray-800 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-gray-700 active:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition ease-in-out duration-150">PDF</a>
                  </div>
              </div>
         </template>
@@ -256,7 +271,7 @@ const openDetails = ref({
                                              'bg-green-100 text-green-800': offer.status === 'finalizada',
                                              'bg-gray-100 text-gray-800': !offer.status
                                            }">
-                                          {{ offer.status || 'Borrador' }}
+                                        {{ offer.status || 'Borrador' }}
                                      </span>
                                      </div>
                              </div>
@@ -440,7 +455,44 @@ const openDetails = ref({
                         <section v-if="!centralitaInfo && centralitasMultisede.length === 0" class="bg-white p-6 shadow-sm sm:rounded-lg italic text-gray-500">
                             No se incluyó ninguna centralita en esta oferta.
                         </section>
-                         </div> 
+
+                        <section v-if="digitalSolutions.length > 0" class="bg-white p-6 shadow-sm sm:rounded-lg">
+                            <details class="group" :open="openDetails.solutions" @toggle="openDetails.solutions = $event.target.open">
+                                <summary class="flex justify-between items-center font-medium cursor-pointer list-none">
+                                    <h3 class="text-lg leading-6 text-gray-900">🚀 Soluciones Digitales</h3>
+                                    <span class="transition group-open:rotate-180">
+                                        <svg fill="none" height="20" shape-rendering="geometricPrecision" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" viewBox="0 0 24 24" width="20"><path d="M6 9l6 6 6-6"></path></svg>
+                                    </span>
+                                </summary>
+                                <div class="mt-4 space-y-2 border-t pt-4 text-sm">
+                                    <ul class="list-disc list-inside ml-4 space-y-1">
+                                        <li v-for="solution in digitalSolutions" :key="solution.id">
+                                            {{ solution.pivot.addon_name }} 
+                                            <span class="text-xs text-gray-500">({{ formatCurrency(solution.pivot.addon_price) }}/mes)</span>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </details>
+                        </section>
+                        <section v-if="appliedBenefits.length > 0" class="bg-white p-6 shadow-sm sm:rounded-lg">
+                            <details class="group" :open="openDetails.benefits" @toggle="openDetails.benefits = $event.target.open">
+                                <summary class="flex justify-between items-center font-medium cursor-pointer list-none">
+                                    <h3 class="text-lg leading-6 text-gray-900">🎁 Beneficios Aplicados</h3>
+                                    <span class="transition group-open:rotate-180">
+                                        <svg fill="none" height="20" shape-rendering="geometricPrecision" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" viewBox="0 0 24 24" width="20"><path d="M6 9l6 6 6-6"></path></svg>
+                                    </span>
+                                </summary>
+                                <div class="mt-4 space-y-2 border-t pt-4 text-sm">
+                                    <ul class="list-disc list-inside ml-4 space-y-1">
+                                        <li v-for="benefit in appliedBenefits" :key="benefit.id">
+                                            {{ benefit.description }}
+                                            <span v-if="benefit.addon" class="text-xs text-gray-500">(Aplica a: {{ benefit.addon.name }})</span>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </details>
+                        </section>
+                        </div> 
                     
                     <div class="lg:col-span-1 space-y-8">
                          <div class="sticky top-8 space-y-8"> 
@@ -510,7 +562,7 @@ const openDetails = ref({
                              </section>
 
                          </div> 
-                    </div> 
+                     </div> 
                 </div> 
             </div> 
         </div> 
