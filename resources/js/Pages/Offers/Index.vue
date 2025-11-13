@@ -133,7 +133,7 @@ const canExport = computed(() => {
              </div>
         </template>
 
-        <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 mt-6">
+        <div class="max-auto mx-auto sm:px-6 lg:px-8 mt-6">
             <div v-if="$page.props.flash.success" class="p-4 mb-4 bg-green-100 border border-green-300 text-green-800 rounded-md shadow-sm transition duration-300 ease-in-out">
                 {{ $page.props.flash.success }}
             </div>
@@ -143,7 +143,7 @@ const canExport = computed(() => {
         </div>
 
         <div class="py-12">
-            <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
+            <div class="max-auto mx-auto sm:px-6 lg:px-8">
                 <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
                     <div class="p-6 bg-white border-b border-gray-200 overflow-x-auto">
                         <table class="min-w-full divide-y divide-gray-200 border">
