@@ -469,8 +469,8 @@ export function useOfferCalculations(
         // --- FIN LÓGICA IP FIJA PRINCIPAL ---
         // ===================================================
 
-        // --- INICIO MODIFICACIÓN BENEFICIOS (TV Addons) ---
-        // Itera sobre los addons de TV seleccionados
+
+        // --- INICIO MODIFICACIÓN PRECIOS FÚTBOL ---
         selectedTvAddonIds.value.forEach(addonId => {
             // Busca el addon en la lista completa (props.allAddons)
             const addon = props.allAddons.find(a => a.id === addonId);
@@ -478,7 +478,25 @@ export function useOfferCalculations(
                 // Busca el pivot si está en el paquete (para precio/comisión especial del paquete)
                 const pivot = tvAddonOptions.value.find(a => a.id === addonId)?.pivot;
                 
-                const originalPrice = parseFloat(pivot?.price ?? addon.price) || 0;
+                // 1. Obtenemos el precio por defecto del pivot o del addon base
+                let originalPrice = parseFloat(pivot?.price ?? addon.price) || 0;
+                
+                // 2. Comprobamos si el paquete es "Base Plus"
+                const isPackageBasePlus = selectedPackage.value?.name === 'Base Plus';
+
+                // 3. Si es "Base Plus", aplicamos los precios especiales
+                if (isPackageBasePlus) {
+                    if (addon.name === 'Futbol') {
+                        originalPrice = 38.40; // <-- TU PRECIO ESPECIAL
+                    } else if (addon.name === 'Futbol y más deportes') {
+                        originalPrice = 44.05; // <-- TU PRECIO ESPECIAL
+                    }
+                    // Si es "Base Plus" pero es otro addon (ej. Bares), usará el precio original ya cargado.
+                }
+                // Si no es "Base Plus", usará el precio original ya cargado.
+
+                // --- FIN DE LA MODIFICACIÓN ---
+                
                 const benefit = activeBenefitsMap.value.get(addon.id);
                 const itemPrice = applyBenefit(originalPrice, benefit);
                 const description = benefit ? `${addon.name} (Beneficio)` : `TV: ${addon.name}`;
@@ -492,7 +510,8 @@ export function useOfferCalculations(
                 commissionDetails.Televisión.push({ description: addon.name, amount: commission });
             }
         });
-        // --- FIN MODIFICACIÓN BENEFICIOS ---
+        // --- FIN MODIFICACIÓN PRECIOS FÚTBOL ---
+
 
         if (includedCentralita.value) {
             const commission = parseFloat(includedCentralita.value.pivot.included_line_commission) || 0;

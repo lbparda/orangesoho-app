@@ -229,7 +229,27 @@ const { calculationSummary, ipFijaAddonInfo, fibraOroAddonInfo } = useOfferCalcu
 );
 // --- FIN MODIFICACIÓN BENEFICIOS/SOLUCIONES ---
 // --- FIN: CAMBIO ---
+// --- INICIO: FUNCIÓN PARA PRECIO DINÁMICO DE TV ---
+const getTvAddonPrice = (addon) => {
+    // 1. Obtenemos el precio por defecto del pivot o del addon base
+    let originalPrice = parseFloat(addon.pivot?.price ?? addon.price) || 0;
+    
+    // 2. Comprobamos si el paquete es "Base Plus"
+    // selectedPackage ya está definido arriba (línea 103)
+    const isPackageBasePlus = selectedPackage.value?.name === 'Base Plus';
 
+    // 3. Si es "Base Plus", aplicamos los precios especiales
+    if (isPackageBasePlus) {
+        if (addon.name === 'Futbol') {
+            originalPrice = 38.40;
+        } else if (addon.name === 'Futbol y más deportes') {
+            originalPrice = 44.05;
+        }
+    }
+    
+    return originalPrice;
+};
+// --- FIN: FUNCIÓN PARA PRECIO DINÁMICO DE TV ---
 const modelsByBrand = (brand) => availableTerminals.value.filter(t => t.brand === brand).filter((v, i, a) => a.findIndex(t => t.model === v.model) === i);
 // Buscamos el pivot usando el ID del terminal y la duración
 const findTerminalPivot = (line) => availableTerminals.value.find(t => t.id === line.selected_model_id && t.pivot.duration_months === line.selected_duration)?.pivot;
@@ -550,7 +570,7 @@ watch(isCentralitaActive, (isActive) => {
                                     <div v-for="addon in tvAddonOptions" :key="addon.id" class="flex items-center">
                                         <input :id="`tv_addon_${addon.id}`" :value="addon.id" v-model="selectedTvAddonIds" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
                                         <label :for="`tv_addon_${addon.id}`" class="ml-3 block text-sm text-gray-900">
-                                            {{ addon.name }} <span v-if="parseFloat(addon.pivot.price) > 0" class="text-gray-600">(+{{ parseFloat(addon.pivot.price).toFixed(2) }}€)</span>
+                                            {{ addon.name }} <span v-if="getTvAddonPrice(addon) > 0" class="text-gray-600">(+{{ getTvAddonPrice(addon).toFixed(2) }}€)</span>
                                         </label>
                                     </div>
                                 </div>
