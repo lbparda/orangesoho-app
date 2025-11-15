@@ -693,7 +693,7 @@ export function useOfferCalculations(
                         const monthlyValue = parseFloat(o2o.total_discount_amount) / parseFloat(o2o.duration_months);
                         price -= monthlyValue;
                         appliedO2oList.push({ line: index === 0 ? 'Línea Principal' : `Línea ${index + 1}`, name: o2o.name, value: monthlyValue.toFixed(2) });
-                        summaryBreakdown.push({ description: `Subvención O2O (${o2o.name})`, price: -monthlyValue });
+                        summaryBreakdown.push({ description: ` O2O (${o2o.name})`, price: -monthlyValue });
                         const packageO2oPivot = selectedPackage.value?.o2o_discounts?.find(d => d.id === o2o.id)?.pivot;
                         if (packageO2oPivot && packageO2oPivot.dho_payment) {
                              commissionDetails.Ajustes.push({ description: `Ajuste DHO ${lineName}`, amount: -parseFloat(packageO2oPivot.dho_payment) });

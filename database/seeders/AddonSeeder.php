@@ -133,9 +133,9 @@ class AddonSeeder extends Seeder
             [
                 'type' => 'service', // O 'software', como prefieras
                 'price' => 5.60, // Precio real (el beneficio dará 50% dto.)
-                'commission' => 1.00, // Ajusta la comisión
+                'commission' => 0.00, // Ajusta la comisión
                 'decommission' => 0.00,
-                'description' => 'Producto Microsoft 365 (para beneficio)',
+                'description' => 'Producto Microsoft 365',
                 'created_at' => now(),
                 'updated_at' => now()
             ]
@@ -145,8 +145,8 @@ class AddonSeeder extends Seeder
             [
                 'type' => 'service', // O 'software', como prefieras
                 'price' => 11.70, // Precio real (el beneficio dará 50% dto.)
-                'commission' => 1.00, // Ajusta la comisión
-                'decommission' => 0.00,
+                'commission' => 40.00, // Ajusta la comisión
+                'decommission' => 20.00,
                 'description' => 'Producto Microsoft 365 (para beneficio)',
                 'created_at' => now(),
                 'updated_at' => now()
@@ -158,9 +158,9 @@ class AddonSeeder extends Seeder
             ['name' => 'Presencia Digital'],
             [
                 'type' => 'service',
-                'price' => 20.00, // Precio real (el beneficio dará 50% dto.)
-                'commission' => 5.00, // Ajusta la comisión
-                'decommission' => 0.00,
+                'price' => 10.00, // Precio real (el beneficio dará 50% dto.)
+                'commission' => 40.00, // Ajusta la comisión
+                'decommission' => 20.00,
                 'description' => 'Producto Presencia Digital (para beneficio)',
                 'created_at' => now(),
                 'updated_at' => now()
@@ -172,9 +172,9 @@ class AddonSeeder extends Seeder
             ['name' => 'Factura electrónica'],
             [
                 'type' => 'service',
-                'price' => 5.00, // ¡Placeholder! Ajusta el precio real
-                'commission' => 1.00, // Ajusta la comisión
-                'decommission' => 0.00,
+                'price' => 12.00, // ¡Placeholder! Ajusta el precio real
+                'commission' => 40.00, // Ajusta la comisión
+                'decommission' => 20.00,
                 'description' => 'Producto Factura electrónica (para beneficio)',
                 'created_at' => now(),
                 'updated_at' => now()
@@ -186,9 +186,9 @@ class AddonSeeder extends Seeder
             ['name' => 'Disney+ con +90 canales'],
             [
                 'type' => 'tv',
-                'price' => 8.99, // Precio real
-                'commission' => 2.00, // Ajusta la comisión
-                'decommission' => 0.00,
+                'price' => 4.95, // Precio real
+                'commission' => 10.00, // Ajusta la comisión
+                'decommission' => 5.00,
                 'description' => 'Producto Disney+ (para beneficio)',
                 'created_at' => now(),
                 'updated_at' => now()
@@ -197,12 +197,12 @@ class AddonSeeder extends Seeder
 
         // 6. Amazon Prime
         Addon::updateOrCreate(
-            ['name' => 'Amazon Prime'],
+            ['name' => 'Amazon Prime con +90 canales'],
             [
                 'type' => 'tv', // O 'service'
-                'price' => 4.99, // ¡Placeholder! Ajusta el precio real (PVP Amazon)
-                'commission' => 1.00, // Ajusta la comisión
-                'decommission' => 0.00,
+                'price' => 4.12, // ¡Placeholder! Ajusta el precio real (PVP Amazon)
+                'commission' => 10.00, // Ajusta la comisión
+                'decommission' => 5.00,
                 'description' => 'Producto Amazon Prime (para beneficio)',
                 'created_at' => now(),
                 'updated_at' => now()
