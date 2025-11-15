@@ -13,14 +13,13 @@ class BenefitSeeder extends Seeder
         // --- 1. BUSCAR LOS ADDONS (PRODUCTOS) QUE CREASTE ---
         // (Usamos firstOrFail para detenernos si falta un addon)
         $addon_fibra_oro = Addon::where('name', 'Fibra Oro')->firstOrFail();
-        $addon_ms365basic = Addon::where('name', 'Microsoft 365 Empresa Basica')->firstOrFail();
         $addon_ms365standard = Addon::where('name', 'Microsoft 365 Empresa Standard')->firstOrFail();
         $addon_presencia = Addon::where('name', 'Presencia Digital')->firstOrFail();
         $addon_factura = Addon::where('name', 'Factura electrónica')->firstOrFail();
         // Asumo que "LA Extra" es tu addon "Líneas adicionales móviles"
         $addon_la_extra = Addon::where('name', 'Líneas adicionales móviles')->firstOrFail(); 
         $addon_disney = Addon::where('name', 'Disney+ con +90 canales')->firstOrFail();
-        $addon_amazon = Addon::where('name', 'Amazon Prime')->firstOrFail();
+        $addon_amazon = Addon::where('name', 'Amazon Prime con +90 canales')->firstOrFail();
 
 
         // --- 2. CREAR LAS "REGLAS DE BENEFICIO" ---
@@ -57,7 +56,7 @@ class BenefitSeeder extends Seeder
 
         $b_amazon = Benefit::updateOrCreate(
             ['addon_id' => $addon_amazon->id, 'apply_type' => 'free'], // Asumo que Amazon es Gratis
-            ['description' => 'Amazon Prime', 'category' => 'Hogar', 'apply_type' => 'free']
+            ['description' => 'Amazon Prime con +90 canales', 'category' => 'Hogar', 'apply_type' => 'free']
         );
 
         // --- 3. ASIGNAR BENEFICIOS Y LÍMITES A PAQUETES ---
