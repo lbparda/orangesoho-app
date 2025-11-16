@@ -853,7 +853,7 @@ export function useOfferCalculations(
                     const decommission = parseFloat(addonInfo.decommission) || 0;
                     const commission = baseCommission; // "Ponerla toda"
 
-                    if (benefit && benefit.apply_type === 'free' && decommission > 0) {
+                    if (benefit && benefit.apply_type === 'percentage_discount' && decommission > 0) {
                         commissionDetails.Ajustes.push({ description: `Ajuste Decomisión (${addonInfo.name})`, amount: -decommission });
                     }
                     // --- FIN CORRECCIÓN 10 ---
