@@ -208,7 +208,19 @@ class AddonSeeder extends Seeder
                 'updated_at' => now()
             ]
         );    
-
+        // 6. HBO
+        Addon::updateOrCreate(
+            ['name' => 'HBO MAX con +90 canales'],
+            [
+                'type' => 'tv', // O 'service'
+                'price' => 5.78, // ¡Placeholder! Ajusta el precio real (PVP Amazon)
+                'commission' => 10.00, // Ajusta la comisión
+                'decommission' => 0.00,
+                'description' => 'Producto HBO MAX',
+                'created_at' => now(),
+                'updated_at' => now()
+            ]
+        );    
 
 
     }
