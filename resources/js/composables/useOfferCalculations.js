@@ -315,12 +315,22 @@ export function useOfferCalculations(
                     const benefit = activeBenefitsMap.value.get(addonInfo.id);
                     const linePrice = applyBenefit(originalPrice, benefit);
                     const description = benefit ? `Internet Adicional ${index + 1} (Beneficio)` : `Internet Adicional ${index + 1} (${addonInfo.name})`;
-                    const commission = (benefit && benefit.apply_type === 'free') ? 0 : (parseFloat(addonInfo.commission) || 0);
-                    // --- FIN MODIFICACIÓN BENEFICIOS ---
+                    
+                    // --- INICIO CORRECCIÓN 1: Internet Adicional (Benefit Rule) ---
+                    const baseCommission = parseFloat(addonInfo.commission) || 0;
+                    const decommission = parseFloat(addonInfo.decommission) || 0;
+                    const commission = baseCommission; // "Ponerla toda"
+                    
+                    if (benefit && benefit.apply_type === 'free' && decommission > 0) {
+                        commissionDetails.Ajustes.push({ description: `Ajuste Decomisión (${addonInfo.name})`, amount: -decommission });
+                    }
+                    // --- FIN CORRECCIÓN 1 ---
 
                     price += linePrice;
                     summaryBreakdown.push({ description: description, price: linePrice });
-                    commissionDetails.Fibra.push({ description: `Internet Adicional ${index + 1} (${addonInfo.name})`, amount: commission });
+                    if(commission > 0) {
+                        commissionDetails.Fibra.push({ description: `Internet Adicional ${index + 1} (${addonInfo.name})`, amount: commission });
+                    }
 
                     // --- INICIO LÓGICA MODIFICADA: IP Fija gratis si hay centralita multisede ---
                     if (line.has_ip_fija && ipFijaAddonInfo.value) {
@@ -338,8 +348,15 @@ export function useOfferCalculations(
                                 ? `IP Fija Adicional ${index + 1} (Beneficio)` 
                                 : `IP Fija Adicional ${index + 1}`;
                         
-                        const ipFijaCommission = (benefitIpFija && benefitIpFija.apply_type === 'free') ? 0 : (parseFloat(ipFijaAddonInfo.value.commission) || 0);
-                        // --- FIN MODIFICACIÓN BENEFICIOS ---
+                        // --- INICIO CORRECCIÓN 2: IP Fija Adicional (Benefit Rule) ---
+                        const ipFijaBaseCommission = parseFloat(ipFijaAddonInfo.value.commission) || 0;
+                        const ipFijaDecommission = parseFloat(ipFijaAddonInfo.value.decommission) || 0;
+                        const ipFijaCommission = ipFijaBaseCommission; // "Ponerla toda"
+
+                        if (benefitIpFija && benefitIpFija.apply_type === 'free' && ipFijaDecommission > 0) {
+                            commissionDetails.Ajustes.push({ description: `Ajuste Decomisión (IP Fija Ad. ${index + 1})`, amount: -ipFijaDecommission });
+                        }
+                        // --- FIN CORRECCIÓN 2 ---
 
                         price += ipFijaPrice;
                         summaryBreakdown.push({ description: description, price: ipFijaPrice });
@@ -397,22 +414,32 @@ export function useOfferCalculations(
                         if (centralitaInfo) {
                             // --- INICIO MODIFICACIÓN BENEFICIOS ---
                             const originalPrice = parseFloat(centralitaInfo.pivot.price) || 0;
-                            const benefit = activeBenefitsMap.value.get(centralitaInfo.id);
-                            const itemPrice = applyBenefit(originalPrice, benefit);
-                            const description = benefit ? `Centralita Multisede ${index + 1} (Beneficio)` : `Centralita Multisede ${index + 1} (${centralitaInfo.name})`;
-                            const commission = (benefit && benefit.apply_type === 'free') ? 0 : (parseFloat(centralitaInfo.commission) || 0);
-                            // --- FIN MODIFICACIÓN BENEFICIOS ---
+                            // const benefit = activeBenefitsMap.value.get(centralitaInfo.id); // Centralita no es beneficio
+                            const itemPrice = originalPrice; // applyBenefit(originalPrice, benefit);
+                            const description = `Centralita Multisede ${index + 1} (${centralitaInfo.name})`;
                             
+                            // --- INICIO CORRECCIÓN 3: Centralita Multisede (Centralita Rule) ---
+                            const baseCommission = parseFloat(centralitaInfo.commission) || 0;
                             const decommission = parseFloat(centralitaInfo.decommission) || 0;
-                            const totalAmount = commission + decommission;
+                            const totalAmount = baseCommission; // "Ponerla toda"
+                            
+                            if (decommission > 0) { // Aplicar siempre
+                                commissionDetails.Ajustes.push({ 
+                                    description: `Ajuste Decomisión (${centralitaInfo.name})`, 
+                                    amount: -decommission 
+                                });
+                            }
+                            // --- FIN CORRECCIÓN 3 ---
                             
                             price += itemPrice;
                             summaryBreakdown.push({ description: description, price: itemPrice });
                             
-                            commissionDetails.Centralita.push({ 
-                                description: `Centralita Multisede ${index + 1} (${centralitaInfo.name})`, 
-                                amount: totalAmount 
-                            });
+                            if (totalAmount > 0) {
+                                commissionDetails.Centralita.push({ 
+                                    description: `Centralita Multisede ${index + 1} (${centralitaInfo.name})`, 
+                                    amount: totalAmount 
+                                });
+                            }
 
                             // ... (lógica de extensión auto-incluida para multisede)
                             const centralitaType = centralitaInfo.name.split(' ')[1];
@@ -454,8 +481,15 @@ export function useOfferCalculations(
                     ? 'IP Fija Principal (Beneficio)' 
                     : 'IP Fija Principal';
             
-            const commission = (benefit && benefit.apply_type === 'free') ? 0 : (parseFloat(ipFijaAddonInfo.value.commission) || 0);
-            // --- FIN MODIFICACIÓN BENEFICIOS ---
+            // --- INICIO CORRECCIÓN 4: IP Fija Principal (Benefit Rule) ---
+            const baseCommission = parseFloat(ipFijaAddonInfo.value.commission) || 0;
+            const decommission = parseFloat(ipFijaAddonInfo.value.decommission) || 0;
+            const commission = baseCommission; // "Ponerla toda"
+
+            if (benefit && benefit.apply_type === 'free' && decommission > 0) {
+                commissionDetails.Ajustes.push({ description: `Ajuste Decomisión (IP Fija Pr.)`, amount: -decommission });
+            }
+            // --- FIN CORRECCIÓN 4 ---
 
             price += itemPrice;
             summaryBreakdown.push({ description: description, price: itemPrice });
@@ -501,61 +535,118 @@ export function useOfferCalculations(
                 const itemPrice = applyBenefit(originalPrice, benefit);
                 const description = benefit ? `${addon.name} (Beneficio)` : `TV: ${addon.name}`;
                 
-                const commission = (benefit && benefit.apply_type === 'free') ? 0 : (parseFloat(pivot?.included_line_commission ?? addon.commission) || 0);
+                // --- INICIO CORRECCIÓN 5: Televisión (Benefit Rule) ---
+                const baseCommission = parseFloat(pivot?.included_line_commission ?? addon.commission) || 0;
+                const decommission = parseFloat(addon.decommission) || 0;
+                const commission = baseCommission; // "Ponerla toda"
+
+                if (benefit && benefit.apply_type === 'free' && decommission > 0) {
+                    commissionDetails.Ajustes.push({ 
+                        description: `Ajuste Decomisión (${addon.name})`, 
+                        amount: -decommission 
+                    });
+                }
+                // --- FIN CORRECCIÓN 5 ---
                 
                 price += itemPrice;
                 if (itemPrice > 0 || (benefit && benefit.apply_type === 'free')) { 
                     summaryBreakdown.push({ description: description, price: itemPrice });
                 }
-                commissionDetails.Televisión.push({ description: addon.name, amount: commission });
+                if (commission > 0) {
+                    commissionDetails.Televisión.push({ description: addon.name, amount: commission });
+                }
             }
         });
         // --- FIN MODIFICACIÓN PRECIOS FÚTBOL ---
 
 
         if (includedCentralita.value) {
-            const commission = parseFloat(includedCentralita.value.pivot.included_line_commission) || 0;
+            
+            // --- INICIO CORRECCIÓN 6: Centralita Incluida (Centralita Rule) ---
+            const baseCommission = parseFloat(includedCentralita.value.pivot.included_line_commission) || 0;
             const decommission = parseFloat(includedCentralita.value.pivot.included_line_decommission) || 0; 
-            const totalAmount = commission + decommission;
-            commissionDetails.Centralita.push({ 
-                description: `Centralita Incluida (${includedCentralita.value.name})`, 
-                amount: totalAmount
-            });
+            const totalAmount = baseCommission; // "Ponerla toda"
+            
+            if (decommission > 0) { // Aplicar siempre
+                 commissionDetails.Ajustes.push({ 
+                    description: `Ajuste Decomisión (Cent. Incluida)`, 
+                    amount: -decommission 
+                });
+            }
+            // --- FIN CORRECCIÓN 6 ---
+            
+            if (totalAmount > 0) {
+                commissionDetails.Centralita.push({ 
+                    description: `Centralita Incluida (${includedCentralita.value.name})`, 
+                    amount: totalAmount
+                });
+            }
+
         } else if (selectedCentralitaId.value) {
             const selectedCentralita = centralitaAddonOptions.value.find(c => c.id === selectedCentralitaId.value);
             if (selectedCentralita) {
                 // --- INICIO MODIFICACIÓN BENEFICIOS ---
                 const originalPrice = parseFloat(selectedCentralita.pivot.price) || 0;
-                const benefit = activeBenefitsMap.value.get(selectedCentralita.id);
-                const itemPrice = applyBenefit(originalPrice, benefit);
-                const description = benefit ? `Centralita: ${selectedCentralita.name} (Beneficio)` : `Centralita: ${selectedCentralita.name}`;
-                const commission = (benefit && benefit.apply_type === 'free') ? 0 : (parseFloat(selectedCentralita.commission) || 0);
-                // --- FIN MODIFICACIÓN BENEFICIOS ---
+                // const benefit = activeBenefitsMap.value.get(selectedCentralita.id); // No es beneficio
+                const itemPrice = originalPrice; // applyBenefit(originalPrice, benefit);
+                const description = `Centralita: ${selectedCentralita.name}`;
+                
+                // --- INICIO CORRECCIÓN 7: Centralita Contratada (Centralita Rule) ---
+                const baseCommission = parseFloat(selectedCentralita.commission) || 0;
+                const decommission = parseFloat(selectedCentralita.decommission) || 0;
+                const totalAmount = baseCommission; // "Ponerla toda"
+                
+                if (decommission > 0) { // Aplicar siempre
+                    commissionDetails.Ajustes.push({ 
+                        description: `Ajuste Decomisión (${selectedCentralita.name})`, 
+                        amount: -decommission 
+                    });
+                }
+                // --- FIN CORRECCIÓN 7 ---
 
                 price += itemPrice;
                 summaryBreakdown.push({ description: description, price: itemPrice });
-                const decommission = parseFloat(selectedCentralita.decommission) || 0;
-                const totalAmount = commission+decommission;
-                commissionDetails.Centralita.push({ description: `Centralita Contratada (${selectedCentralita.name})`, amount: totalAmount  });
+                if (totalAmount > 0) {
+                    commissionDetails.Centralita.push({ description: `Centralita Contratada (${selectedCentralita.name})`, amount: totalAmount  });
+                }
             }
         }
 
         if (isCentralitaActive.value && operadoraAutomaticaInfo.value) {
             const commission = parseFloat(operadoraAutomaticaInfo.value.pivot.included_line_commission) || 0;
+            const decommission = parseFloat(operadoraAutomaticaInfo.value.decommission) || 0; // Asumimos que existe
+
             if (operadoraAutomaticaInfo.value.pivot.is_included) {
-                commissionDetails.Centralita.push({ description: 'Operadora Automática (Incluida)', amount: commission });
+                
+                // --- INICIO CORRECCIÓN 8a: Operadora Incluida (Centralita Rule) ---
+                const commissionFinal = commission;
+                if (decommission > 0) { // Aplicar siempre
+                     commissionDetails.Ajustes.push({ description: `Ajuste Decomisión (Op. Automática Incl.)`, amount: -decommission });
+                }
+                if (commissionFinal > 0) {
+                    commissionDetails.Centralita.push({ description: 'Operadora Automática (Incluida)', amount: commissionFinal });
+                }
+                // --- FIN CORRECCIÓN 8a ---
+
             } else if (isOperadoraAutomaticaSelected.value) {
                  // --- INICIO MODIFICACIÓN BENEFICIOS ---
                 const originalPrice = parseFloat(operadoraAutomaticaInfo.value.pivot.price) || 0;
-                const benefit = activeBenefitsMap.value.get(operadoraAutomaticaInfo.value.id);
-                const itemPrice = applyBenefit(originalPrice, benefit);
-                const description = benefit ? 'Operadora Automática (Beneficio)' : 'Operadora Automática';
-                const commissionFinal = (benefit && benefit.apply_type === 'free') ? 0 : commission;
-                // --- FIN MODIFICACIÓN BENEFICIOS ---
+                // const benefit = activeBenefitsMap.value.get(operadoraAutomaticaInfo.value.id); // No es beneficio
+                const itemPrice = originalPrice; // applyBenefit(originalPrice, benefit);
+                const description = 'Operadora Automática';
+                
+                // --- INICIO CORRECCIÓN 8b: Operadora Contratada (Centralita Rule) ---
+                const commissionFinal = commission; // 'commission' es la baseCommission
+                if (decommission > 0) { // Aplicar siempre
+                    commissionDetails.Ajustes.push({ description: `Ajuste Decomisión (Op. Automática)`, amount: -decommission });
+                }
+                // --- FIN CORRECCIÓN 8b ---
 
                 price += itemPrice;
                 summaryBreakdown.push({ description: description, price: itemPrice });
-                commissionDetails.Centralita.push({ description: 'Operadora Automática (Contratada)', amount: commissionFinal });
+                if (commissionFinal > 0) {
+                    commissionDetails.Centralita.push({ description: 'Operadora Automática (Contratada)', amount: commissionFinal });
+                }
             }
         }
         if (isCentralitaActive.value) {
@@ -579,18 +670,26 @@ export function useOfferCalculations(
                     if (addonInfo) {
                         // --- INICIO MODIFICACIÓN BENEFICIOS ---
                         const originalPrice = parseFloat(addonInfo.price) || 0;
-                        const benefit = activeBenefitsMap.value.get(addonInfo.id);
-                        const finalUnitPrice = applyBenefit(originalPrice, benefit);
+                        // const benefit = activeBenefitsMap.value.get(addonInfo.id); // No es beneficio
+                        const finalUnitPrice = originalPrice; // applyBenefit(originalPrice, benefit);
                         const itemPrice = quantity * finalUnitPrice;
-                        const description = benefit 
-                            ? `${quantity}x ${addonInfo.name} (Beneficio)`
-                            : `${quantity}x ${addonInfo.name} (Adicional)`;
-                        const commission = (benefit && benefit.apply_type === 'free') ? 0 : (parseFloat(addonInfo.commission) || 0);
-                        // --- FIN MODIFICACIÓN BENEFICIOS ---
+                        const description = `${quantity}x ${addonInfo.name} (Adicional)`;
+
+                        // --- INICIO CORRECCIÓN 9: Extensiones (Centralita Rule) ---
+                        const baseCommission = parseFloat(addonInfo.commission) || 0;
+                        const decommission = parseFloat(addonInfo.decommission) || 0;
+                        const commission = baseCommission; // "Ponerla toda"
+
+                        if (decommission > 0) { // Aplicar siempre
+                            commissionDetails.Ajustes.push({ description: `Ajuste Decomisión (${quantity}x ${addonInfo.name})`, amount: -(quantity * decommission) });
+                        }
+                        // --- FIN CORRECCIÓN 9 ---
 
                         price += itemPrice;
                         summaryBreakdown.push({ description: description, price: itemPrice });
-                        commissionDetails.Centralita.push({ description: `${quantity}x ${addonInfo.name} (Adicional)`, amount: quantity * commission });
+                        if (commission > 0) {
+                            commissionDetails.Centralita.push({ description: `${quantity}x ${addonInfo.name} (Adicional)`, amount: quantity * commission });
+                        }
                     }
                 }
             }
@@ -748,12 +847,22 @@ export function useOfferCalculations(
                     const description = benefit 
                         ? `${addonInfo.name} (Beneficio)` 
                         : addonInfo.name;
-                    // Comisión 0 si es gratis
-                    const commission = (benefit && benefit.apply_type === 'free') ? 0 : (parseFloat(addonInfo.commission) || 0);
+                    
+                    // --- INICIO CORRECCIÓN 10: Servicios (Benefit Rule) ---
+                    const baseCommission = parseFloat(addonInfo.commission) || 0;
+                    const decommission = parseFloat(addonInfo.decommission) || 0;
+                    const commission = baseCommission; // "Ponerla toda"
+
+                    if (benefit && benefit.apply_type === 'free' && decommission > 0) {
+                        commissionDetails.Ajustes.push({ description: `Ajuste Decomisión (${addonInfo.name})`, amount: -decommission });
+                    }
+                    // --- FIN CORRECCIÓN 10 ---
 
                     price += itemPrice;
                     summaryBreakdown.push({ description: description, price: itemPrice });
-                    commissionDetails.Servicios.push({ description: addonInfo.name, amount: commission });
+                    if(commission > 0) {
+                        commissionDetails.Servicios.push({ description: addonInfo.name, amount: commission });
+                    }
                 }
             });
         }
@@ -795,7 +904,7 @@ export function useOfferCalculations(
             } else { // team_lead o jefe de ventas
                 userCommission = teamCommission;
 
-                // Es 'team_lead', aplicar el porcentaje del equipo al desglose
+                // Es 'team_lead', aplicar el porcentaje del equipo al desgLOSSe
                 const finalMultiplier = teamPercentage;
                 Object.keys(commissionDetails).forEach(category => {
                     commissionDetails[category].forEach(item => {
