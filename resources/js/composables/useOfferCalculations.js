@@ -89,7 +89,7 @@ export function useOfferCalculations(
         return selectedPackage.value.addons.find(a => a.type === 'centralita' && a.pivot.is_included);
     });
     const isCentralitaActive = computed(() => { // Necesario para cálculo Centralita/Extensiones/Operadora/IP Fija
-        return !!includedCentralita.value || !!selectedCentralitaId.value;
+        return !!includedCentralita.value || !!selectedCentralitaId.value || additionalInternetLines.value.some(line => !!line.selected_centralita_id);
     });
     const autoIncludedExtension = computed(() => { // Necesario para cálculo Extensiones
         if (!selectedCentralitaId.value) return null;
@@ -107,7 +107,7 @@ export function useOfferCalculations(
     });
     const operadoraAutomaticaInfo = computed(() => { // Necesario para cálculo Operadora
         if (!selectedPackage.value?.addons) return null;
-        return selectedPackage.value.addons.find(a => a.type === 'centralita_feature');
+        return selectedPackage.value.addons.find(a => a.type === 'centralita_feature' && a.name === 'Operadora Automática');
     });
 
     // --- INICIO CORRECCIÓN DE BUG ---
@@ -137,6 +137,14 @@ export function useOfferCalculations(
         return props.fiberFeatures.find(f => f.name === 'Fibra Oro');
     });
     // --- FIN: AÑADIDO PARA FIBRA ORO ---
+
+    // --- INICIO: AÑADIDO PARA DDI ---
+    const ddiAddonInfo = computed(() => {
+        if (!props.allAddons) return null;
+        return props.allAddons.find(a => a.name === 'DDI' && a.type === 'centralita_feature');
+    });
+    // --- FIN: AÑADIDO PARA DDI ---
+
 
     // --- INICIO MODIFICACIÓN BENEFICIOS ---
     /**
@@ -694,6 +702,49 @@ export function useOfferCalculations(
                 }
             }
         }
+        
+        // --- INICIO: LÓGICA DE DDI (AÑADIDO) ---
+        // Asumimos que form.ddi_quantity está disponible en el formulario
+        const ddiQuantity = form.ddi_quantity || 0; 
+        if (isCentralitaActive.value && ddiQuantity > 0 && ddiAddonInfo.value) {
+            
+            // Regla: Gratis para 'Negocio 10' y 'Negocio 20'. 1€ por unidad para el resto.
+            const isFreePackage = ['Negocio 10', 'Negocio 20'].includes(selectedPackage.value.name);
+            
+            let itemPrice = 0;
+            let commissionAmount = 0;
+            let description = '';
+
+            // Utilizamos los valores del Addon de referencia para la comisión
+            const baseCommission = parseFloat(ddiAddonInfo.value.commission) || 0;
+            
+            if (isFreePackage) {
+                // Para Negocio 10/20, DDI es gratuito (0€)
+                itemPrice = 0; 
+                description = `${ddiQuantity}x DDI (Gratuito por Paquete)`;
+                commissionAmount = baseCommission; 
+            } else {
+                // Para el resto, 1€ por DDI
+                const ddiUnitPrice = 1.00;
+                itemPrice = ddiQuantity * ddiUnitPrice;
+                description = `${ddiQuantity}x DDI Adicional`;
+                commissionAmount = baseCommission;
+            }
+
+            price += itemPrice;
+            // Se muestra en el resumen si tiene coste o si es gratuito por el paquete
+            if (itemPrice > 0 || isFreePackage) { 
+                summaryBreakdown.push({ description: description, price: itemPrice });
+            }
+            
+            if (commissionAmount > 0) {
+                 // Multiplicar la comisión base por la cantidad
+                 const totalCommission = ddiQuantity * commissionAmount;
+                 commissionDetails.Centralita.push({ description: `${ddiQuantity}x DDI`, amount: totalCommission });
+            }
+        }
+        // --- FIN: LÓGICA DE DDI (AÑADIDO) ---
+
 
         const appliedO2oList = [];
         let totalTerminalFee = 0;
@@ -943,12 +994,13 @@ export function useOfferCalculations(
         };
     });
 
-    // --- INICIO: AÑADIDO (Línea 541) ---
+    // --- INICIO: EXPORTAR INFOS ADICIONALES ---
     return {
         calculationSummary,
         // Exponemos la info para el v-if del formulario
-        ipFijaAddonInfo, // Ya estaba
+        ipFijaAddonInfo, 
         fibraOroAddonInfo, 
+        ddiAddonInfo, // <--- EXPORTADO
     };
-    // --- FIN: AÑADIDO ---
+    // --- FIN: EXPORTAR INFOS ADICIONALES ---
 }

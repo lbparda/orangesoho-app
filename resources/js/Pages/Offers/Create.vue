@@ -70,6 +70,9 @@ const form = useForm({
     probability: null,
     signing_date: '',
     processing_date: '',
+    // --- INICIO: AÑADIDO DDI ---
+    ddi_quantity: 0, // <--- NUEVA LÍNEA
+    // --- FIN: AÑADIDO DDI ---
     // --- INICIO MODIFICACIÓN BENEFICIOS ---
     applied_benefit_ids: [], // <-- ¡NUEVO! Para enviar al backend
     // --- FIN MODIFICACIÓN BENEFICIOS ---
@@ -124,7 +127,7 @@ const mobileAddonInfo = computed(() => selectedPackage.value?.addons.find(a => a
 const internetAddonOptions = computed(() => selectedPackage.value?.addons.filter(a => a.type === 'internet') || []);
 const centralitaAddonOptions = computed(() => selectedPackage.value?.addons.filter(a => a.type === 'centralita' && !a.pivot.is_included) || []);
 const includedCentralita = computed(() => selectedPackage.value?.addons.find(a => a.type === 'centralita' && a.pivot.is_included));
-const isCentralitaActive = computed(() => !!includedCentralita.value || !!selectedCentralitaId.value);
+const isCentralitaActive = computed(() => !!includedCentralita.value || !!selectedCentralitaId.value || additionalInternetLines.value.some(line => !!line.selected_centralita_id));
 const autoIncludedExtension = computed(() => {
     if (!selectedCentralitaId.value) return null;
     const selected = centralitaAddonOptions.value.find(c => c.id === selectedCentralitaId.value);
@@ -133,7 +136,7 @@ const autoIncludedExtension = computed(() => {
     return props.centralitaExtensions.find(ext => ext.name.includes(type));
 });
 const includedCentralitaExtensions = computed(() => isCentralitaActive.value ? selectedPackage.value?.addons.filter(a => a.type === 'centralita_extension' && a.pivot.is_included) : []);
-const operadoraAutomaticaInfo = computed(() => selectedPackage.value?.addons.find(a => a.type === 'centralita_feature'));
+const operadoraAutomaticaInfo = computed(() => selectedPackage.value?.addons.find(a => a.type === 'centralita_feature' && a.name === 'Operadora Automática'));
 const canAddLine = computed(() => !!selectedPackage.value);
 const availableTerminals = computed(() => selectedPackage.value?.terminals || []);
 const availableO2oDiscounts = computed(() => selectedPackage.value?.o2o_discounts || []);
@@ -142,11 +145,11 @@ const availableAdditionalExtensions = computed(() => props.centralitaExtensions)
 const digitalSolutionAddons = computed(() => {
     if (!props.allAddons) return [];
     // Filtramos por el 'type' que definiste en tu AddonSeeder
-    return props.allAddons.filter(a => a.type === 'service');
+    return props.allAddons.filter(a => a.type === 'service' || a.type === 'software');
 });
 
-// --- INICIO: MODIFICACIÓN (Añadir selectedDigitalAddonIds) ---
-const { calculationSummary, ipFijaAddonInfo, fibraOroAddonInfo } = useOfferCalculations(
+// --- INICIO: MODIFICACIÓN (Añadir ddiAddonInfo) ---
+const { calculationSummary, ipFijaAddonInfo, fibraOroAddonInfo, ddiAddonInfo } = useOfferCalculations(
     props,
     selectedPackageId,
     lines,
@@ -156,11 +159,12 @@ const { calculationSummary, ipFijaAddonInfo, fibraOroAddonInfo } = useOfferCalcu
     centralitaExtensionQuantities,
     isOperadoraAutomaticaSelected,
     selectedTvAddonIds,
-    selectedDigitalAddonIds, // <-- AÑADIDO
+    selectedDigitalAddonIds,
     form,
     selectedBenefits
 );
 // --- FIN: MODIFICACIÓN ---
+
 // --- INICIO: FUNCIÓN PARA PRECIO DINÁMICO DE TV ---
 const getTvAddonPrice = (addon) => {
     // 1. Obtenemos el precio por defecto del pivot o del addon base
@@ -243,7 +247,7 @@ const copyPreviousLine = (line, index) => {
     if (index <= 0 || !lines.value[index - 1]) return;
     const prev = lines.value[index - 1];
     line.is_portability = prev.is_portability;
-  line.source_operator = prev.source_operator;
+    line.source_operator = prev.source_operator;
     line.has_vap = prev.has_vap;
     line.o2o_discount_id = prev.o2o_discount_id;
     line.selected_brand = prev.selected_brand;
@@ -261,7 +265,7 @@ const addWatchersToAdditionalLine = (line) => {
             line.has_ip_fija = true;
         } else { // Si se quita la centralita, desmarcar IP Fija
             // No lo desmarcamos automáticamente, puede que la quieran sin centralita
-             line.has_ip_fija = false;
+            line.has_ip_fija = false;
         }
     });
 };
@@ -347,6 +351,8 @@ const saveOffer = () => {
         // --- INICIO: MODIFICACIÓN (Añadir digital_addons) ---
         form.digital_addons = selectedDigitalAddonIds.value; // <-- AÑADIDO
         // --- FIN: MODIFICACIÓN ---
+        
+        // El ddi_quantity ya está en el form
 
         form.summary = calculationSummary.value;
 
@@ -367,6 +373,7 @@ watch(selectedPackageId, (newPackageId) => {
     centralitaExtensionQuantities.value = {}; isOperadoraAutomaticaSelected.value = false; selectedTvAddonIds.value = [];
     //form.is_ip_fija_selected = false; // Resetea IP fija al cambiar paquete
     form.is_fibra_oro_selected = false; // <-- AÑADIDO (Línea 261)
+    form.ddi_quantity = 0; // <--- AÑADIDO: Resetea DDI
     
     // --- INICIO MODIFICACIÓN BENEFICIOS ---
     selectedBenefitIds.value = []; // <-- ¡NUEVO! Resetea la selección
@@ -412,7 +419,7 @@ watch(isCentralitaActive, (isActive) => {
 }, { immediate: true }); // immediate: true para que se ejecute al cargar si ya hay centralita
 // --- FIN CÓDIGO AÑADIDO ---
 
-</script>  
+</script>  
 <template>
     <Head title="Crear Oferta" />
     <AuthenticatedLayout>
@@ -562,6 +569,29 @@ watch(isCentralitaActive, (isActive) => {
                                             <label for="operadora_automatica_cb" class="ml-2 block text-sm text-gray-900">Añadir Op. Automática (+{{ parseFloat(operadoraAutomaticaInfo.pivot.price).toFixed(2) }}€)</label>
                                         </div>
                                     </div>
+                                    
+                                    <!-- INICIO: CAMPO DDI -->
+                                    <div v-if="ddiAddonInfo" class="pt-2 border-t border-dashed">
+                                        <div class="flex items-center justify-between mt-2">
+                                            <label for="ddi_quantity" class="text-sm text-gray-800">
+                                                DDI (Marcación Directa) 
+                                                <span class="text-xs text-gray-500" v-if="selectedPackage && !['Negocio 10', 'Negocio 20'].includes(selectedPackage.name)">(+1.00€/u)</span>
+                                                <span class="text-xs text-green-600 font-semibold" v-else-if="selectedPackage">(Gratis)</span>
+                                                <span class="text-xs text-gray-500" v-else>(Precio variable)</span>
+                                            </label>
+                                            <input 
+                                                id="ddi_quantity"
+                                                type="number" 
+                                                min="0" 
+                                                v-model.number="form.ddi_quantity" 
+                                                class="w-20 rounded-md border-gray-300 shadow-sm text-center focus:border-indigo-500 focus:ring-indigo-500" 
+                                                placeholder="0"
+                                            >
+                                        </div>
+                                        <InputError class="mt-2" :message="form.errors.ddi_quantity" />
+                                    </div>
+                                    <!-- FIN: CAMPO DDI -->
+
                                     <div class="pt-2">
                                         <div v-if="includedCentralitaExtensions.length > 0" class="mb-4 space-y-2">
                                             <p class="text-sm font-medium text-gray-700">Ext. Incluidas:</p>

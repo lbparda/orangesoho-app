@@ -142,6 +142,10 @@ class OfferController extends Controller
             'probability' => 'nullable|integer|in:0,25,50,75,90,100',
             'signing_date' => 'nullable|date',
             'processing_date' => 'nullable|date',
+            
+            // --- INICIO: AÑADIR VALIDACIÓN DDI ---
+            'ddi_quantity' => 'nullable|integer|min:0', // <--- NUEVA LÍNEA
+            // --- FIN: AÑADIR VALIDACIÓN DDI ---
 
             // --- INICIO MODIFICACIÓN BENEFICIOS ---
             'applied_benefit_ids' => 'nullable|array', // Valida que sea un array
@@ -357,6 +361,21 @@ class OfferController extends Controller
                 }
                 // --- FIN: AÑADIR LÓGICA DE GUARDADO ---
                 
+                // --- INICIO: AÑADIR LÓGICA DDI ---
+                if (!empty($validated['ddi_quantity']) && $validated['ddi_quantity'] > 0) {
+                    // Se busca el addon DDI por nombre y tipo (asumiendo que es un feature de centralita)
+                    $ddiAddon = Addon::where('name', 'DDI')->where('type', 'centralita_feature')->first();
+                    if ($ddiAddon) {
+                        $offer->addons()->attach($ddiAddon->id, [
+                            'quantity' => $validated['ddi_quantity'],
+                            'addon_name' => $ddiAddon->name,
+                            'addon_price' => $ddiAddon->price, 
+                            'addon_commission' => $ddiAddon->commission,
+                        ]);
+                    }
+                }
+                // --- FIN: AÑADIR LÓGICA DDI ---
+                
                 // --- FIN LÓGICA DE ADDONS ---
             });
 
@@ -367,7 +386,7 @@ class OfferController extends Controller
              return back()->withInput()->with('error', 'Error al guardar la oferta. Revisa los datos e inténtalo de nuevo.');
         }
     }
- public function edit(Offer $offer)
+public function edit(Offer $offer)
     {
         if ($offer->status === 'finalizada' && Auth::user()->role !== 'admin') { 
             return redirect()->route('offers.show', $offer)->with('warning', 'Esta oferta está finalizada y no se puede editar.');
@@ -480,6 +499,13 @@ class OfferController extends Controller
         $initialBenefitIds = $offer->benefits->pluck('id')->toArray();
         // ***** FIN DE LA CORRECCIÓN *****
             
+        // --- INICIO: CARGAR DDI ---
+        $ddiAddonPivot = $offer->addons()
+            ->where('addon_name', 'DDI')
+            ->first();
+        $initialDdiQuantity = $ddiAddonPivot ? $ddiAddonPivot->pivot->quantity : 0; // <--- NUEVAS LÍNEAS
+        // --- FIN: CARGAR DDI ---
+            
         // --- FIN: PREPARAR DATOS VUE ---
 
 
@@ -510,6 +536,10 @@ class OfferController extends Controller
             // ***** INICIO DE LA CORRECCIÓN (Pasar la prop) *****
             'initialSelectedBenefitIds' => $initialBenefitIds, // <-- ¡NUEVA PROP AÑADIDA!
             // ***** FIN DE LA CORRECCIÓN *****
+            
+            // --- INICIO: AÑADIR PROP DDI ---
+            'initialDdiQuantity' => $initialDdiQuantity, // <--- NUEVA LÍNEA
+            // --- FIN: AÑADIR PROP DDI ---
         ]);
     }
    public function update(Request $request, Offer $offer)
@@ -569,6 +599,10 @@ class OfferController extends Controller
              'probability' => 'nullable|integer|in:0,25,50,75,90,100',
              'signing_date' => 'nullable|date',
              'processing_date' => 'nullable|date',
+             
+             // --- INICIO: AÑADIR VALIDACIÓN DDI ---
+             'ddi_quantity' => 'nullable|integer|min:0', // <--- NUEVA LÍNEA
+             // --- FIN: AÑADIR VALIDACIÓN DDI ---
 
             // --- INICIO MODIFICACIÓN BENEFICIOS ---
             'applied_benefit_ids' => 'nullable|array',
@@ -787,6 +821,21 @@ class OfferController extends Controller
                     }
                 }
                 // --- FIN: AÑADIR LÓGICA DE GUARDADO ---
+                
+                // --- INICIO: AÑADIR LÓGICA DDI ---
+                if (!empty($validated['ddi_quantity']) && $validated['ddi_quantity'] > 0) {
+                    // Se busca el addon DDI por nombre y tipo (asumiendo que es un feature de centralita)
+                    $ddiAddon = Addon::where('name', 'DDI')->where('type', 'centralita_feature')->first();
+                    if ($ddiAddon) {
+                        $offer->addons()->attach($ddiAddon->id, [
+                            'quantity' => $validated['ddi_quantity'],
+                            'addon_name' => $ddiAddon->name,
+                            'addon_price' => $ddiAddon->price, 
+                            'addon_commission' => $ddiAddon->commission,
+                        ]);
+                    }
+                }
+                // --- FIN: AÑADIR LÓGICA DDI ---
                 
                 // --- FIN LÓGICA DE ADDONS ---
 

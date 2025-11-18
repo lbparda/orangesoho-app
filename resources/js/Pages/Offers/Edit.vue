@@ -28,8 +28,11 @@ const props = defineProps({
     portabilityExceptions: Array,
     fiberFeatures: Array,
     initialAdditionalInternetLines: Array, // <-- ¡AÑADIDO!
-    initialMainIpFijaSelected: Boolean,  // <-- ¡AÑADIDO!
+    initialMainIpFijaSelected: Boolean,  // <-- ¡AÑADIDO!
     initialMainFibraOroSelected: Boolean, // <-- AÑADIDO PARA FIBRA ORO (Línea 31)
+    // --- INICIO: AÑADIDO DDI ---
+    initialDdiQuantity: { type: Number, default: 0 }, // <--- NUEVA LÍNEA
+    // --- FIN: AÑADIDO DDI ---
 });
 
 const selectedClient = ref(null);
@@ -49,7 +52,7 @@ const formatDateForInput = (dateString) => {
 };
 
 // --- Funciones auxiliares para inicializar el estado del form ---
-const getAddonId = (type) => props.offer.addons.find(a => a.type === type)?.id;
+const getAddonId = (type) => props.offer.addons.find(a => a.type === type && a.pivot.selected_centralita_id === null)?.id;
 const getAddons = (type) => props.offer.addons.filter(a => a.type === type);
 // hasAddon ya no se usa para la IP Fija principal
 
@@ -70,6 +73,9 @@ const form = useForm({
     // Usar la prop del controlador
     is_ip_fija_selected: props.initialMainIpFijaSelected, // <-- ¡CORREGIDO!
     is_fibra_oro_selected: props.initialMainFibraOroSelected, // <-- AÑADIDO (Línea 60)
+    // --- INICIO: AÑADIDO DDI ---
+    ddi_quantity: props.initialDdiQuantity, // <--- NUEVA LÍNEA
+    // --- FIN: AÑADIDO DDI ---
     summary: {}, // Se recalcula
     probability: props.offer.probability,
     signing_date: formatDateForInput(props.offer.signing_date),
@@ -135,9 +141,9 @@ const selectedBenefitIds = ref(props.initialSelectedBenefitIds || []);
 // --- FIN MODIFICACIÓN BENEFICIOS/SOLUCIONES ---
 // --- FIN MODIFICACIÓN ---
 
-const isOperadoraAutomaticaSelected = ref(!!getAddonId('centralita_feature'));
+const isOperadoraAutomaticaSelected = ref(!!getAddons('centralita_feature').find(a => a.name === 'Operadora Automática'));
 // Modificado para ignorar las centralitas multisede
-const initialOptionalCentralita = props.offer.addons.find(a => a.type === 'centralita' && !a.pivot.selected_centralita_id);
+const initialOptionalCentralita = props.offer.addons.find(a => a.type === 'centralita' && a.pivot.selected_centralita_id === null);
 const selectedCentralitaId = ref(initialOptionalCentralita?.id || null);
 const showCommissionDetails = ref(false);
 
@@ -173,8 +179,8 @@ const mobileAddonInfo = computed(() => selectedPackage.value?.addons.find(a => a
 const internetAddonOptions = computed(() => selectedPackage.value?.addons.filter(a => a.type === 'internet') || []);
 const tvAddonOptions = computed(() => selectedPackage.value?.addons.filter(a => a.type === 'tv') || []);
 const centralitaAddonOptions = computed(() => selectedPackage.value?.addons.filter(a => a.type === 'centralita' && !a.pivot.is_included) || []);
-const includedCentralita = computed(() => selectedPackage.value?.addons.find(a => a.type === 'centralita' && a.pivot.is_included));
-const isCentralitaActive = computed(() => !!includedCentralita.value || !!selectedCentralitaId.value); // <-- Clave para la lógica
+const includedCentralita = computed(() => props.offer.addons.find(a => a.type === 'centralita' && a.pivot.selected_centralita_id === null && a.pivot.quantity > 0));
+const isCentralitaActive = computed(() => !!includedCentralita.value || !!selectedCentralitaId.value || additionalInternetLines.value.some(line => !!line.selected_centralita_id)); // <-- Clave para la lógica
 const autoIncludedExtension = computed(() => {
     if (!selectedCentralitaId.value) return null;
     const selected = centralitaAddonOptions.value.find(c => c.id === selectedCentralitaId.value);
@@ -211,9 +217,9 @@ const centralitaExtensionQuantities = ref(initialExtensionQuantities);
 
 // --- INICIO: CAMBIO (Línea 147) ---
 // Pasamos el objeto 'form' completo al composable
-// AÑADIMOS: ipFijaAddonInfo y fibraOroAddonInfo
+// AÑADIMOS: ddiAddonInfo, ipFijaAddonInfo y fibraOroAddonInfo
 // --- INICIO MODIFICACIÓN BENEFICIOS/SOLUCIONES ---
-const { calculationSummary, ipFijaAddonInfo, fibraOroAddonInfo } = useOfferCalculations(
+const { calculationSummary, ipFijaAddonInfo, fibraOroAddonInfo, ddiAddonInfo } = useOfferCalculations( // <--- AÑADIDO ddiAddonInfo
     props, 
     selectedPackageId, 
     lines, 
@@ -344,7 +350,7 @@ const addWatchersToAdditionalLine = (line) => {
             line.has_ip_fija = true;
         } else { // Si se quita la centralita, desmarcar IP Fija
             // No desmarcamos automáticamente
-              line.has_ip_fija = false;
+             line.has_ip_fija = false;
         }
     });
 };
@@ -413,6 +419,8 @@ const saveOffer = () => {
         form.applied_benefit_ids = selectedBenefitIds.value;
         // --- FIN MODIFICACIÓN BENEFICIOS/SOLUCIONES ---
         
+        // El ddi_quantity ya está en el form
+
         form.summary = calculationSummary.value;
 
         form.put(route('offers.update', props.offer.id), { onSuccess: () => alert('¡Oferta actualizada!'), onError: (e) => { console.error(e); alert('Error al actualizar.'); } });
@@ -460,11 +468,11 @@ watch(isCentralitaActive, (isActive) => {
     <AuthenticatedLayout>
         <template #header>
             <div class="flex justify-between items-center">
-                 <h2 class="font-semibold text-xl text-gray-800 leading-tight">Editar Oferta #{{ offer.id }}</h2>
-                 <Link :href="route('offers.index')">
-                     <SecondaryButton>Volver a la Lista</SecondaryButton>
-                 </Link>
-             </div>
+                   <h2 class="font-semibold text-xl text-gray-800 leading-tight">Editar Oferta #{{ offer.id }}</h2>
+                   <Link :href="route('offers.index')">
+                       <SecondaryButton>Volver a la Lista</SecondaryButton>
+                   </Link>
+            </div>
         </template>
 
         <div class="flex flex-col md:flex-row">
@@ -473,37 +481,37 @@ watch(isCentralitaActive, (isActive) => {
                 <div class="space-y-8">
 
                     <div class="bg-white shadow-sm sm:rounded-lg p-8">
-                            <div class="mb-8">
-                                <label class="block text-sm font-medium text-gray-700 mb-2">Cliente</label>
+                                <div class="mb-8">
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Cliente</label>
 
-                                <div v-if="!isReassigningClient && selectedClient">
-                                    <div class="p-4 border rounded-md bg-gray-50 shadow-sm">
-                                        <div class="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1 text-sm">
-                                            <p><strong>Nombre:</strong> {{ selectedClient.name }}</p>
-                                            <p><strong>CIF/NIF:</strong> {{ selectedClient.cif_nif }}</p>
-                                            <p><strong>Email:</strong> {{ selectedClient.email || 'No disponible' }}</p>
-                                            <p><strong>Teléfono:</strong> {{ selectedClient.phone || 'No disponible' }}</p>
-                                            <p class="col-span-2"><strong>Dirección:</strong> {{ selectedClient.address || 'No disponible' }}</p>
+                                    <div v-if="!isReassigningClient && selectedClient">
+                                        <div class="p-4 border rounded-md bg-gray-50 shadow-sm">
+                                            <div class="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1 text-sm">
+                                                <p><strong>Nombre:</strong> {{ selectedClient.name }}</p>
+                                                <p><strong>CIF/NIF:</strong> {{ selectedClient.cif_nif }}</p>
+                                                <p><strong>Email:</strong> {{ selectedClient.email || 'No disponible' }}</p>
+                                                <p><strong>Teléfono:</strong> {{ selectedClient.phone || 'No disponible' }}</p>
+                                                <p class="col-span-2"><strong>Dirección:</strong> {{ selectedClient.address || 'No disponible' }}</p>
+                                            </div>
+                                        </div>
+                                        <div class="mt-4">
+                                            <SecondaryButton type="button" @click="showReassignSelector">
+                                                Reasignar Cliente
+                                            </SecondaryButton>
                                         </div>
                                     </div>
-                                    <div class="mt-4">
-                                        <SecondaryButton type="button" @click="showReassignSelector">
-                                            Reasignar Cliente
-                                        </SecondaryButton>
+
+                                    <div v-else>
+                                        <select v-model="form.client_id" id="client" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                            <option v-for="client in clients" :key="client.id" :value="client.id">{{ client.name }} ({{ client.cif_nif }})</option>
+                                        </select>
+                                        <InputError class="mt-2" :message="form.errors.client_id" />
                                     </div>
                                 </div>
-
-                                <div v-else>
-                                    <select v-model="form.client_id" id="client" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
-                                        <option v-for="client in clients" :key="client.id" :value="client.id">{{ client.name }} ({{ client.cif_nif }})</option>
-                                    </select>
-                                    <InputError class="mt-2" :message="form.errors.client_id" />
+                                <div>
+                                    <label for="package" class="block text-sm font-medium text-gray-700 mb-2">Paquete Base</label>
+                                    <input type="text" :value="selectedPackage?.name" id="package" disabled class="mt-1 block w-full rounded-md border-gray-300 shadow-sm bg-gray-100 cursor-not-allowed">
                                 </div>
-                            </div>
-                            <div>
-                                <label for="package" class="block text-sm font-medium text-gray-700 mb-2">Paquete Base</label>
-                                <input type="text" :value="selectedPackage?.name" id="package" disabled class="mt-1 block w-full rounded-md border-gray-300 shadow-sm bg-gray-100 cursor-not-allowed">
-                            </div>
                     </div>
 
                     <div v-if="selectedPackage" class="bg-white shadow-sm sm:rounded-lg p-8 space-y-6">
@@ -530,37 +538,37 @@ watch(isCentralitaActive, (isActive) => {
                         </section>
 
                        <div v-if="internetAddonOptions.length > 0 || (props.fiberFeatures && props.fiberFeatures.length > 0)" class="p-6 bg-slate-50 rounded-lg">
-                           <label class="block text-sm font-medium text-gray-700 mb-2">Fibra Principal</label>
-                           <div v-if="internetAddonOptions.length > 0" class="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-4 mt-1">
-                               <label v-for="addon in internetAddonOptions" :key="addon.id"
-                                   :class="['flex-1 text-center px-4 py-3 rounded-md border cursor-pointer transition', { 'bg-indigo-600 text-white border-indigo-600 shadow-lg': selectedInternetAddonId === addon.id, 'bg-white border-gray-300 hover:bg-gray-50': selectedInternetAddonId !== addon.id }]">
-                                   <input type="radio" :value="addon.id" v-model="selectedInternetAddonId" class="sr-only">
-                                   <span class="block font-semibold">{{ addon.name }}</span>
-                                   <span class="block text-xs mt-1" v-if="parseFloat(addon.pivot.price) > 0">+{{ parseFloat(addon.pivot.price).toFixed(2) }}€/mes</span>
-                               </label>
-                           </div>
-                           
-                           <div class="mt-4 flex flex-wrap gap-x-6 gap-y-2">
-                               <div v-if="ipFijaAddonInfo"> <label class="flex items-center">
-                                       <Checkbox v-model:checked="form.is_ip_fija_selected" />
-                                       <span class="ml-2 text-sm text-gray-600">
-                                           Añadir IP Fija ({{ ipFijaAddonInfo.price }}€)
-                                       </span>
-                                   </label>
-                                   <p class="text-xs text-gray-500 ml-6">
-                                       Gratis si se incluye Centralita.
-                                   </p>
-                               </div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Fibra Principal</label>
+                            <div v-if="internetAddonOptions.length > 0" class="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-4 mt-1">
+                                <label v-for="addon in internetAddonOptions" :key="addon.id"
+                                    :class="['flex-1 text-center px-4 py-3 rounded-md border cursor-pointer transition', { 'bg-indigo-600 text-white border-indigo-600 shadow-lg': selectedInternetAddonId === addon.id, 'bg-white border-gray-300 hover:bg-gray-50': selectedInternetAddonId !== addon.id }]">
+                                    <input type="radio" :value="addon.id" v-model="selectedInternetAddonId" class="sr-only">
+                                    <span class="block font-semibold">{{ addon.name }}</span>
+                                    <span class="block text-xs mt-1" v-if="parseFloat(addon.pivot.price) > 0">+{{ parseFloat(addon.pivot.price).toFixed(2) }}€/mes</span>
+                                </label>
+                            </div>
+                            
+                            <div class="mt-4 flex flex-wrap gap-x-6 gap-y-2">
+                                <div v-if="ipFijaAddonInfo"> <label class="flex items-center">
+                                            <Checkbox v-model:checked="form.is_ip_fija_selected" />
+                                            <span class="ml-2 text-sm text-gray-600">
+                                                Añadir IP Fija ({{ ipFijaAddonInfo.price }}€)
+                                            </span>
+                                        </label>
+                                        <p class="text-xs text-gray-500 ml-6">
+                                            Gratis si se incluye Centralita.
+                                        </p>
+                                </div>
 
-                               <div v-if="fibraOroAddonInfo"> <label class="flex items-center">
-                                       <Checkbox v-model:checked="form.is_fibra_oro_selected" />
-                                       <span class="ml-2 text-sm text-gray-600">
-                                           Añadir Fibra Oro ({{ fibraOroAddonInfo.price }}€)
-                                       </span>
-                                   </label>
-                               </div>
-                               </div>
-                           </div>
+                                <div v-if="fibraOroAddonInfo"> <label class="flex items-center">
+                                            <Checkbox v-model:checked="form.is_fibra_oro_selected" />
+                                            <span class="ml-2 text-sm text-gray-600">
+                                                Añadir Fibra Oro ({{ fibraOroAddonInfo.price }}€)
+                                            </span>
+                                        </label>
+                                </div>
+                            </div>
+                        </div>
 
 
                         <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -596,6 +604,29 @@ watch(isCentralitaActive, (isActive) => {
                                             <label for="operadora_automatica_cb" class="ml-2 block text-sm text-gray-900">Añadir Op. Automática (+{{ parseFloat(operadoraAutomaticaInfo.pivot.price).toFixed(2) }}€)</label>
                                         </div>
                                     </div>
+
+                                    <!-- INICIO: CAMPO DDI -->
+                                    <div v-if="ddiAddonInfo" class="pt-2 border-t border-dashed">
+                                        <div class="flex items-center justify-between mt-2">
+                                            <label for="ddi_quantity" class="text-sm text-gray-800">
+                                                DDI (Marcación Directa)
+                                                <span class="text-xs text-gray-500" v-if="selectedPackage && !['Negocio 10', 'Negocio 20'].includes(selectedPackage.name)">(+1.00€/u)</span>
+                                                <span class="text-xs text-green-600 font-semibold" v-else-if="selectedPackage">(Gratis)</span>
+                                                <span class="text-xs text-gray-500" v-else>(Precio variable)</span>
+                                            </label>
+                                            <input 
+                                                id="ddi_quantity"
+                                                type="number" 
+                                                min="0" 
+                                                v-model.number="form.ddi_quantity" 
+                                                class="w-20 rounded-md border-gray-300 shadow-sm text-center focus:border-indigo-500 focus:ring-indigo-500" 
+                                                placeholder="0"
+                                            >
+                                        </div>
+                                        <InputError class="mt-2" :message="form.errors.ddi_quantity" />
+                                    </div>
+                                    <!-- FIN: CAMPO DDI -->
+
                                     <div class="pt-2">
                                         <div v-if="includedCentralitaExtensions.length > 0" class="mb-4 space-y-2">
                                             <p class="text-sm font-medium text-gray-700">Ext. Incluidas:</p>
@@ -629,13 +660,13 @@ watch(isCentralitaActive, (isActive) => {
                                     </div>
 
                                     <div v-if="line.addon_id && centralitaAddonOptions.length > 0">
-                                         <label :for="`multi_centralita_${line.id}`" class="block text-xs font-medium text-gray-500">Centralita Multisede</label>
-                                         <select v-model="line.selected_centralita_id" :id="`multi_centralita_${line.id}`" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-indigo-500 focus:ring-indigo-500">
-                                             <option :value="null">-- Sin Centralita Multisede --</option>
-                                             <option v-for="centralita in centralitaAddonOptions" :key="centralita.id" :value="centralita.id">
-                                                 {{ centralita.name }} (+{{ parseFloat(centralita.pivot.price).toFixed(2) }}€)
-                                             </option>
-                                         </select>
+                                            <label :for="`multi_centralita_${line.id}`" class="block text-xs font-medium text-gray-500">Centralita Multisede</label>
+                                            <select v-model="line.selected_centralita_id" :id="`multi_centralita_${line.id}`" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                                <option :value="null">-- Sin Centralita Multisede --</option>
+                                                <option v-for="centralita in centralitaAddonOptions" :key="centralita.id" :value="centralita.id">
+                                                    {{ centralita.name }} (+{{ parseFloat(centralita.pivot.price).toFixed(2) }}€)
+                                                </option>
+                                            </select>
                                     </div>
                                     
                                     <div v-if="line.addon_id" class="mt-2 flex flex-wrap gap-x-6 gap-y-1">
@@ -656,8 +687,9 @@ watch(isCentralitaActive, (isActive) => {
                                                 </span>
                                             </label>
                                         </div>
-                                        </div>
                                     </div>
+                                    
+                                </div>
                                 <PrimaryButton @click="addInternetLine" type="button" class="w-full justify-center">Añadir Internet</PrimaryButton>
                             </div>
                         </div>
@@ -710,7 +742,7 @@ watch(isCentralitaActive, (isActive) => {
                                     <span class="ml-3 text-sm text-gray-700">{{ benefit.description }}</span>
                                 </label>
                             </div>
-                        </div>
+                            </div>
                         <div class="mt-6">
                             <h4 class="font-semibold text-gray-700 border-b pb-2">Categoría Hogar</h4>
                             <p class="text-xs text-gray-500 mt-1">(Máximo 1 beneficio de esta categoría)</p>
@@ -729,7 +761,7 @@ watch(isCentralitaActive, (isActive) => {
                                     <span class="ml-3 text-sm text-gray-700">{{ benefit.description }}</span>
                                 </label>
                             </div>
-                        </div>
+                            </div>
                     </div>
                     <div v-if="selectedPackage" class="bg-white shadow-sm sm:rounded-lg p-8 space-y-6">
                         <h3 class="text-lg font-semibold text-gray-800 text-center">Líneas Móviles</h3>
@@ -739,7 +771,7 @@ watch(isCentralitaActive, (isActive) => {
                                     <span class="font-medium text-gray-700">
                                         {{ line.is_extra ? `Línea Adicional ${index + 1 - lines.filter(l => !l.is_extra).length}` : `Línea Principal ${index + 1}` }}
                                     </span>
-                                     <div class="flex space-x-2">
+                                    <div class="flex space-x-2">
                                          <button
                                              v-if="index > 0"
                                              @click="copyPreviousLine(line, index)"
@@ -761,7 +793,7 @@ watch(isCentralitaActive, (isActive) => {
                                                  <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
                                              </svg>
                                          </button>
-                                     </div>
+                                    </div>
                                 </div>
                                 <div class="md:col-span-4">
                                     <label class="block text-xs font-medium text-gray-500">Nº Teléfono</label>
@@ -808,9 +840,9 @@ watch(isCentralitaActive, (isActive) => {
                                 </div>
                             </div>
                         </div>
-                         <div class="flex justify-center pt-4">
-                             <PrimaryButton @click="addLine" type="button">Añadir Línea Móvil Adicional</PrimaryButton>
-                         </div>
+                        <div class="flex justify-center pt-4">
+                            <PrimaryButton @click="addLine" type="button">Añadir Línea Móvil Adicional</PrimaryButton>
+                        </div>
                     </div>
 
                     <div v-if="selectedPackage" class="mt-10 flex justify-center">
@@ -829,12 +861,12 @@ watch(isCentralitaActive, (isActive) => {
                 <div class="sticky top-10 space-y-6">
                     <div class="p-6 bg-white rounded-lg shadow-sm space-y-3">
                         <h2 class="text-xl font-semibold text-gray-800 text-center">Resumen de la Oferta</h2>
-                         <div v-if="calculationSummary.summaryBreakdown && calculationSummary.summaryBreakdown.length > 0" class="space-y-2 border-t pt-4 mt-4">
-                             <div v-for="(item, index) in calculationSummary.summaryBreakdown" :key="'sum-'+index" class="flex justify-between text-sm" :class="{'text-gray-700': item.price >= 0, 'text-red-600': item.price < 0}">
-                                 <span>{{ item.description }}</span>
-                                 <span class="font-medium">{{ item.price >= 0 ? '+' : '' }}{{ item.price.toFixed(2) }}€</span>
-                             </div>
-                         </div>
+                        <div v-if="calculationSummary.summaryBreakdown && calculationSummary.summaryBreakdown.length > 0" class="space-y-2 border-t pt-4 mt-4">
+                            <div v-for="(item, index) in calculationSummary.summaryBreakdown" :key="'sum-'+index" class="flex justify-between text-sm" :class="{'text-gray-700': item.price >= 0, 'text-red-600': item.price < 0}">
+                                <span>{{ item.description }}</span>
+                                <span class="font-medium">{{ item.price >= 0 ? '+' : '' }}{{ item.price.toFixed(2) }}€</span>
+                            </div>
+                        </div>
                         <div class="border-t pt-4 mt-4 space-y-3">
                             <div class="flex justify-between text-lg font-bold text-gray-800">
                                 <span>Pago Inicial Total:</span>
@@ -846,7 +878,7 @@ watch(isCentralitaActive, (isActive) => {
                             </div>
                         </div>
                     </div>
-                     <div class="p-6 bg-white rounded-lg shadow-sm space-y-3">
+                    <div class="p-6 bg-white rounded-lg shadow-sm space-y-3">
                         <h2 class="text-xl font-semibold text-gray-800 text-center">Resumen Comisión</h2>
                         <div class="border-t pt-4 mt-4 space-y-2">
                              <p v-if="$page.props.auth.user.role === 'admin' || $page.props.auth.user.role === 'team_lead'" class="text-md text-gray-500 text-center">
@@ -877,9 +909,9 @@ watch(isCentralitaActive, (isActive) => {
                              </div>
                          </div>
                      </div>
-                </div>
-            </div>
+                 </div>
+             </div>
 
         </div>
-     </AuthenticatedLayout>
+    </AuthenticatedLayout>
 </template>

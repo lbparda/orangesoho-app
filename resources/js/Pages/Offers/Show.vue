@@ -126,9 +126,10 @@ const centralitaInfo = computed(() => {
     if (!props.offer) return null;
 
     // Busca la centralita principal (la que no está asociada a una línea adicional)
-    const savedCentralita = props.offer.addons?.find(a => a.type === 'centralita');
-    const savedOperadora = props.offer.addons?.find(a => a.type === 'centralita_feature');
-    
+    const savedCentralita = props.offer.addons?.find(a => a.type === 'centralita' && a.pivot.selected_centralita_id === null);
+    const savedOperadora = props.offer.addons?.find(a => a.type === 'centralita_feature' && a.pivot.addon_name === 'Operadora Automática');
+    const savedDdi = props.offer.addons?.find(a => a.type === 'centralita_feature' && a.pivot.addon_name === 'DDI'); // <--- NUEVO
+
     // --- CORRECCIÓN ---
     // Filtramos extensiones: solo las que pertenecen a la centralita principal
     const mainCentralitaPivotId = savedCentralita?.pivot.id;
@@ -138,7 +139,7 @@ const centralitaInfo = computed(() => {
     // --- FIN CORRECCIÓN ---
     
     const includedCentralita = props.offer.package?.addons?.find(a => a.type === 'centralita' && a.pivot.is_included);
-    const includedOperadora = props.offer.package?.addons?.find(a => a.type === 'centralita_feature' && a.pivot.is_included);
+    const includedOperadora = props.offer.package?.addons?.find(a => a.type === 'centralita_feature' && a.pivot.addon_name === 'Operadora Automática' && a.pivot.is_included);
     
     const finalCentralita = savedCentralita || includedCentralita;
     const finalOperadora = savedOperadora || includedOperadora;
@@ -147,13 +148,14 @@ const centralitaInfo = computed(() => {
         a.type === 'centralita_extension' && a.pivot.is_included && a.pivot.included_quantity > 0
     ) || [];
 
-    if (!finalCentralita && !finalOperadora && contractedExtensions.length === 0 && packageIncludedExtensions.length === 0) {
+    if (!finalCentralita && !finalOperadora && contractedExtensions.length === 0 && packageIncludedExtensions.length === 0 && !savedDdi) { // <--- AÑADIDO DDI
         return null; // No hay centralita principal
     }
     
     return {
         centralita: finalCentralita,
         operadora: finalOperadora,
+        ddi: savedDdi, // <--- AÑADIDO
         contractedExtensions: contractedExtensions,
         packageIncludedExtensions: packageIncludedExtensions
     };
@@ -270,7 +272,7 @@ const formatCurrency = (value) => {
     } catch { return 'Error €'; }
 };
 const formatPrice = (value) => { // Para el desglose
-     if (value == null || isNaN(value)) return 'N/A';
+      if (value == null || isNaN(value)) return 'N/A';
     const formatted = formatCurrency(value);
     return value >= 0 ? `+${formatted}` : formatted;
 };
@@ -328,34 +330,34 @@ const openDetails = ref({
              <div class="flex flex-wrap justify-between items-center gap-4">
                  <h2 class="font-semibold text-xl text-gray-800 leading-tight">Detalle de la Oferta #{{ offer.id }}</h2>
                  <div class="space-x-2 flex items-center flex-wrap">
-                     <Link :href="route('offers.index')"><SecondaryButton>Volver</SecondaryButton></Link>
-                     
-                     <Link v-if="offer.status === 'borrador'" :href="route('offers.edit', offer.id)">
-                         <PrimaryButton>Editar</PrimaryButton>
-                     </Link>
-                     
-                     <DangerButton @click="confirmLockOffer" v-if="offer.status === 'borrador'">
-                         Finalizar y Bloquear
-                     </DangerButton>
-                     
-                     <PrimaryButton @click="confirmSendEmail" :title="'Enviar email'">
-                        Email
-                     </PrimaryButton>
-                     
-                     <a :href="route('offers.pdf', offer.id)" target="_blank" download class="inline-flex items-center px-4 py-2 bg-gray-800 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-gray-700 active:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition ease-in-out duration-150">PDF</a>
+                      <Link :href="route('offers.index')"><SecondaryButton>Volver</SecondaryButton></Link>
+                      
+                      <Link v-if="offer.status === 'borrador'" :href="route('offers.edit', offer.id)">
+                          <PrimaryButton>Editar</PrimaryButton>
+                      </Link>
+                      
+                      <DangerButton @click="confirmLockOffer" v-if="offer.status === 'borrador'">
+                          Finalizar y Bloquear
+                      </DangerButton>
+                      
+                      <PrimaryButton @click="confirmSendEmail" :title="'Enviar email'">
+                          Email
+                      </PrimaryButton>
+                      
+                      <a :href="route('offers.pdf', offer.id)" target="_blank" download class="inline-flex items-center px-4 py-2 bg-gray-800 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-gray-700 active:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition ease-in-out duration-150">PDF</a>
                  </div>
              </div>
         </template>
 
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 mt-6">
            <div v-if="$page.props.flash.success" class="p-4 mb-4 bg-green-100 border border-green-300 text-green-800 rounded-md shadow-sm transition duration-300 ease-in-out">
-               {{ $page.props.flash.success }}
+                {{ $page.props.flash.success }}
            </div>
            <div v-if="$page.props.flash.warning" class="p-4 mb-4 bg-yellow-100 border border-yellow-300 text-yellow-800 rounded-md shadow-sm transition duration-300 ease-in-out">
-                {{ $page.props.flash.warning }}
+                 {{ $page.props.flash.warning }}
            </div>
            <div v-if="$page.props.flash.error" class="p-4 mb-4 bg-red-100 border border-red-300 text-red-800 rounded-md shadow-sm transition duration-300 ease-in-out">
-               {{ $page.props.flash.error }}
+                {{ $page.props.flash.error }}
            </div>
         </div>
 
@@ -374,12 +376,12 @@ const openDetails = ref({
                                  <div class="text-right">
                                      <span class="font-semibold text-gray-600 block">Estado:</span>
                                      <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full capitalize"
-                                           :class="{
-                                             'bg-blue-100 text-blue-800': offer.status === 'borrador',
-                                             'bg-green-100 text-green-800': offer.status === 'finalizada',
-                                             'bg-gray-100 text-gray-800': !offer.status
-                                           }">
-                                        {{ offer.status || 'Borrador' }}
+                                         :class="{
+                                            'bg-blue-100 text-blue-800': offer.status === 'borrador',
+                                            'bg-green-100 text-green-800': offer.status === 'finalizada',
+                                            'bg-gray-100 text-gray-800': !offer.status
+                                        }">
+                                         {{ offer.status || 'Borrador' }}
                                      </span>
                                      </div>
                              </div>
@@ -389,9 +391,9 @@ const openDetails = ref({
                                  <div><p class="text-gray-500">CIF / NIF</p><p class="font-medium text-gray-900">{{ offer.client.cif_nif }}</p></div>
                                  <div><p class="text-gray-500">Email</p><p class="font-medium text-gray-900">{{ offer.client.email || 'No especificado' }}</p></div>
                                  <div><p class="text-gray-500">Teléfono</p><p class="font-medium text-gray-900">{{ offer.client.phone || 'No especificado' }}</p></div>
-                             </div>
+                                 </div>
                              <div v-else><p class="italic text-gray-500">No hay cliente asociado.</p></div>
-                        </section>
+                         </section>
 
                         <section class="bg-white p-6 shadow-sm sm:rounded-lg">
                             <details class="group" :open="openDetails.lines" @toggle="openDetails.lines = $event.target.open">
@@ -402,8 +404,8 @@ const openDetails = ref({
                                     </span>
                                 </summary>
                                 <div class="mt-4 space-y-4 border-t pt-4">
-                                     <div v-if="offer.lines && offer.lines.length > 0" class="space-y-4">
-                                         <div v-for="(line, index) in offer.lines" :key="line.id || index" class="p-4 border rounded-lg bg-white shadow-sm hover:shadow-md transition-shadow duration-200">
+                                    <div v-if="offer.lines && offer.lines.length > 0" class="space-y-4">
+                                        <div v-for="(line, index) in offer.lines" :key="line.id || index" class="p-4 border rounded-lg bg-white shadow-sm hover:shadow-md transition-shadow duration-200">
                                              <p class="font-bold text-gray-800 mb-2">Línea {{ index + 1 }}: <span class="font-mono">{{ line.phone_number || 'Número no especificado' }}</span></p>
                                              <div class="grid grid-cols-1 md:grid-cols-3 gap-x-4 text-sm text-gray-600">
                                                  <div><span class="font-semibold block text-gray-500">Tipo</span> {{ line.is_extra ? 'Adicional' : 'Principal' }}</div>
@@ -417,10 +419,10 @@ const openDetails = ref({
                                                      </div>
                                                  </div>
                                                  <div class="md:col-span-3 mt-2 italic text-xs text-gray-400" v-else>Sin terminal asociado.</div>
-                                                </div>
+                                                  </div>
                                          </div>
                                      </div>
-                                     <p v-else class="italic text-gray-500">No se añadieron líneas móviles.</p>
+                                    <p v-else class="italic text-gray-500">No se añadieron líneas móviles.</p>
                                 </div>
                             </details>
                         </section>
@@ -444,7 +446,7 @@ const openDetails = ref({
                                             <span class="text-xs font-semibold text-gray-700">IP Fija Principal:</span>
                                             <span class="ml-1 text-xs">
                                                 Incluida
-                                                <span v-if="centralitaInfo">(Gratis por Centralita)</span>
+                                                <span v-if="centralitaInfo?.centralita || centralitasMultisede.length > 0">(Gratis por Centralita)</span>
                                             </span>
                                         </div>
                                         
@@ -471,7 +473,7 @@ const openDetails = ref({
                                                 <span class="ml-1 text-xs">Incluida</span>
                                             </div>
                                             </div>
-                                    </div>
+                                        </div>
                                     
                                     <div v-if="tvAddons.length > 0" class="text-sm bg-purple-50 p-3 rounded mt-2 shadow-sm">
                                         <span class="font-semibold block mb-1 text-purple-800">Televisión:</span>
@@ -497,11 +499,19 @@ const openDetails = ref({
                                 
                                 <div class="mt-4 space-y-4 border-t pt-4">
                                     
-                                    <div v-if="centralitaInfo" class="text-sm bg-indigo-50 p-4 rounded shadow-sm">
-                                        <p class="font-medium text-indigo-900 mb-2">Centralita Principal</p>
+                                    <!-- Centralita Principal (si existe) -->
+                                    <div v-if="centralitaInfo" class="text-sm bg-indigo-50 p-4 rounded shadow-sm space-y-2">
+                                        <p class="font-medium text-indigo-900">Centralita Principal</p>
                                         <p v-if="centralitaInfo.centralita"><span class="font-semibold text-indigo-800">Base:</span> {{ centralitaInfo.centralita.name }}</p>
-                                        <p v-if="centralitaInfo.operadora" class="mt-1"><span class="font-semibold text-indigo-800">Operadora Automática:</span> {{ centralitaInfo.operadora.name }}</p>
+                                        <p v-if="centralitaInfo.operadora"><span class="font-semibold text-indigo-800">Operadora Automática:</span> {{ centralitaInfo.operadora.pivot.addon_name }}</p>
+
+                                        <!-- DDI -->
+                                        <div v-if="centralitaInfo.ddi" class="mt-2 pt-2 border-t border-indigo-200">
+                                            <p class="font-semibold text-indigo-800">DDI</p>
+                                            <p class="ml-4 text-xs">{{ centralitaInfo.ddi.pivot.quantity }} unidades contratadas</p>
+                                        </div>
                                         
+                                        <!-- Extensiones Principal -->
                                         <div class="mt-2 pt-2 border-t border-indigo-200">
                                             <span class="font-semibold block text-indigo-800 mb-1">Extensiones (Principal):</span>
                                             
@@ -521,6 +531,7 @@ const openDetails = ref({
                                         </div>
                                     </div>
                                     
+                                    <!-- Centralitas Multisede (si existen) -->
                                     <div v-if="centralitasMultisede.length > 0" class="space-y-3">
                                         <div v-for="multi in centralitasMultisede" :key="multi.id" class="text-sm bg-indigo-50 p-4 rounded shadow-sm">
                                             <p class="font-medium text-indigo-900 mb-2">Centralita Multisede (en {{ multi.lineName }})</p>
@@ -532,20 +543,20 @@ const openDetails = ref({
                                                     <li>{{ multi.extensionName }} (x1 Incluida)</li>
                                                 </ul>
                                             </div>
-
                                             
-                                            
-
+                                            <!-- IP Fija en Multisede -->
                                             <div v-if="multi.has_ip_fija" class="mt-2 pt-2 border-t border-indigo-200">
                                                 <span class="text-xs font-semibold text-gray-700">IP Fija:</span>
                                                 <span class="ml-1 text-xs">Incluida (Gratis por Centralita)</span>
                                             </div>
 
+                                            <!-- Fibra Oro en Multisede -->
                                             <div v-if="multi.has_fibra_oro" class="mt-2 pt-2 border-t border-indigo-200">
                                                 <span class="text-xs font-semibold text-gray-700">Fibra Oro:</span>
                                                 <span class="ml-1 text-xs">Incluida</span>
                                             </div>
-                                            </div>
+                                            
+                                        </div>
                                     </div>
 
                                 </div>
@@ -614,7 +625,7 @@ const openDetails = ref({
                                              <span>{{ item.description }}</span>
                                              <span class="font-medium font-mono">{{ formatPrice(item.price) }}</span>
                                          </div>
-                                          <p v-if="!offer.summary?.summaryBreakdown || offer.summary.summaryBreakdown.length === 0" class="italic text-gray-400 text-xs">No hay desglose de precios.</p>
+                                         <p v-if="!offer.summary?.summaryBreakdown || offer.summary.summaryBreakdown.length === 0" class="italic text-gray-400 text-xs">No hay desglose de precios.</p>
                                      </div>
                                  </div>
                              </section>
@@ -638,12 +649,12 @@ const openDetails = ref({
                                                      </div>
                                              </div>
                                          </div>
-                                          <p v-if="!offer.summary?.commissionDetails || Object.keys(offer.summary.commissionDetails).length === 0" class="italic text-gray-500">No hay desglose detallado.</p>
+                                         <p v-if="!offer.summary?.commissionDetails || Object.keys(offer.summary.commissionDetails).length === 0" class="italic text-gray-500">No hay desglose detallado.</p>
                                      </div>
                                  </details>
 
                                  <div class="space-y-2 text-sm bg-green-50 p-4 rounded-lg border border-green-200 shadow-sm">
-                                      <div v-if="commissionTotals.showGross" class="flex justify-between font-medium text-gray-600">
+                                     <div v-if="commissionTotals.showGross" class="flex justify-between font-medium text-gray-600">
                                          <span>Comisión Bruta (100%):</span>
                                          <span class="font-mono">{{ formatCurrency(commissionTotals.gross) }}</span>
                                      </div>
@@ -663,9 +674,9 @@ const openDetails = ref({
 
                          </div> 
                      </div> 
-                </div> 
-            </div> 
-        </div> 
+                 </div> 
+             </div> 
+         </div> 
         
         <Modal :show="confirmingLockOffer" @close="closeModal">
             <div class="p-6">
