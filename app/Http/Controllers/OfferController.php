@@ -42,8 +42,29 @@ class OfferController extends Controller
              $query->where('user_id', $user->id);
         }
 
+        // --- LÓGICA DE BÚSQUEDA INTEGRADA ---
+        if ($request->has('search')) {
+            $search = $request->input('search');
+            $query->where(function ($q) use ($search) {
+                // Buscar por ID de la oferta
+                $q->where('id', 'like', "%{$search}%")
+                  // O buscar por nombre del cliente (relación 'client')
+                  ->orWhereHas('client', function ($q) use ($search) {
+                      $q->where('name', 'like', "%{$search}%");
+                  })
+                  // O buscar por nombre del usuario/vendedor (relación 'user')
+                  ->orWhereHas('user', function ($q) use ($search) {
+                      $q->where('name', 'like', "%{$search}%");
+                  })
+                  // O buscar por nombre del paquete (campo 'package_name')
+                  ->orWhere('package_name', 'like', "%{$search}%");
+            });
+        }
+        // --- FIN LÓGICA DE BÚSQUEDA ---
+
         return Inertia::render('Offers/Index', [
-            'offers' => $query->paginate(10)
+            'offers' => $query->paginate(10)->withQueryString(), // Mantiene los filtros en la URL
+            'filters' => $request->only(['search']), 
         ]);
     }
 
@@ -386,7 +407,7 @@ class OfferController extends Controller
              return back()->withInput()->with('error', 'Error al guardar la oferta. Revisa los datos e inténtalo de nuevo.');
         }
     }
-public function edit(Offer $offer)
+ public function edit(Offer $offer)
     {
         if ($offer->status === 'finalizada' && Auth::user()->role !== 'admin') { 
             return redirect()->route('offers.show', $offer)->with('warning', 'Esta oferta está finalizada y no se puede editar.');
@@ -467,29 +488,29 @@ public function edit(Offer $offer)
         // --- INICIO: PREPARAR DATOS VUE (ACTUALIZADO) ---
         
         // 1. IP Fija Principal
-        $mainIpFijaSelected = $offer->addons()->where('name', 'IP Fija')->where('type', 'internet_feature')->exists();
+        $mainIpFijaSelected = $offer->addons->where('name', 'IP Fija')->where('type', 'internet_feature')->isNotEmpty();
         // 1.b. (AÑADIDO) Fibra Oro Principal
-        $mainFibraOroSelected = $offer->addons()->where('name', 'Fibra Oro')->where('type', 'internet_feature')->exists();
+        $mainFibraOroSelected = $offer->addons->where('name', 'Fibra Oro')->where('type', 'internet_feature')->isNotEmpty();
 
         // 2. Líneas Adicionales
-        $additionalInternetLinesData = $offer->addons()
+        // OPTIMIZADO: Usamos la colección cargada
+        $additionalInternetLinesData = $offer->addons
             ->where('type', 'internet_additional')
-            ->get()
             ->map(function ($addon, $index) {
                 return [
                     'id' => $addon->id + microtime(true) + $index, 
                     'addon_id' => $addon->id,
                     'has_ip_fija' => (bool) $addon->pivot->has_ip_fija, 
-                    'has_fibra_oro' => (bool) $addon->pivot->has_fibra_oro, // <-- AÑADIDO
+                    'has_fibra_oro' => (bool) $addon->pivot->has_fibra_oro,
                     'selected_centralita_id' => $addon->pivot->selected_centralita_id, 
                 ];
-            })->toArray();
+            })->values()->toArray();
             
         // --- INICIO: AÑADIR CARGA DE SOLUCIONES DIGITALES ---
-        // 3. Soluciones Digitales
-        $initialSelectedDigitalAddonIds = $offer->addons()
-            ->whereIn('type', ['service', 'software']) // Usamos los tipos de tu AddonSeeder
-            ->pluck('addons.id') // Pluck 'addons.id' para evitar ambigüedad
+        // 3. Soluciones Digitales (OPTIMIZADO)
+        $initialSelectedDigitalAddonIds = $offer->addons
+            ->whereIn('type', ['service', 'software'])
+            ->pluck('id')
             ->toArray();
         // --- FIN: AÑADIR CARGA ---
             
@@ -499,10 +520,12 @@ public function edit(Offer $offer)
         $initialBenefitIds = $offer->benefits->pluck('id')->toArray();
         // ***** FIN DE LA CORRECCIÓN *****
             
-        // --- INICIO: CARGAR DDI ---
-        $ddiAddonPivot = $offer->addons()
-            ->where('addon_name', 'DDI')
-            ->first();
+        // --- INICIO: CARGAR DDI (OPTIMIZADO) ---
+        // Buscamos en la colección ya cargada en lugar de hacer una query
+        $ddiAddonPivot = $offer->addons
+            ->first(function($addon) {
+                return $addon->type === 'centralita_feature' && $addon->name === 'DDI';
+            });
         $initialDdiQuantity = $ddiAddonPivot ? $ddiAddonPivot->pivot->quantity : 0; // <--- NUEVAS LÍNEAS
         // --- FIN: CARGAR DDI ---
             
@@ -601,7 +624,7 @@ public function edit(Offer $offer)
              'processing_date' => 'nullable|date',
              
              // --- INICIO: AÑADIR VALIDACIÓN DDI ---
-             'ddi_quantity' => 'nullable|integer|min:0', // <--- NUEVA LÍNEA
+             'ddi_quantity' => 'nullable|integer|min:0', 
              // --- FIN: AÑADIR VALIDACIÓN DDI ---
 
             // --- INICIO MODIFICACIÓN BENEFICIOS ---
@@ -822,9 +845,8 @@ public function edit(Offer $offer)
                 }
                 // --- FIN: AÑADIR LÓGICA DE GUARDADO ---
                 
-                // --- INICIO: AÑADIR LÓGICA DDI ---
+                // --- INICIO: AÑADIR LÓGICA DDI (CORREGIDO: ¡ESTABA FALTANDO EN UPDATE!) ---
                 if (!empty($validated['ddi_quantity']) && $validated['ddi_quantity'] > 0) {
-                    // Se busca el addon DDI por nombre y tipo (asumiendo que es un feature de centralita)
                     $ddiAddon = Addon::where('name', 'DDI')->where('type', 'centralita_feature')->first();
                     if ($ddiAddon) {
                         $offer->addons()->attach($ddiAddon->id, [

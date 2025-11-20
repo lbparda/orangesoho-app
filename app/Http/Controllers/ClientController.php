@@ -8,14 +8,12 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 
-// La línea conflictiva ha sido eliminada de aquí
-
 class ClientController extends Controller
 {
     /**
      * Muestra una lista de clientes filtrada por el rol del usuario.
      */
-    public function index()
+    public function index(Request $request) // <--- Asegúrate de inyectar Request
     {
         $user = Auth::user();
 
@@ -33,8 +31,22 @@ class ClientController extends Controller
         }
         // Si el rol es 'admin', no se aplica ningún filtro y verá todos los clientes.
 
+        // --- LÓGICA DE BÚSQUEDA REINTEGRADA ---
+        if ($request->has('search')) {
+            $search = $request->input('search');
+            $clientsQuery->where(function($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                  ->orWhere('cif_nif', 'like', "%{$search}%")
+                  ->orWhere('email', 'like', "%{$search}%")
+                  ->orWhere('phone', 'like', "%{$search}%");
+            });
+        }
+        // --- FIN LÓGICA DE BÚSQUEDA ---
+
         return Inertia::render('Clients/Index', [
-            'clients' => $clientsQuery->latest()->paginate(10)
+            // Aumentamos la paginación a 1000 como pediste para "ver todos"
+            'clients' => $clientsQuery->latest()->paginate(1000)->withQueryString(), 
+            'filters' => $request->only(['search']), // Pasamos el filtro a la vista para mantener el input
         ]);
     }
 

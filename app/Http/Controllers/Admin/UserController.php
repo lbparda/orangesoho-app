@@ -13,10 +13,27 @@ use Inertia\Inertia;
 
 class UserController extends Controller
 {
-    public function index()
+    public function index(Request $request) // <--- 1. Inyectamos Request
     {
+        // Iniciamos la consulta base
+        $query = User::with('team')->latest();
+
+        // --- 2. LÓGICA DE BÚSQUEDA APLICADA ---
+        if ($request->has('search')) {
+            $search = $request->input('search');
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                  ->orWhere('email', 'like', "%{$search}%");
+                // Si quisieras buscar por rol también:
+                // ->orWhere('role', 'like', "%{$search}%");
+            });
+        }
+        // --- FIN LÓGICA DE BÚSQUEDA ---
+
+        // 3. Paginamos y devolvemos a la vista, incluyendo los filtros
         return Inertia::render('Admin/Users/Index', [
-            'users' => User::with('team')->latest()->paginate(10),
+            'users' => $query->paginate(1000)->withQueryString(), // Mantiene los parámetros en la URL
+            'filters' => $request->only(['search']), // Mantiene el texto en el input del buscador
         ]);
     }
 
@@ -30,7 +47,6 @@ class UserController extends Controller
     public function store(Request $request)
     {
         // 1. La validación de 'team_id' se cambia a 'nullable'
-        //    Esto permite crear un admin sin necesidad de seleccionar un equipo en el formulario.
         $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|string|lowercase|email|max:255|unique:'.User::class,
@@ -43,17 +59,14 @@ class UserController extends Controller
 
         // 2. Lógica para asignar el equipo de administradores
         if ($request->role === 'admin') {
-            // Buscamos el equipo. Asegúrate de que el nombre 'Administradores' es exacto.
             $adminTeam = Team::where('name', 'Administradores')->first();
             if ($adminTeam) {
                 $teamId = $adminTeam->id;
             } else {
-                // Si el equipo no existe, puedes retornar un error para evitar crear un admin sin equipo.
                 return back()->with('error', 'El equipo "Administradores" no existe. Por favor, créalo primero.');
             }
         }
 
-        // Si $teamId sigue siendo null aquí (porque no es admin y no se seleccionó equipo), la BD fallará si el campo no es nullable.
         // Nos aseguramos de que no sea null si el rol no es admin.
         if ($request->role !== 'admin' && is_null($teamId)) {
             return back()->withErrors(['team_id' => 'Se requiere un equipo para este rol.'])->withInput();
@@ -63,7 +76,7 @@ class UserController extends Controller
             'name' => $request->name,
             'email' => $request->email,
             'password' => Hash::make($request->password),
-            'team_id' => $teamId, // 3. Se usa la variable procesada
+            'team_id' => $teamId,
             'is_admin' => $request->role === 'admin',
             'role' => $request->role,
         ]);
@@ -74,14 +87,13 @@ class UserController extends Controller
     public function edit(User $user)
     {
         return Inertia::render('Admin/Users/Edit', [
-            'user' => $user->load('team'), // Cargamos la relación para que esté disponible
+            'user' => $user->load('team'),
             'teams' => Team::all(),
         ]);
     }
 
     public function update(Request $request, User $user)
     {
-        // 1. La validación de 'team_id' también se cambia a 'nullable'.
         $request->validate([
             'name' => 'required|string|max:255',
             'email' => ['required', 'string', 'lowercase', 'email', 'max:255', Rule::unique(User::class)->ignore($user->id)],
@@ -92,7 +104,6 @@ class UserController extends Controller
 
         $teamId = $request->team_id;
 
-        // 2. Misma lógica de asignación que en el método store
         if ($request->role === 'admin') {
             $adminTeam = Team::where('name', 'Administradores')->first();
             if ($adminTeam) {
@@ -109,7 +120,7 @@ class UserController extends Controller
         $user->update([
             'name' => $request->name,
             'email' => $request->email,
-            'team_id' => $teamId, // 3. Se usa la variable procesada
+            'team_id' => $teamId,
             'is_admin' => $request->role === 'admin',
             'role' => $request->role,
         ]);

@@ -16,7 +16,7 @@ class DiscountSeeder extends Seeder
             'conditions' => [
                 'applies_to' => 'principal_line', 'requires_portability' => true,
                 'requires_vap' => true, 'excluded_operators' => ['Movistar'],
-                'package_names' => ['NEGOCIO Extra 1', 'NEGOCIO Extra 3', 'NEGOCIO Extra 5']
+                'package_names' => ['Base Plus','NEGOCIO Extra 1', 'NEGOCIO Extra 3', 'NEGOCIO Extra 5']
             ]
         ]);
 
@@ -26,7 +26,7 @@ class DiscountSeeder extends Seeder
             'conditions' => [
                 'applies_to' => 'principal_line', 'requires_portability' => true,
                 'requires_vap' => false, 'excluded_operators' => ['Movistar'],
-                'package_names' => ['NEGOCIO Extra 1', 'NEGOCIO Extra 3', 'NEGOCIO Extra 5']
+                'package_names' => ['Base Plus','NEGOCIO Extra 1', 'NEGOCIO Extra 3', 'NEGOCIO Extra 5']
             ]
         ]);
 
@@ -38,7 +38,7 @@ class DiscountSeeder extends Seeder
                 'requires_portability' => true, // <-- Se añade para claridad
                 'requires_vap' => true,
                 'source_operators' => ['Movistar'],
-                'package_names' => ['NEGOCIO Extra 1', 'NEGOCIO Extra 3', 'NEGOCIO Extra 5']
+                'package_names' => ['Base Plus','NEGOCIO Extra 1', 'NEGOCIO Extra 3', 'NEGOCIO Extra 5']
             ]
         ]);
 
@@ -50,7 +50,7 @@ class DiscountSeeder extends Seeder
                 'applies_to' => 'principal_line',
                 'requires_portability' => false, // <-- Se añade para que aplique a altas nuevas
                 'requires_vap' => false,'excluded_operators' => ['Movistar','Vodafone'],
-                'package_names' => ['NEGOCIO Extra 1', 'NEGOCIO Extra 3', 'NEGOCIO Extra 5']
+                'package_names' => ['Base Plus','NEGOCIO Extra 1', 'NEGOCIO Extra 3', 'NEGOCIO Extra 5']
             ]
         ]);
         
