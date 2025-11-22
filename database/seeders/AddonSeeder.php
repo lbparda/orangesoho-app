@@ -83,17 +83,7 @@ class AddonSeeder extends Seeder
                 'description' => 'Servicio de operadora automática para la centralita.'
             ]
         );
-        // --- NUEVO ADDON: DDI (Marcación Directa de Entrada) ---
-        Addon::updateOrCreate( // <-- AÑADIDO
-            ['name' => 'DDI'],
-            [
-                'type' => 'centralita_feature',
-                'price' => 1.00, // Precio base (la lógica de cálculo lo ajustará a 0€ o 1€ según el paquete)
-                'commission' =>0.00, 
-                'decommission' => 0.00,
-                'description' => 'Marcación Directa de Entrada para Centralita.'
-            ]
-        ); // <-- FIN AÑADIDO
+        
 
           // --- TV FUTBOL ---
         Addon::updateOrCreate(
@@ -232,7 +222,18 @@ class AddonSeeder extends Seeder
                 'created_at' => now(),
                 'updated_at' => now()
             ]
-        );    
+        );  
+        // --- NUEVO ADDON: DDI (Marcación Directa de Entrada) ---
+        Addon::updateOrCreate( // <-- AÑADIDO
+            ['name' => 'DDI'],
+            [
+                'type' => 'centralita_feature',
+                'price' => 1.00, // Precio base (la lógica de cálculo lo ajustará a 0€ o 1€ según el paquete)
+                'commission' =>0.00, 
+                'decommission' => 0.00,
+                'description' => 'Marcación Directa de Entrada para Centralita.'
+            ]
+        ); // <-- FIN AÑADIDO  
 
 
     }

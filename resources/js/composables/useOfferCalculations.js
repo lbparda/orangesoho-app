@@ -1,4 +1,5 @@
 import { computed } from 'vue';
+import { usePage } from '@inertiajs/vue3';
 
 // --- INICIO MODIFICACIÓN BENEFICIOS ---
 /**
@@ -43,8 +44,9 @@ export function useOfferCalculations(
     // --- INICIO MODIFICACIÓN BENEFICIOS ---
     selectedBenefits, // <-- Un computed ref de los objetos de beneficio seleccionados
     // --- FIN MODIFICACIÓN BENEFICIOS ---
-    offerOwner = null // <--- NUEVO PARÁMETRO: Dueño de la oferta
+    offerOwner = null // <--- NUEVO PARÁMETRO: Dueño de la oferta (opcional)
 ) {
+    const page = usePage(); // Necesario si offerOwner es null
 
     // --- Computeds auxiliares INTERNAS al cálculo ---
     const selectedPackage = computed(() => {
@@ -70,12 +72,6 @@ export function useOfferCalculations(
         
         // Muestra los addons de TV que están en el paquete (como 'Futbol Bares')
         const packageTvAddons = selectedPackage.value?.addons.filter(a => a.type === 'tv') || [];
-        // Opcional: Muestra addons de TV globales que no son beneficios
-        // const globalTvAddons = props.allAddons.filter(a => 
-        //     a.type === 'tv' && 
-        //     !benefitHogarAddonIds.includes(a.id) &&
-        //     !packageTvAddons.some(pkgAddon => pkgAddon.id === a.id)
-        // );
         
         // Devolvemos solo los que están explícitamente en el paquete
         return packageTvAddons;
@@ -190,8 +186,12 @@ export function useOfferCalculations(
                 if (!conditions.requires_tv_bares) return false;
 
                 const packageMatch = conditions.package_names.includes(packageName);
-                const portabilityMatch = conditions.requires_portability === principalLine.is_portability;
-                const vapMatch = conditions.requires_vap === principalLine.has_vap;
+                // CORRECCIÓN: Asegurar booleanos
+                const isPortability = !!principalLine.is_portability; 
+                const hasVap = !!principalLine.has_vap;
+
+                const portabilityMatch = conditions.requires_portability === isPortability;
+                const vapMatch = conditions.requires_vap === hasVap;
 
                 if(packageMatch && portabilityMatch && vapMatch) {
                     return true;
@@ -211,10 +211,15 @@ export function useOfferCalculations(
                 if (!conditions.package_names || !conditions.package_names.includes(packageName)) {
                     return false;
                 }
-                if (conditions.hasOwnProperty('requires_vap') && conditions.requires_vap !== principalLine.has_vap) {
+                
+                // CORRECCIÓN: Asegurar booleanos para comparaciones estrictas
+                const isPortability = !!principalLine.is_portability; 
+                const hasVap = !!principalLine.has_vap;
+
+                if (conditions.hasOwnProperty('requires_vap') && conditions.requires_vap !== hasVap) {
                     return false;
                 }
-                if (conditions.hasOwnProperty('requires_portability') && conditions.requires_portability !== principalLine.is_portability) {
+                if (conditions.hasOwnProperty('requires_portability') && conditions.requires_portability !== isPortability) {
                     return false;
                 }
                 if (conditions.hasOwnProperty('source_operators') && conditions.source_operators && !conditions.source_operators.includes(principalLine.source_operator)) {
@@ -928,9 +933,11 @@ export function useOfferCalculations(
 
         const totalCommission = Object.values(commissionDetails).flat().reduce((acc, item) => acc + item.amount, 0);
         
-        // --- CORRECCIÓN: Determinar el usuario para el cálculo de rentabilidad ---
+        // --- CORRECCIÓN: USAR EL PROPIETARIO DE LA OFERTA SI EXISTE ---
+        // Si se pasa offerOwner, usamos ese usuario (para el cálculo de rentabilidad en Show).
+        // Si es null (en Create/Edit nuevo), usamos el logueado (props.auth.user).
         const currentUser = offerOwner || props.auth.user; 
-        // -----------------------------------------------------------------------
+        // ---------------------------------------------------------------
 
         let teamCommission = 0;
         let userCommission = 0;
