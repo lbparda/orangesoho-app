@@ -678,32 +678,40 @@ export function useOfferCalculations(
             }
 
             for (const addonId in centralitaExtensionQuantities.value) {
-                const quantity = centralitaExtensionQuantities.value[addonId];
+                // --- INICIO CORRECCIÓN: Restar la extensión incluida en la centralita contratada ---
+                let quantity = centralitaExtensionQuantities.value[addonId];
+
+                // Si es una centralita contratada (no de paquete) y trae una extensión incluida (ej. Puesto IP),
+                // la restamos de la cantidad 'adicional' para no cobrarla dos veces.
+                if (!includedCentralita.value && autoIncludedExtension.value && String(addonId) === String(autoIncludedExtension.value.id)) {
+                    quantity = Math.max(0, quantity - 1);
+                }
+                // --- FIN CORRECCIÓN ---
+
                 if (quantity > 0) {
                     const addonInfo = props.centralitaExtensions.find(ext => ext.id == addonId);
                     if (addonInfo) {
-                        // --- INICIO MODIFICACIÓN BENEFICIOS ---
+                        // --- INICIO CÁLCULO PRECIO/COMISIÓN NORMAL ---
                         const originalPrice = parseFloat(addonInfo.price) || 0;
-                        // const benefit = activeBenefitsMap.value.get(addonInfo.id); // No es beneficio
-                        const finalUnitPrice = originalPrice; // applyBenefit(originalPrice, benefit);
+                        // const benefit = activeBenefitsMap.value.get(addonInfo.id); 
+                        const finalUnitPrice = originalPrice; 
                         const itemPrice = quantity * finalUnitPrice;
                         const description = `${quantity}x ${addonInfo.name} (Adicional)`;
 
-                        // --- INICIO CORRECCIÓN 9: Extensiones (Centralita Rule) ---
                         const baseCommission = parseFloat(addonInfo.commission) || 0;
                         const decommission = parseFloat(addonInfo.decommission) || 0;
-                        const commission = baseCommission; // "Ponerla toda"
+                        const commission = baseCommission; 
 
-                        if (decommission > 0) { // Aplicar siempre
+                        if (decommission > 0) { 
                             commissionDetails.Ajustes.push({ description: `Ajuste Decomisión (${quantity}x ${addonInfo.name})`, amount: -(quantity * decommission) });
                         }
-                        // --- FIN CORRECCIÓN 9 ---
 
                         price += itemPrice;
                         summaryBreakdown.push({ description: description, price: itemPrice });
                         if (commission > 0) {
                             commissionDetails.Centralita.push({ description: `${quantity}x ${addonInfo.name} (Adicional)`, amount: quantity * commission });
                         }
+                        // --- FIN CÁLCULO PRECIO/COMISIÓN NORMAL ---
                     }
                 }
             }
