@@ -41,8 +41,9 @@ export function useOfferCalculations(
     selectedDigitalAddonIds, // <-- AÑADIDO
     form, // <-- Recibe el objeto 'form' completo
     // --- INICIO MODIFICACIÓN BENEFICIOS ---
-    selectedBenefits // <-- ¡NUEVO ARGUMENTO! Un computed ref de los objetos de beneficio seleccionados
+    selectedBenefits, // <-- Un computed ref de los objetos de beneficio seleccionados
     // --- FIN MODIFICACIÓN BENEFICIOS ---
+    offerOwner = null // <--- NUEVO PARÁMETRO: Dueño de la oferta
 ) {
 
     // --- Computeds auxiliares INTERNAS al cálculo ---
@@ -926,7 +927,11 @@ export function useOfferCalculations(
         });
 
         const totalCommission = Object.values(commissionDetails).flat().reduce((acc, item) => acc + item.amount, 0);
-        const currentUser = props.auth.user;
+        
+        // --- CORRECCIÓN: Determinar el usuario para el cálculo de rentabilidad ---
+        const currentUser = offerOwner || props.auth.user; 
+        // -----------------------------------------------------------------------
+
         let teamCommission = 0;
         let userCommission = 0;
 

@@ -5,18 +5,15 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
 import InputError from '@/Components/InputError.vue';
-import Checkbox from '@/Components/Checkbox.vue'; // Asegúrate que la ruta sea correcta
+import Checkbox from '@/Components/Checkbox.vue';
 import { useOfferCalculations } from '@/composables/useOfferCalculations.js';
 
-// --- 1. MODIFICACIÓN: Aceptar las nuevas props del controlador ---
 const props = defineProps({
     offer: Object,
     packages: Array,
-    // --- INICIO MODIFICACIÓN BENEFICIOS/SOLUCIONES ---
-    allAddons: Array, // <-- ¡NUEVO PROP!
-    initialSelectedBenefitIds: Array, // <-- ¡NUEVO PROP!
-    initialSelectedDigitalAddonIds: Array, // <-- ¡NUEVO PROP!
-    // --- FIN MODIFICACIÓN BENEFICIOS/SOLUCIONES ---
+    allAddons: Array, 
+    initialSelectedBenefitIds: Array, 
+    initialSelectedDigitalAddonIds: Array, 
     discounts: Array,
     operators: Array,
     portabilityCommission: Number,
@@ -27,12 +24,10 @@ const props = defineProps({
     probabilityOptions: Array,
     portabilityExceptions: Array,
     fiberFeatures: Array,
-    initialAdditionalInternetLines: Array, // <-- ¡AÑADIDO!
-    initialMainIpFijaSelected: Boolean,  // <-- ¡AÑADIDO!
-    initialMainFibraOroSelected: Boolean, // <-- AÑADIDO PARA FIBRA ORO (Línea 31)
-    // --- INICIO: AÑADIDO DDI ---
-    initialDdiQuantity: { type: Number, default: 0 }, // <--- NUEVA LÍNEA
-    // --- FIN: AÑADIDO DDI ---
+    initialAdditionalInternetLines: Array, 
+    initialMainIpFijaSelected: Boolean,  
+    initialMainFibraOroSelected: Boolean, 
+    initialDdiQuantity: { type: Number, default: 0 }, 
 });
 
 const selectedClient = ref(null);
@@ -51,45 +46,34 @@ const formatDateForInput = (dateString) => {
     }
 };
 
-// --- Funciones auxiliares para inicializar el estado del form ---
 const getAddonId = (type) => props.offer.addons.find(a => a.type === type && a.pivot.selected_centralita_id === null)?.id;
 const getAddons = (type) => props.offer.addons.filter(a => a.type === type);
-// hasAddon ya no se usa para la IP Fija principal
 
-// --- 2. MODIFICACIÓN: Inicializar 'useForm' con las nuevas props ---
 const form = useForm({
     client_id: props.offer.client_id,
     package_id: props.offer.package_id,
-    lines: [], // Se rellena abajo
+    lines: [], 
     internet_addon_id: getAddonId('internet'),
-    // Usar la prop del controlador en lugar de 'getAddons'
-    additional_internet_lines: props.initialAdditionalInternetLines, // <-- ¡CORREGIDO!
-    centralita: {}, // Se rellena abajo
+    additional_internet_lines: props.initialAdditionalInternetLines, 
+    centralita: {}, 
     tv_addons: getAddons('tv').map(a => a.id),
-    // --- INICIO MODIFICACIÓN BENEFICIOS/SOLUCIONES ---
-    digital_addons: props.initialSelectedDigitalAddonIds || [], // <-- ¡NUEVO!
-    applied_benefit_ids: props.initialSelectedBenefitIds || [], // <-- ¡NUEVO!
-    // --- FIN MODIFICACIÓN BENEFICIOS/SOLUCIONES ---
-    // Usar la prop del controlador
-    is_ip_fija_selected: props.initialMainIpFijaSelected, // <-- ¡CORREGIDO!
-    is_fibra_oro_selected: props.initialMainFibraOroSelected, // <-- AÑADIDO (Línea 60)
-    // --- INICIO: AÑADIDO DDI ---
-    ddi_quantity: props.initialDdiQuantity, // <--- NUEVA LÍNEA
-    // --- FIN: AÑADIDO DDI ---
-    summary: {}, // Se recalcula
+    digital_addons: props.initialSelectedDigitalAddonIds || [], 
+    applied_benefit_ids: props.initialSelectedBenefitIds || [], 
+    is_ip_fija_selected: props.initialMainIpFijaSelected, 
+    is_fibra_oro_selected: props.initialMainFibraOroSelected, 
+    ddi_quantity: props.initialDdiQuantity, 
+    summary: {}, 
     probability: props.offer.probability,
     signing_date: formatDateForInput(props.offer.signing_date),
     processing_date: formatDateForInput(props.offer.processing_date),
 });
 
-const selectedPackageId = ref(props.offer.package_id); // Mantenemos este ref para reactividad del paquete
+const selectedPackageId = ref(props.offer.package_id); 
 
-// --- CAMBIO 1: Inicializar 'lines' con la lógica de descuento ---
-const lines = ref(props.offer.lines.map((line, index) => { // <-- Obtenemos el index
+const lines = ref(props.offer.lines.map((line, index) => { 
     const terminalPivotData = line.terminal_pivot;
     const terminalInfo = terminalPivotData?.terminal;
 
-    // Leemos los valores de la BBDD
     const initialCostFromDB = parseFloat(line.initial_cost || 0);
     const monthlyCostFromDB = parseFloat(line.monthly_cost || 0);
     const initialDiscountFromDB = parseFloat(line.initial_cost_discount || 0);
@@ -98,8 +82,6 @@ const lines = ref(props.offer.lines.map((line, index) => { // <-- Obtenemos el i
     let originalInitial = initialCostFromDB;
     let originalMonthly = monthlyCostFromDB;
     
-    // Si es la línea 0, el precio guardado está descontado.
-    // Reconstruimos el original sumando el descuento.
     if (index === 0 && terminalPivotData) {
         originalInitial = initialCostFromDB + initialDiscountFromDB;
         originalMonthly = monthlyCostFromDB + monthlyDiscountFromDB;
@@ -116,49 +98,34 @@ const lines = ref(props.offer.lines.map((line, index) => { // <-- Obtenemos el i
         selected_duration: terminalPivotData?.duration_months || null,
         terminal_pivot: terminalPivotData,
         package_terminal_id: line.package_terminal_id,
-        
-        // Estos son los v-models (ya están descontados desde la BBDD)
         initial_cost: initialCostFromDB,
         monthly_cost: monthlyCostFromDB,
-
-        // Guardamos los valores originales y de descuento para recálculos
         original_initial_cost: originalInitial,
         original_monthly_cost: originalMonthly,
         initial_cost_discount: initialDiscountFromDB,
         monthly_cost_discount: monthlyDiscountFromDB,
     };
 }));
-// --- FIN CAMBIO 1 ---
 
-// --- 3. MODIFICACIÓN: Inicializar los 'ref' locales con las nuevas props ---
 const selectedInternetAddonId = ref(form.internet_addon_id); 
-// Usar la prop del controlador
-const additionalInternetLines = ref(props.initialAdditionalInternetLines); // <-- ¡CORREGIDO!
+const additionalInternetLines = ref(props.initialAdditionalInternetLines); 
 const selectedTvAddonIds = ref(form.tv_addons); 
-// --- INICIO MODIFICACIÓN BENEFICIOS/SOLUCIONES ---
 const selectedDigitalAddonIds = ref(props.initialSelectedDigitalAddonIds || []);
 const selectedBenefitIds = ref(props.initialSelectedBenefitIds || []);
-// --- FIN MODIFICACIÓN BENEFICIOS/SOLUCIONES ---
-// --- FIN MODIFICACIÓN ---
 
 const isOperadoraAutomaticaSelected = ref(!!getAddons('centralita_feature').find(a => a.name === 'Operadora Automática'));
-// Modificado para ignorar las centralitas multisede
 const initialOptionalCentralita = props.offer.addons.find(a => a.type === 'centralita' && a.pivot.selected_centralita_id === null);
 const selectedCentralitaId = ref(initialOptionalCentralita?.id || null);
 const showCommissionDetails = ref(false);
 
-// Computeds (sin cambios aquí, usan los refs de arriba)
 const selectedPackage = computed(() => props.packages.find(p => p.id === selectedPackageId.value) || null);
 
-// --- INICIO MODIFICACIÓN BENEFICIOS: Computeds de Lógica ---
 const benefitLimit = computed(() => selectedPackage.value?.benefit_limit || 0);
 const availableBenefits = computed(() => selectedPackage.value?.benefits || []);
 
-// Agrupar beneficios por categoría para la UI
 const benefitsEmpresa = computed(() => availableBenefits.value.filter(b => b.category === 'Empresa'));
 const benefitsHogar = computed(() => availableBenefits.value.filter(b => b.category === 'Hogar'));
 
-// Lógica de Reglas de Selección
 const selectedBenefits = computed(() =>
     availableBenefits.value.filter(b => selectedBenefitIds.value.includes(b.id))
 );
@@ -168,19 +135,15 @@ const hogarSelectedCount = computed(() =>
     selectedBenefits.value.filter(b => b.category === 'Hogar').length
 );
 
-// Regla 1: Límite total alcanzado
 const isTotalLimitReached = computed(() => totalSelectedCount.value >= benefitLimit.value);
-
-// Regla 2: Límite de "Hogar" alcanzado
 const isHogarLimitReached = computed(() => hogarSelectedCount.value >= 1);
-// --- FIN MODIFICACIÓN BENEFICIOS ---
 
 const mobileAddonInfo = computed(() => selectedPackage.value?.addons.find(a => a.type === 'mobile_line'));
 const internetAddonOptions = computed(() => selectedPackage.value?.addons.filter(a => a.type === 'internet') || []);
 const tvAddonOptions = computed(() => selectedPackage.value?.addons.filter(a => a.type === 'tv') || []);
 const centralitaAddonOptions = computed(() => selectedPackage.value?.addons.filter(a => a.type === 'centralita' && !a.pivot.is_included) || []);
 const includedCentralita = computed(() => props.offer.addons.find(a => a.type === 'centralita' && a.pivot.selected_centralita_id === null && a.pivot.quantity > 0));
-const isCentralitaActive = computed(() => !!includedCentralita.value || !!selectedCentralitaId.value || additionalInternetLines.value.some(line => !!line.selected_centralita_id)); // <-- Clave para la lógica
+const isCentralitaActive = computed(() => !!includedCentralita.value || !!selectedCentralitaId.value || additionalInternetLines.value.some(line => !!line.selected_centralita_id)); 
 const autoIncludedExtension = computed(() => {
     if (!selectedCentralitaId.value) return null;
     const selected = centralitaAddonOptions.value.find(c => c.id === selectedCentralitaId.value);
@@ -194,16 +157,11 @@ const availableO2oDiscounts = computed(() => selectedPackage.value?.o2o_discount
 const brandsForSelectedPackage = computed(() => [...new Set(availableTerminals.value.map(t => t.brand))]);
 const availableAdditionalExtensions = computed(() => props.centralitaExtensions);
 
-// --- INICIO MODIFICACIÓN SOLUCIONES ---
 const digitalSolutionAddons = computed(() => {
     if (!props.allAddons) return [];
-    // CORRECCIÓN: Incluir los tipos 'service' y 'software' para reflejar la lógica del controlador.
     return props.allAddons.filter(a => ['service', 'software'].includes(a.type));
 });
-// --- FIN MODIFICACIÓN SOLUCIONES ---
 
-
-// Inicialización de cantidades de extensiones (sin cambios aquí)
 const initialExtensionQuantities = {};
 const savedExtensions = getAddons('centralita_extension');
 const includedExtensionIds = includedCentralitaExtensions.value.map(ext => ext.id);
@@ -215,36 +173,28 @@ additionalSavedExtensions.forEach(ext => {
 });
 const centralitaExtensionQuantities = ref(initialExtensionQuantities);
 
-// --- INICIO: CAMBIO (Línea 147) ---
-// Pasamos el objeto 'form' completo al composable
-// AÑADIMOS: ddiAddonInfo, ipFijaAddonInfo y fibraOroAddonInfo
-// --- INICIO MODIFICACIÓN BENEFICIOS/SOLUCIONES ---
-const { calculationSummary, ipFijaAddonInfo, fibraOroAddonInfo, ddiAddonInfo } = useOfferCalculations( // <--- AÑADIDO ddiAddonInfo
+// --- CORRECCIÓN: PASAR EL DUEÑO DE LA OFERTA ---
+const { calculationSummary, ipFijaAddonInfo, fibraOroAddonInfo, ddiAddonInfo } = useOfferCalculations( 
     props, 
     selectedPackageId, 
     lines, 
     selectedInternetAddonId, 
-    additionalInternetLines, // <-- Pasamos el ref actualizado
+    additionalInternetLines, 
     selectedCentralitaId, 
     centralitaExtensionQuantities, 
     isOperadoraAutomaticaSelected, 
     selectedTvAddonIds,
-    selectedDigitalAddonIds, // <-- ¡NUEVO!
-    form, // <-- Pasar el objeto form completo
-    selectedBenefits // <-- ¡NUEVO!
+    selectedDigitalAddonIds, 
+    form, 
+    selectedBenefits,
+    props.offer.user // <--- ¡AQUÍ! Pasamos el usuario de la oferta
 );
-// --- FIN MODIFICACIÓN BENEFICIOS/SOLUCIONES ---
-// --- FIN: CAMBIO ---
-// --- INICIO: FUNCIÓN PARA PRECIO DINÁMICO DE TV ---
+// -----------------------------------------------
+
 const getTvAddonPrice = (addon) => {
-    // 1. Obtenemos el precio por defecto del pivot o del addon base
     let originalPrice = parseFloat(addon.pivot?.price ?? addon.price) || 0;
-    
-    // 2. Comprobamos si el paquete es "Base Plus"
-    // selectedPackage ya está definido arriba (línea 103)
     const isPackageBasePlus = selectedPackage.value?.name === 'Base Plus';
 
-    // 3. Si es "Base Plus", aplicamos los precios especiales
     if (isPackageBasePlus) {
         if (addon.name === 'Futbol') {
             originalPrice = 38.40;
@@ -255,49 +205,36 @@ const getTvAddonPrice = (addon) => {
     
     return originalPrice;
 };
-// --- FIN: FUNCIÓN PARA PRECIO DINÁMICO DE TV ---
+
 const modelsByBrand = (brand) => availableTerminals.value.filter(t => t.brand === brand).filter((v, i, a) => a.findIndex(t => t.model === v.model) === i);
-// Buscamos el pivot usando el ID del terminal y la duración
 const findTerminalPivot = (line) => availableTerminals.value.find(t => t.id === line.selected_model_id && t.pivot.duration_months === line.selected_duration)?.pivot;
 
-// --- CAMBIO 2: Actualizar 'assignTerminalPrices' con TU lógica ---
 const assignTerminalPrices = (line) => {
     const pivot = findTerminalPivot(line);
     
-    // 1. Obtenemos todos los valores del pivot
     const originalInitial = parseFloat(pivot?.initial_cost || 0);
     const originalMonthly = parseFloat(pivot?.monthly_cost || 0);
     const initialDiscount = parseFloat(pivot?.initial_cost_discount || 0);
     const monthlyDiscount = parseFloat(pivot?.monthly_cost_discount || 0);
 
-    // 2. Guardamos los valores originales y de descuento en la línea (para el cálculo de comisiones)
     line.original_initial_cost = originalInitial;
     line.original_monthly_cost = originalMonthly;
     line.initial_cost_discount = initialDiscount;
     line.monthly_cost_discount = monthlyDiscount;
 
-    // --- INICIO DE TU LÓGICA ---
-    // Buscamos el índice de la línea actual
     const lineIndex = lines.value.findIndex(l => l.id === line.id);
 
-    // 3. Aplicamos el descuento SÓLO a la PRIMERA línea (index 0)
     if (lineIndex === 0) {
-        // Estos son los v-model de los inputs, así que se actualizarán
         line.initial_cost = originalInitial - initialDiscount;
         line.monthly_cost = originalMonthly - monthlyDiscount;
     } else {
-        // Todas las demás líneas (principales o extras) usan el precio normal
         line.initial_cost = originalInitial;
         line.monthly_cost = originalMonthly;
     }
-    // --- FIN DE TU LÓGICA ---
 
-    // 4. Asignamos el resto de datos
     line.terminal_pivot = pivot;
-    line.package_terminal_id = pivot?.id || null; // Guardamos el ID de la tabla pivote
+    line.package_terminal_id = pivot?.id || null; 
 };
-// --- FIN FUNCIÓN MODIFICADA ---
-
 
 const copyPreviousLine = (line, index) => {
     if (index <= 0 || !lines.value[index - 1]) return;
@@ -309,11 +246,9 @@ const copyPreviousLine = (line, index) => {
     line.selected_brand = prev.selected_brand;
     line.selected_model_id = prev.selected_model_id;
     line.selected_duration = prev.selected_duration;
-    assignTerminalPrices(line); // Asigna pivot, costs y package_terminal_id (y ahora descuentos)
+    assignTerminalPrices(line); 
 };
 
-// --- INICIO CÓDIGO CORREGIDO (Reactividad) ---
-// --- CAMBIO 3: Actualizar 'addLine' (para nuevas líneas) ---
 const addLine = () => {
     const newLine = { 
         id: Date.now(), 
@@ -330,26 +265,22 @@ const addLine = () => {
         package_terminal_id: null, 
         initial_cost: 0, 
         monthly_cost: 0,
-        // --- LÍNEAS AÑADIDAS ---
         original_initial_cost: 0,
         original_monthly_cost: 0,
         initial_cost_discount: 0,
         monthly_cost_discount: 0
-        // --- FIN LÍNEAS AÑADIDAS ---
     };
     lines.value.push(newLine); 
-    addWatchersToLine(lines.value[lines.value.length - 1]); // Apuntar al objeto reactivo
+    addWatchersToLine(lines.value[lines.value.length - 1]); 
 };
-// --- FIN CAMBIO 3 ---
+
 const removeLine = (index) => { if (lines.value[index]?.is_extra) lines.value.splice(index, 1); };
 
-// Watcher para líneas de internet adicionales
 const addWatchersToAdditionalLine = (line) => {
     watch(() => line.selected_centralita_id, (isCentralita) => {
-        if (isCentralita) { // Si hay ID de centralita, marcar IP Fija
+        if (isCentralita) { 
             line.has_ip_fija = true;
-        } else { // Si se quita la centralita, desmarcar IP Fija
-            // No desmarcamos automáticamente
+        } else { 
              line.has_ip_fija = false;
         }
     });
@@ -360,13 +291,12 @@ const addInternetLine = () => {
         id: Date.now(),
         addon_id: null,
         has_ip_fija: false,
-        has_fibra_oro: false, // <-- AÑADIDO (Línea 250)
+        has_fibra_oro: false, 
         selected_centralita_id: null
     };
     additionalInternetLines.value.push(newLine);
-    addWatchersToAdditionalLine(additionalInternetLines.value[additionalInternetLines.value.length - 1]); // Apuntar al objeto reactivo
+    addWatchersToAdditionalLine(additionalInternetLines.value[additionalInternetLines.value.length - 1]); 
 };
-// --- FIN CÓDIGO CORREGIDO ---
 
 const removeInternetLine = (index) => additionalInternetLines.value.splice(index, 1);
 const getDurationsForModel = (line) => [...new Set(availableTerminals.value.filter(t => t.id === line.selected_model_id).map(t => t.pivot.duration_months))].sort((a, b) => a - b);
@@ -377,7 +307,6 @@ const getO2oDiscountsForLine = (line, index) => {
     return line.is_extra && extrasBefore < limit ? availableO2oDiscounts.value.filter(d => (parseFloat(d.total_discount_amount) / parseFloat(d.duration_months)) <= 1) : availableO2oDiscounts.value;
 };
 
-// --- CAMBIO 4: Actualizar 'saveOffer' para enviar los descuentos ---
 const saveOffer = () => {
     try {
         let finalExt = [];
@@ -392,35 +321,27 @@ const saveOffer = () => {
             has_vap: l.has_vap,
             o2o_discount_id: l.o2o_discount_id,
             terminal_pivot_id: l.package_terminal_id, 
-            initial_cost: l.initial_cost, // Ya está descontado si es línea 0
-            monthly_cost: l.monthly_cost, // Ya está descontado si es línea 0
-            // ¡AÑADIMOS LOS DESCUENTOS AL GUARDAR!
+            initial_cost: l.initial_cost, 
+            monthly_cost: l.monthly_cost, 
             initial_cost_discount: l.initial_cost_discount,
             monthly_cost_discount: l.monthly_cost_discount,
         }));
-        // --- FIN CAMBIO 4 ---
 
         form.internet_addon_id = selectedInternetAddonId.value;
-        // --- 4. MODIFICACIÓN: Usar el ref local para guardar ---
-        form.additional_internet_lines = additionalInternetLines.value // <-- ¡CORREGIDO!
+        form.additional_internet_lines = additionalInternetLines.value 
             .filter(l => l.addon_id)
             .map(l => ({ 
                 addon_id: l.addon_id, 
                 has_ip_fija: l.has_ip_fija,
-                has_fibra_oro: l.has_fibra_oro, // <-- AÑADIDO (Línea 303)
+                has_fibra_oro: l.has_fibra_oro, 
                 selected_centralita_id: l.selected_centralita_id 
             }));
-        // --- FIN MODIFICACIÓN ---
         form.centralita = { id: selectedCentralitaId.value || includedCentralita.value?.id || null, operadora_automatica_selected: isOperadoraAutomaticaSelected.value, operadora_automatica_id: operadoraAutomaticaInfo.value?.id || null, extensions: finalExt };
         form.tv_addons = selectedTvAddonIds.value;
         
-        // --- INICIO MODIFICACIÓN BENEFICIOS/SOLUCIONES ---
         form.digital_addons = selectedDigitalAddonIds.value;
         form.applied_benefit_ids = selectedBenefitIds.value;
-        // --- FIN MODIFICACIÓN BENEFICIOS/SOLUCIONES ---
         
-        // El ddi_quantity ya está en el form
-
         form.summary = calculationSummary.value;
 
         form.put(route('offers.update', props.offer.id), { onSuccess: () => alert('¡Oferta actualizada!'), onError: (e) => { console.error(e); alert('Error al actualizar.'); } });
@@ -433,11 +354,8 @@ const addWatchersToLine = (line) => {
     watch(() => [line.selected_model_id, line.selected_duration], () => assignTerminalPrices(line));
 };
 
-// --- APLICAR WATCHERS A LÍNEAS CARGADAS ---
-// Esto aplica los watchers a los datos que SÍ se cargaron de las props
 additionalInternetLines.value.forEach(addWatchersToAdditionalLine);
 lines.value.forEach(addWatchersToLine);
-// --- FIN ---
 
 watch(
     () => form.client_id,
@@ -452,7 +370,6 @@ watch(
     { immediate: true }
 );
 
-// Watcher para marcar/desmarcar IP Fija según la centralita (para la línea PRINCIPAL)
 watch(isCentralitaActive, (isActive) => {
     if (isActive) {
         form.is_ip_fija_selected = true;
@@ -468,7 +385,13 @@ watch(isCentralitaActive, (isActive) => {
     <AuthenticatedLayout>
         <template #header>
             <div class="flex justify-between items-center">
-                   <h2 class="font-semibold text-xl text-gray-800 leading-tight">Editar Oferta #{{ offer.id }}</h2>
+                   <h2 class="font-semibold text-xl text-gray-800 leading-tight">
+                       Editar Oferta #{{ offer.id }} 
+                       <!-- Mostrar el dueño si es diferente al usuario logueado -->
+                       <span v-if="$page.props.auth.user.id !== offer.user.id" class="text-sm text-gray-500 ml-2 font-normal">
+                           (Propietario: {{ offer.user.name }})
+                       </span>
+                   </h2>
                    <Link :href="route('offers.index')">
                        <SecondaryButton>Volver a la Lista</SecondaryButton>
                    </Link>
@@ -537,7 +460,7 @@ watch(isCentralitaActive, (isActive) => {
                             </div>
                         </section>
 
-                       <div v-if="internetAddonOptions.length > 0 || (props.fiberFeatures && props.fiberFeatures.length > 0)" class="p-6 bg-slate-50 rounded-lg">
+                        <div v-if="internetAddonOptions.length > 0 || (props.fiberFeatures && props.fiberFeatures.length > 0)" class="p-6 bg-slate-50 rounded-lg">
                             <label class="block text-sm font-medium text-gray-700 mb-2">Fibra Principal</label>
                             <div v-if="internetAddonOptions.length > 0" class="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-4 mt-1">
                                 <label v-for="addon in internetAddonOptions" :key="addon.id"
@@ -772,27 +695,27 @@ watch(isCentralitaActive, (isActive) => {
                                         {{ line.is_extra ? `Línea Adicional ${index + 1 - lines.filter(l => !l.is_extra).length}` : `Línea Principal ${index + 1}` }}
                                     </span>
                                     <div class="flex space-x-2">
-                                         <button
-                                             v-if="index > 0"
-                                             @click="copyPreviousLine(line, index)"
-                                             type="button"
-                                             class="text-blue-600 hover:text-blue-800 p-1 rounded-full hover:bg-blue-100"
-                                             title="Copiar configuración de la línea anterior"
-                                         >
-                                             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                                             </svg>
-                                         </button>
-                                         <button
-                                             v-if="line.is_extra"
-                                             @click="removeLine(index)"
-                                             type="button"
-                                             class="text-red-500 hover:text-red-700 p-1 rounded-full hover:bg-red-100"
-                                         >
-                                             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                                 <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-                                             </svg>
-                                         </button>
+                                     <button
+                                         v-if="index > 0"
+                                         @click="copyPreviousLine(line, index)"
+                                         type="button"
+                                         class="text-blue-600 hover:text-blue-800 p-1 rounded-full hover:bg-blue-100"
+                                         title="Copiar configuración de la línea anterior"
+                                     >
+                                         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                         </svg>
+                                     </button>
+                                     <button
+                                         v-if="line.is_extra"
+                                         @click="removeLine(index)"
+                                         type="button"
+                                         class="text-red-500 hover:text-red-700 p-1 rounded-full hover:bg-red-100"
+                                     >
+                                         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                             <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                         </svg>
+                                     </button>
                                     </div>
                                 </div>
                                 <div class="md:col-span-4">

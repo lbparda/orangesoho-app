@@ -82,7 +82,7 @@ class DiscountSeeder extends Seeder
             'conditions' => [
                 'applies_to' => 'principal_line', 'requires_portability' => true,
                 'requires_vap' => true, 'requires_tv_bares' => true,
-                'package_names' => ['NEGOCIO Extra 1', 'NEGOCIO Extra 3', 'NEGOCIO Extra 5', 'NEGOCIO Extra 10', 'NEGOCIO Extra 20']
+                'package_names' => ['Base Plus','NEGOCIO Extra 1', 'NEGOCIO Extra 3', 'NEGOCIO Extra 5', 'NEGOCIO Extra 10', 'NEGOCIO Extra 20']
             ]
         ]);
 
@@ -92,7 +92,7 @@ class DiscountSeeder extends Seeder
             'conditions' => [
                 'applies_to' => 'principal_line', 'requires_portability' => false,
                 'requires_vap' => false, 'requires_tv_bares' => true, 
-                'package_names' => ['NEGOCIO Extra 1', 'NEGOCIO Extra 3', 'NEGOCIO Extra 5', 'NEGOCIO Extra 10', 'NEGOCIO Extra 20']
+                'package_names' => ['Base Plus','NEGOCIO Extra 1', 'NEGOCIO Extra 3', 'NEGOCIO Extra 5', 'NEGOCIO Extra 10', 'NEGOCIO Extra 20']
             ]
         ]);
 
@@ -102,7 +102,7 @@ class DiscountSeeder extends Seeder
             'conditions' => [
                 'applies_to' => 'principal_line', 'requires_portability' => true,
                 'requires_vap' => false, 'requires_tv_bares' => true,
-                'package_names' => ['NEGOCIO Extra 1', 'NEGOCIO Extra 3', 'NEGOCIO Extra 5', 'NEGOCIO Extra 10', 'NEGOCIO Extra 20']
+                'package_names' => ['Base Plus','NEGOCIO Extra 1', 'NEGOCIO Extra 3', 'NEGOCIO Extra 5', 'NEGOCIO Extra 10', 'NEGOCIO Extra 20']
             ]
         ]);
     }

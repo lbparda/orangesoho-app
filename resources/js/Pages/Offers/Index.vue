@@ -5,7 +5,10 @@ import PrimaryButton from '@/Components/PrimaryButton.vue';
 import DangerButton from '@/Components/DangerButton.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
 import ConfirmationModal from '@/Components/ConfirmationModal.vue';
-import TextInput from '@/Components/TextInput.vue'; // Importar TextInput para el buscador
+import Modal from '@/Components/Modal.vue'; // <--- Importado Modal
+import TextInput from '@/Components/TextInput.vue';
+import InputLabel from '@/Components/InputLabel.vue'; // <--- Importado InputLabel
+import InputError from '@/Components/InputError.vue'; // <--- Importado InputError
 import { ref, computed, watch } from 'vue';
 
 // --- FUNCIÓN HELPER PARA DEBOUNCE (Sin Lodash) ---
@@ -21,14 +24,13 @@ function debounce(func, wait) {
 
 const props = defineProps({
     offers: Object,
-    filters: Object, // Añadir filters a las props si vienen del controlador
+    filters: Object,
+    assignableUsers: Array, // <--- Nueva prop recibida desde el controlador
 });
 
 const page = usePage();
 
-// --- INICIO: LÓGICA DE ROL AÑADIDA ---
 const isAdmin = computed(() => page.props.auth.user?.role === 'admin');
-// --- FIN: LÓGICA DE ROL AÑADIDA ---
 
 // --- Lógica de Búsqueda ---
 const search = ref(props.filters?.search || '');
@@ -40,6 +42,40 @@ watch(search, debounce((value) => {
     });
 }, 300));
 // --------------------------
+
+// --- LÓGICA DE REASIGNACIÓN (NUEVO) ---
+const showReassignModal = ref(false);
+const offerToReassign = ref(null);
+const reassignForm = useForm({
+    user_id: '',
+});
+
+const openReassignModal = (offer) => {
+    offerToReassign.value = offer;
+    reassignForm.user_id = offer.user_id; // Preseleccionar el dueño actual
+    showReassignModal.value = true;
+};
+
+const closeReassignModal = () => {
+    showReassignModal.value = false;
+    offerToReassign.value = null;
+    reassignForm.reset();
+};
+
+const submitReassign = () => {
+    if (!offerToReassign.value) return;
+    
+    reassignForm.put(route('offers.reassign', offerToReassign.value.id), {
+        preserveScroll: true,
+        onSuccess: () => closeReassignModal(),
+    });
+};
+
+// Solo mostramos el botón si hay usuarios a quien asignar (es decir, si es Admin o Manager con equipo)
+const canReassign = computed(() => {
+    return props.assignableUsers && props.assignableUsers.length > 0;
+});
+// --------------------------------------
 
 // --- LÓGICA PARA ELIMINAR ---
 const confirmingOfferDeletion = ref(false);
@@ -68,10 +104,10 @@ const deleteOffer = () => {
         },
     });
 };
-// --- FIN LÓGICA PARA ELIMINAR ---
+// ----------------------------
 
 // --- Funciones de formato ---
-const formatDate = (dateString) => { // Formato para Fecha Creación
+const formatDate = (dateString) => {
     if (!dateString) return '-';
     try {
         const date = new Date(dateString);
@@ -80,12 +116,11 @@ const formatDate = (dateString) => { // Formato para Fecha Creación
     } catch (e) { return 'Error Fecha'; }
 };
 
-const formatSimpleDate = (dateString) => { // Formato DD/MM/YYYY
+const formatSimpleDate = (dateString) => {
     if (!dateString) return '-';
     try {
         const date = new Date(dateString);
         if (isNaN(date.getTime())) {
-             // Intento de parseo manual si viene como YYYY-MM-DD string simple
              if (typeof dateString === 'string' && dateString.length >= 10) {
                  const parts = dateString.substring(0, 10).split('-');
                  if (parts.length === 3) {
@@ -104,7 +139,6 @@ const formatSimpleDate = (dateString) => { // Formato DD/MM/YYYY
     }
 };
 
-
 const formatCurrency = (summary) => {
     const finalPrice = summary?.finalPrice;
     if (finalPrice === null || finalPrice === undefined || isNaN(parseFloat(finalPrice))) return '-';
@@ -113,8 +147,6 @@ const formatCurrency = (summary) => {
     } catch (e) { return 'Error €'; }
 };
 
-
-// Mensaje dinámico para el modal
 const deletionMessage = computed(() => {
     if (!offerToDelete.value) return '';
     return `¿Estás seguro de que quieres eliminar la oferta #${offerToDelete.value.id} para el cliente ${offerToDelete.value.client?.name || 'N/A'}? Esta acción no se puede deshacer.`;
@@ -172,14 +204,14 @@ const canExport = computed(() => {
             </div>
         </div>
 
-        <div class="py-6"> <!-- Reducido padding vertical -->
+        <div class="py-6">
             <div class="max-auto mx-auto sm:px-6 lg:px-8">
                 <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
                     
                     <!-- TABLA CON SCROLL -->
                     <div class="p-6 bg-white border-b border-gray-200 overflow-x-auto overflow-y-auto max-h-[70vh]">
                         <table class="min-w-full divide-y divide-gray-200 border">
-                            <thead class="bg-gray-100 sticky top-0 z-10"> <!-- Sticky Header -->
+                            <thead class="bg-gray-100 sticky top-0 z-10">
                                 <tr>
                                     <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
                                     <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cliente</th>
@@ -221,6 +253,19 @@ const canExport = computed(() => {
                                         
                                         <Link v-if="offer.status === 'borrador' || isAdmin" :href="route('offers.edit', offer.id)" class="text-green-600 hover:text-green-800">Editar</Link>
                                         
+                                        <!-- BOTÓN REASIGNAR -->
+                                        <button 
+                                            v-if="canReassign" 
+                                            @click="openReassignModal(offer)"
+                                            class="text-amber-600 hover:text-amber-800 cursor-pointer"
+                                            title="Reasignar Oferta"
+                                        >
+                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 inline">
+                                              <path stroke-linecap="round" stroke-linejoin="round" d="M19 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zM3.75 13.5v-2.875a3.375 3.375 0 00-3.375-3.375h-.375" />
+                                              <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                            </svg>
+                                        </button>
+
                                         <a
                                             :href="route('offers.pdf', offer.id)"
                                             class="inline-flex items-center px-2 py-1 bg-gray-700 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-gray-600 focus:bg-gray-600 active:bg-gray-800 transition ease-in-out duration-150"
@@ -255,6 +300,54 @@ const canExport = computed(() => {
                 </div>
             </div>
         </div>
+
+        <!-- MODAL REASIGNAR -->
+        <Modal :show="showReassignModal" @close="closeReassignModal">
+            <div class="p-6">
+                <h2 class="text-lg font-medium text-gray-900">
+                    Reasignar Oferta #{{ offerToReassign?.id }}
+                </h2>
+                
+                <p class="mt-1 text-sm text-gray-600 mb-4">
+                    Selecciona el nuevo propietario para esta oferta.
+                    <span v-if="offerToReassign?.client" class="block font-semibold mt-1">
+                        Cliente: {{ offerToReassign.client.name }}
+                    </span>
+                </p>
+
+                <div class="mt-6">
+                    <InputLabel for="new_user" value="Nuevo Vendedor" />
+                    
+                    <select
+                        id="new_user"
+                        v-model="reassignForm.user_id"
+                        class="mt-1 block w-full border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm"
+                    >
+                        <option value="" disabled>Selecciona un usuario</option>
+                        <option v-for="user in assignableUsers" :key="user.id" :value="user.id">
+                            {{ user.name }} <span v-if="user.team">({{ user.team.name }})</span>
+                        </option>
+                    </select>
+                    
+                    <InputError :message="reassignForm.errors.user_id" class="mt-2" />
+                </div>
+
+                <div class="mt-6 flex justify-end">
+                    <SecondaryButton @click="closeReassignModal">
+                        Cancelar
+                    </SecondaryButton>
+
+                    <PrimaryButton
+                        class="ml-3"
+                        :class="{ 'opacity-25': reassignForm.processing }"
+                        :disabled="reassignForm.processing"
+                        @click="submitReassign"
+                    >
+                        Guardar Cambios
+                    </PrimaryButton>
+                </div>
+            </div>
+        </Modal>
 
         <ConfirmationModal
             :show="confirmingOfferDeletion"

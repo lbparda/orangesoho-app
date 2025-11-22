@@ -43,8 +43,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::resource('offers', OfferController::class);
     Route::get('/offers/{offer}/pdf', [OfferController::class, 'generatePDF'])->name('offers.pdf');
     Route::post('offers/{offer}/lock', [OfferController::class, 'lock'])->name('offers.lock');
+    
+    // --- NUEVA RUTA PARA REASIGNAR ---
+    Route::put('offers/{offer}/reassign', [OfferController::class, 'reassign'])->name('offers.reassign');
+    // ---------------------------------
+
     // NOTA: La ruta exportFunnel de mi mensaje anterior no está aquí, 
     // pero si la necesitas, puedes volver a añadirla.
+    Route::get('/offers/export/funnel', [OfferController::class, 'exportFunnel'])->name('offers.exportFunnel');
+    Route::post('/offers/{offer}/send', [OfferController::class, 'send'])->name('offers.send');
 
     // Importación de Terminales
     Route::get('/terminals/import', [ImportController::class, 'create'])->name('terminals.import.create');
@@ -98,4 +105,3 @@ Route::prefix('team-lead')
 
 // Carga las rutas de autenticación
 require __DIR__.'/auth.php';
-

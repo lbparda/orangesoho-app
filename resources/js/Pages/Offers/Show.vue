@@ -1,142 +1,160 @@
 <script setup>
-import { computed, ref } from 'vue'; // ref añadido
+import { computed, ref } from 'vue';
 import { Head, Link, usePage, useForm } from '@inertiajs/vue3';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import DangerButton from '@/Components/DangerButton.vue';
 import Modal from '@/Components/Modal.vue';
-// --- INICIO: IMPORTACIONES AÑADIDAS ---
 import TextInput from '@/Components/TextInput.vue';
 import InputLabel from '@/Components/InputLabel.vue';
 import InputError from '@/Components/InputError.vue';
-// --- FIN: IMPORTACIONES AÑADIDAS ---
+import { useOfferCalculations } from '@/composables/useOfferCalculations';
 
 const props = defineProps({
-    offer: Object, // La oferta con relaciones cargadas
-    centralitaExtensions: Array, // <-- ¡AÑADIDO! La lógica que funciona lo necesita
+    offer: Object,
+    centralitaExtensions: Array,
+    // Props nuevas necesarias para que useOfferCalculations no falle
+    allAddons: Array, 
+    discounts: Array,
+    portabilityCommission: Number,
+    portabilityExceptions: Array,
+    additionalInternetAddons: Array,
+    fiberFeatures: Array,
 });
 
 const page = usePage();
-
-// --- INICIO: LÓGICA DE CÁLCULO DE COMISIÓN PARA EL VISUALIZADOR ---
 const currentUser = computed(() => page.props.auth.user);
-const offerCreator = computed(() => props.offer.user); // El usuario que CREÓ la oferta
 
-// Define si la sección de comisiones es visible
+// --- INICIO: INTEGRACIÓN DEL COMPOSABLE PARA CÁLCULOS EN TIEMPO REAL ---
+
+// Mock de props mínimas que necesita el composable
+const composablePropsMock = {
+    packages: [props.offer.package], // Mock
+    allAddons: props.allAddons,
+    discounts: props.discounts,
+    portabilityCommission: props.portabilityCommission,
+    portabilityExceptions: props.portabilityExceptions,
+    additionalInternetAddons: props.additionalInternetAddons,
+    fiberFeatures: props.fiberFeatures,
+    centralitaExtensions: props.centralitaExtensions,
+    auth: { user: props.offer.user } // Importante para fallback
+};
+
+const selectedPackageIdRef = computed(() => props.offer.package_id);
+const linesRef = computed(() => props.offer.lines);
+
+const selectedInternetAddonIdRef = computed(() => 
+    props.offer.addons.find(a => a.type === 'internet')?.id || null
+);
+
+const additionalInternetLinesRef = computed(() => {
+    return props.offer.addons
+        .filter(a => a.type === 'internet_additional')
+        .map(a => ({
+            addon_id: a.id,
+            has_ip_fija: !!a.pivot.has_ip_fija,
+            has_fibra_oro: !!a.pivot.has_fibra_oro,
+            selected_centralita_id: a.pivot.selected_centralita_id
+        }));
+});
+
+const selectedCentralitaIdRef = computed(() => 
+    props.offer.addons.find(a => a.type === 'centralita' && a.pivot.selected_centralita_id === null)?.id || null
+);
+
+const centralitaExtensionQuantitiesRef = computed(() => {
+    const quantities = {};
+    props.offer.addons
+        .filter(a => a.type === 'centralita_extension')
+        .forEach(a => {
+            if (a.pivot.quantity > 0) quantities[a.id] = a.pivot.quantity;
+        });
+    return quantities;
+});
+
+const isOperadoraAutomaticaSelectedRef = computed(() => 
+    !!props.offer.addons.find(a => a.type === 'centralita_feature' && a.name === 'Operadora Automática')
+);
+
+const selectedTvAddonIdsRef = computed(() => 
+    props.offer.addons.filter(a => a.type === 'tv').map(a => a.id)
+);
+
+const selectedDigitalAddonIdsRef = computed(() => 
+    props.offer.addons.filter(a => ['service', 'software'].includes(a.type)).map(a => a.id)
+);
+
+const selectedBenefitsRef = computed(() => props.offer.benefits || []);
+
+const formMock = {
+    is_ip_fija_selected: props.offer.addons.some(a => a.name === 'IP Fija' && a.type === 'internet_feature'),
+    is_fibra_oro_selected: props.offer.addons.some(a => a.name === 'Fibra Oro' && a.type === 'internet_feature'),
+    ddi_quantity: props.offer.addons.find(a => a.name === 'DDI' && a.type === 'centralita_feature')?.pivot?.quantity || 0
+};
+
+// --- LLAMADA AL COMPOSABLE ---
+const { calculationSummary } = useOfferCalculations(
+    composablePropsMock,
+    selectedPackageIdRef,
+    linesRef,
+    selectedInternetAddonIdRef,
+    additionalInternetLinesRef,
+    selectedCentralitaIdRef,
+    centralitaExtensionQuantitiesRef,
+    isOperadoraAutomaticaSelectedRef,
+    selectedTvAddonIdsRef,
+    selectedDigitalAddonIdsRef,
+    formMock,
+    selectedBenefitsRef,
+    props.offer.user // <--- CLAVE: Usamos el dueño para el cálculo
+);
+// --- FIN INTEGRACIÓN COMPOSABLE ---
+
+
+// --- LÓGICA DE VISUALIZACIÓN ORIGINAL ---
+
 const canViewCommissions = computed(() => {
     const userRole = currentUser.value?.role;
     return userRole === 'admin' || currentUser.value?.is_manager || userRole === 'user';
 });
 
-
-// --- INICIO DE LA MODIFICACIÓN ---
-// El 'commissionMultiplier' se ha eliminado, ya que los valores
-// en 'offer.summary.commissionDetails' ya vienen calculados
-// desde 'useOfferCalculations.js' al guardar la oferta.
-// --- FIN DE LA MODIFICACIÓN ---
-
-
-/**
- * Define qué TOTALES (los guardados en la BBDD) se deben mostrar
- * basándose en el rol del VISITANTE.
- */
-const commissionTotals = computed(() => {
-    const summary = props.offer.summary;
-    if (!summary || !currentUser.value) {
-        return { showGross: false, gross: 0, showTeam: false, team: 0, teamPerc: 0, showUser: false, user: 0, userLabel: '' };
-    }
-
-    const role = currentUser.value.role;
-    const gross = parseFloat(summary.totalCommission || 0);
-    const savedTeam = parseFloat(summary.teamCommission || 0);
-    const savedUser = parseFloat(summary.userCommission || 0);
-    const creatorTeamPerc = props.offer.user?.team?.commission_percentage || 0;
-
-    // ADMIN: Muestra Bruta, Equipo (del creador), Vendedor (del creador)
-    if (role === 'admin') {
-        return {
-            showGross: true,
-            gross: gross,
-            showTeam: true,
-            team: savedTeam,
-            teamPerc: creatorTeamPerc,
-            showUser: true,
-            user: savedUser,
-            userLabel: 'Comisión Vendedor:'
-        };
-    }
-
-    // TEAM LEAD / MANAGER: Muestra Equipo (del creador) y Vendedor (del creador)
-    if (currentUser.value.is_manager) {
-         return {
-            showGross: false, // Oculta Bruta
-            gross: 0,
-            showTeam: true,
-            team: savedTeam,
-            teamPerc: creatorTeamPerc,
-            showUser: true,
-            user: savedUser,
-            userLabel: 'Comisión Vendedor:'
-        };
-    }
-
-    // USER: Muestra solo "Tu Comisión" (que es el valor guardado del creador,
-    // asumiendo que un user solo ve sus propias ofertas)
-    if (role === 'user') {
-         return {
-            showGross: false,
-            gross: 0,
-            showTeam: false,
-            team: 0,
-            teamPerc: 0,
-            showUser: true,
-            user: savedUser,
-            userLabel: 'Tu Comisión:'
-        };
-    }
-    
-    return { showGross: false, gross: 0, showTeam: false, team: 0, teamPerc: 0, showUser: false, user: 0, userLabel: '' };
-});
-// --- FIN: LÓGICA DE CÁLCULO DE COMISIÓN ---
-
-
-// --- INICIO: LÓGICA DE BLOQUEO (de Show.vue) ---
 const confirmingLockOffer = ref(false);
 const lockForm = useForm({});
-
-const confirmLockOffer = () => {
-    confirmingLockOffer.value = true;
-};
-
-const closeModal = () => {
-    confirmingLockOffer.value = false;
-};
-
+const confirmLockOffer = () => confirmingLockOffer.value = true;
+const closeModal = () => { confirmingLockOffer.value = false; confirmingSendEmail.value = false; };
 const lockOffer = () => {
     lockForm.post(route('offers.lock', props.offer.id), {
         preserveScroll: true,
         onSuccess: () => closeModal(),
     });
 };
-// --- FIN: LÓGICA DE BLOQUEO ---
 
-// --- LÓGICA CENTRALITA (Principal) - (Del Fichero 2) ---
+const confirmingSendEmail = ref(false);
+const sendEmailForm = useForm({ email: '' });
+const confirmSendEmail = () => {
+    sendEmailForm.email = props.offer.client?.email || '';
+    confirmingSendEmail.value = true;
+};
+const sendOfferByEmail = () => {
+    sendEmailForm.post(route('offers.send', props.offer.id), {
+        preserveScroll: true,
+        onSuccess: () => closeModal(),
+    });
+};
+
+// --- LÓGICA CENTRALITA (Principal) ---
 const centralitaInfo = computed(() => {
     if (!props.offer) return null;
 
-    // Busca la centralita principal (la que no está asociada a una línea adicional)
     const savedCentralita = props.offer.addons?.find(a => a.type === 'centralita' && a.pivot.selected_centralita_id === null);
     const savedOperadora = props.offer.addons?.find(a => a.type === 'centralita_feature' && a.pivot.addon_name === 'Operadora Automática');
-    const savedDdi = props.offer.addons?.find(a => a.type === 'centralita_feature' && a.pivot.addon_name === 'DDI'); // <--- NUEVO
+    const savedDdi = props.offer.addons?.find(a => a.type === 'centralita_feature' && a.pivot.addon_name === 'DDI'); 
 
-    // --- CORRECCIÓN ---
-    // Filtramos extensiones: solo las que pertenecen a la centralita principal
     const mainCentralitaPivotId = savedCentralita?.pivot.id;
     const contractedExtensions = props.offer.addons?.filter(a => 
         a.type === 'centralita_extension' && a.pivot.related_centralita_id === mainCentralitaPivotId
     ) || [];
-    // --- FIN CORRECCIÓN ---
     
     const includedCentralita = props.offer.package?.addons?.find(a => a.type === 'centralita' && a.pivot.is_included);
     const includedOperadora = props.offer.package?.addons?.find(a => a.type === 'centralita_feature' && a.pivot.addon_name === 'Operadora Automática' && a.pivot.is_included);
@@ -148,117 +166,85 @@ const centralitaInfo = computed(() => {
         a.type === 'centralita_extension' && a.pivot.is_included && a.pivot.included_quantity > 0
     ) || [];
 
-    if (!finalCentralita && !finalOperadora && contractedExtensions.length === 0 && packageIncludedExtensions.length === 0 && !savedDdi) { // <--- AÑADIDO DDI
-        return null; // No hay centralita principal
+    if (!finalCentralita && !finalOperadora && contractedExtensions.length === 0 && packageIncludedExtensions.length === 0 && !savedDdi) { 
+        return null; 
     }
     
     return {
         centralita: finalCentralita,
         operadora: finalOperadora,
-        ddi: savedDdi, // <--- AÑADIDO
+        ddi: savedDdi,
         contractedExtensions: contractedExtensions,
         packageIncludedExtensions: packageIncludedExtensions
     };
 });
 
-// --- LÓGICA INTERNET, TV Y MULTISEDE (Del Fichero 2) ---
-const allAddons = computed(() => props.offer.addons || []);
+// --- LÓGICA INTERNET, TV Y MULTISEDE ---
+// Usamos props.offer.addons directamente para evitar conflictos con la prop 'allAddons'
+const offerAddons = computed(() => props.offer.addons || []);
 const allPackageAddons = computed(() => props.offer.package?.addons || []);
 
-// Mantenemos la lógica de Show.vue (snapshot) para Internet y TV
-const baseInternetAddon = computed(() => allAddons.value.find(a => a.type === 'internet'));
+const baseInternetAddon = computed(() => offerAddons.value.find(a => a.type === 'internet'));
 
-// --- INICIO: CAMBIO (Línea 103) ---
-// Hacemos la búsqueda más específica por nombre
-const ipFijaPrincipal = computed(() => allAddons.value.find(a => 
+const ipFijaPrincipal = computed(() => offerAddons.value.find(a => 
     a.type === 'internet_feature' && a.pivot.addon_name === 'IP Fija'
 ));
-// --- AÑADIDO: 'fibraOroPrincipal' ---
-const fibraOroPrincipal = computed(() => allAddons.value.find(a => 
+const fibraOroPrincipal = computed(() => offerAddons.value.find(a => 
     a.type === 'internet_feature' && a.pivot.addon_name === 'Fibra Oro'
 ));
-// --- FIN: CAMBIO ---
 
-const additionalInternetAddons = computed(() => allAddons.value.filter(a => a.type === 'internet_additional') || []);
-const tvAddons = computed(() => allAddons.value.filter(a => a.type === 'tv' || a.type === 'tv_base' || a.type === 'tv_premium') || []);
+const additionalInternetAddonsData = computed(() => offerAddons.value.filter(a => a.type === 'internet_additional') || []);
+const tvAddons = computed(() => offerAddons.value.filter(a => a.type === 'tv' || a.type === 'tv_base' || a.type === 'tv_premium') || []);
 
-/**
- * Busca los detalles de una centralita (por su ID) dentro de los addons
- * disponibles en el PAQUETE (ya que de ahí se saca el nombre y precio).
- */
 const getPackageCentralitaDetails = (centralitaId) => {
     if (!centralitaId) return null;
-    // Busca en los addons del paquete el nombre de la centralita
     return allPackageAddons.value.find(a => a.type === 'centralita' && a.id === centralitaId);
 };
 
-/**
- * Busca la extensión auto-incluida que corresponde a un tipo de centralita.
- * (Replicando la lógica de useOfferCalculations)
- */
 const findAutoIncludedExtension = (centralitaAddon) => {
     if (!centralitaAddon) return null;
-    // Extrae el tipo del nombre, ej: "Centralita Básica" -> "Básica"
     const type = centralitaAddon.name.split(' ')[1]; 
     if (!type) return null;
-    
-    // --- ¡CORREGIDO! ---
-    // Buscar en la prop 'centralitaExtensions' (la lista completa)
-    // en lugar de 'props.offer.package.addons' (solo los del paquete)
     return props.centralitaExtensions.find(a => 
         a.type === 'centralita_extension' && a.name.includes(type)
     );
 };
 
-// Computed para Centralitas Multisede (con sus extensiones)
 const centralitasMultisede = computed(() => {
-    // --- ¡CORREGIDO! ---
-    // Usar la nueva prop 'centralitaExtensions' como guarda
     if (!props.centralitaExtensions) return [];
 
-    // Usamos 'additionalInternetAddons' que SÍ lee del snapshot
-    return additionalInternetAddons.value
-        .filter(addon => !!addon.pivot.selected_centralita_id) // Filtra las que SÍ tienen centralita
+    return additionalInternetAddonsData.value
+        .filter(addon => !!addon.pivot.selected_centralita_id)
         .map(addon => {
             const centralitaDetails = getPackageCentralitaDetails(addon.pivot.selected_centralita_id);
-            const includedExtension = findAutoIncludedExtension(centralitaDetails); // Busca la extensión incluida
+            const includedExtension = findAutoIncludedExtension(centralitaDetails); 
 
-            // --- CORRECCIÓN ---
-            // Buscamos las extensiones ADICIONALES que pertenecen a esta multisede
-            const multiCentralitaPivotId = allAddons.value.find(c => c.id === addon.pivot.selected_centralita_id)?.pivot.id;
-            const multiContractedExtensions = allAddons.value.filter(a => 
+            const multiCentralitaPivotId = offerAddons.value.find(c => c.id === addon.pivot.selected_centralita_id)?.pivot.id;
+            const multiContractedExtensions = offerAddons.value.filter(a => 
                 a.type === 'centralita_extension' && a.pivot.related_centralita_id === multiCentralitaPivotId
             ) || [];
-            // --- FIN CORRECCIÓN ---
 
             return {
-                id: addon.id, // ID único del addon de internet
-                lineName: addon.pivot.addon_name, // <-- Leemos del Snapshot
+                id: addon.id,
+                lineName: addon.pivot.addon_name,
                 centralitaName: centralitaDetails?.name || `ID ${addon.pivot.selected_centralita_id}`,
                 has_ip_fija: addon.pivot.has_ip_fija,
-                has_fibra_oro: addon.pivot.has_fibra_oro, // <-- AÑADIDO (Línea 166)
-                extensionName: includedExtension?.name || null, // Nombre de la extensión incluida
-                contractedExtensions: multiContractedExtensions // <-- AÑADIDO
+                has_fibra_oro: addon.pivot.has_fibra_oro,
+                extensionName: includedExtension?.name || null,
+                contractedExtensions: multiContractedExtensions
             };
         });
 });
-// --- FIN LÓGICA INTERNET/CENTRALITA ---
 
-// --- INICIO: NUEVOS COMPUTEDS PARA SOLUCIONES Y BENEFICIOS ---
 const digitalSolutions = computed(() => {
     if (!props.offer?.addons) return [];
-    // Filtra por los tipos que se definen como "Soluciones Digitales"
     return props.offer.addons.filter(a => ['service', 'software'].includes(a.type));
 });
 
 const appliedBenefits = computed(() => {
-    // La relación 'benefits' se carga desde el controlador
     return props.offer?.benefits || [];
 });
-// --- FIN: NUEVOS COMPUTEDS ---
 
-
-// --- FUNCIONES FORMATO ---
 const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
     try {
@@ -271,52 +257,18 @@ const formatCurrency = (value) => {
         return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(value);
     } catch { return 'Error €'; }
 };
-const formatPrice = (value) => { // Para el desglose
+const formatPrice = (value) => { 
       if (value == null || isNaN(value)) return 'N/A';
     const formatted = formatCurrency(value);
     return value >= 0 ? `+${formatted}` : formatted;
 };
 
-// --- INICIO: LÓGICA ENVÍO EMAIL MODIFICADA ---
-const confirmingSendEmail = ref(false); // Nuevo ref para el modal
-const sendEmailForm = useForm({ // Modificar el form
-    email: '', 
-});
-
-// 1. Esta función ABRIRÁ el modal
-const confirmSendEmail = () => {
-    sendEmailForm.email = props.offer.client?.email || ''; // Pone el email del cliente por defecto
-    confirmingSendEmail.value = true;
-};
-
-// 2. Esta función CERRARÁ el modal
-const closeEmailModal = () => {
-    confirmingSendEmail.value = false;
-    sendEmailForm.reset();
-    sendEmailForm.clearErrors();
-};
-
-// 3. Esta función ENVIARÁ el email (llamada desde el modal)
-const sendOfferByEmail = () => { 
-    sendEmailForm.post(route('offers.send', props.offer.id), { 
-        preserveScroll: true,
-        onSuccess: () => closeEmailModal(),
-        // Opcional: onError para mantener el modal abierto si hay un error de validación
-        onError: () => {
-            // No cerramos el modal si hay un error (ej. email inválido)
-        }
-    }); 
-};
-// --- FIN: LÓGICA ENVÍO EMAIL MODIFICADA ---
-
-
-// --- ESTADO PARA DESPLEGABLES ---
 const openDetails = ref({
     lines: false,
     internetTv: false,
     centralita: false,
-    benefits: false, // <-- AÑADIDO
-    solutions: false, // <-- AÑADIDO
+    benefits: false, 
+    solutions: false, 
     commissionBreakdown: false,
 });
 
@@ -328,11 +280,16 @@ const openDetails = ref({
     <AuthenticatedLayout>
         <template #header>
              <div class="flex flex-wrap justify-between items-center gap-4">
-                 <h2 class="font-semibold text-xl text-gray-800 leading-tight">Detalle de la Oferta #{{ offer.id }}</h2>
+                 <h2 class="font-semibold text-xl text-gray-800 leading-tight">
+                     Detalle de la Oferta #{{ offer.id }}
+                     <span v-if="currentUser.id !== offer.user_id" class="text-sm font-normal text-gray-500 ml-2">
+                         (Propietario: {{ offer.user?.name }})
+                     </span>
+                 </h2>
                  <div class="space-x-2 flex items-center flex-wrap">
                       <Link :href="route('offers.index')"><SecondaryButton>Volver</SecondaryButton></Link>
                       
-                      <Link v-if="offer.status === 'borrador'" :href="route('offers.edit', offer.id)">
+                      <Link v-if="offer.status === 'borrador' || currentUser.role === 'admin'" :href="route('offers.edit', offer.id)">
                           <PrimaryButton>Editar</PrimaryButton>
                       </Link>
                       
@@ -350,15 +307,15 @@ const openDetails = ref({
         </template>
 
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 mt-6">
-           <div v-if="$page.props.flash.success" class="p-4 mb-4 bg-green-100 border border-green-300 text-green-800 rounded-md shadow-sm transition duration-300 ease-in-out">
+            <div v-if="$page.props.flash.success" class="p-4 mb-4 bg-green-100 border border-green-300 text-green-800 rounded-md shadow-sm">
                 {{ $page.props.flash.success }}
-           </div>
-           <div v-if="$page.props.flash.warning" class="p-4 mb-4 bg-yellow-100 border border-yellow-300 text-yellow-800 rounded-md shadow-sm transition duration-300 ease-in-out">
-                 {{ $page.props.flash.warning }}
-           </div>
-           <div v-if="$page.props.flash.error" class="p-4 mb-4 bg-red-100 border border-red-300 text-red-800 rounded-md shadow-sm transition duration-300 ease-in-out">
+            </div>
+            <div v-if="$page.props.flash.warning" class="p-4 mb-4 bg-yellow-100 border border-yellow-300 text-yellow-800 rounded-md shadow-sm">
+                  {{ $page.props.flash.warning }}
+            </div>
+            <div v-if="$page.props.flash.error" class="p-4 mb-4 bg-red-100 border border-red-300 text-red-800 rounded-md shadow-sm">
                 {{ $page.props.flash.error }}
-           </div>
+            </div>
         </div>
 
         <div class="py-12">
@@ -377,13 +334,13 @@ const openDetails = ref({
                                      <span class="font-semibold text-gray-600 block">Estado:</span>
                                      <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full capitalize"
                                          :class="{
-                                            'bg-blue-100 text-blue-800': offer.status === 'borrador',
-                                            'bg-green-100 text-green-800': offer.status === 'finalizada',
-                                            'bg-gray-100 text-gray-800': !offer.status
-                                        }">
+                                             'bg-blue-100 text-blue-800': offer.status === 'borrador',
+                                             'bg-green-100 text-green-800': offer.status === 'finalizada',
+                                             'bg-gray-100 text-gray-800': !offer.status
+                                         }">
                                          {{ offer.status || 'Borrador' }}
                                      </span>
-                                     </div>
+                                 </div>
                              </div>
                              <h3 class="text-lg font-medium leading-6 text-gray-900 border-b pb-2">👤 Datos del Cliente</h3>
                              <div v-if="offer.client" class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 text-sm p-4 bg-gray-50 rounded-lg">
@@ -391,9 +348,10 @@ const openDetails = ref({
                                  <div><p class="text-gray-500">CIF / NIF</p><p class="font-medium text-gray-900">{{ offer.client.cif_nif }}</p></div>
                                  <div><p class="text-gray-500">Email</p><p class="font-medium text-gray-900">{{ offer.client.email || 'No especificado' }}</p></div>
                                  <div><p class="text-gray-500">Teléfono</p><p class="font-medium text-gray-900">{{ offer.client.phone || 'No especificado' }}</p></div>
-                                 </div>
+                                 <div><p class="text-gray-500">Dirección</p><p class="font-medium text-gray-900">{{ offer.client.address || 'No especificada' }}</p></div>
+                             </div>
                              <div v-else><p class="italic text-gray-500">No hay cliente asociado.</p></div>
-                         </section>
+                        </section>
 
                         <section class="bg-white p-6 shadow-sm sm:rounded-lg">
                             <details class="group" :open="openDetails.lines" @toggle="openDetails.lines = $event.target.open">
@@ -419,9 +377,9 @@ const openDetails = ref({
                                                      </div>
                                                  </div>
                                                  <div class="md:col-span-3 mt-2 italic text-xs text-gray-400" v-else>Sin terminal asociado.</div>
-                                                  </div>
-                                         </div>
-                                     </div>
+                                             </div>
+                                        </div>
+                                    </div>
                                     <p v-else class="italic text-gray-500">No se añadieron líneas móviles.</p>
                                 </div>
                             </details>
@@ -456,10 +414,10 @@ const openDetails = ref({
                                                 Incluida
                                             </span>
                                         </div>
-                                        </div>
+                                    </div>
                                     
-                                    <div v-if="additionalInternetAddons.length > 0">
-                                        <div v-for="(addon, index) in additionalInternetAddons" :key="addon.id + '-' + index" class="text-sm bg-blue-50 p-3 rounded mt-2 shadow-sm">
+                                    <div v-if="additionalInternetAddonsData.length > 0">
+                                        <div v-for="(addon, index) in additionalInternetAddonsData" :key="addon.id + '-' + index" class="text-sm bg-blue-50 p-3 rounded mt-2 shadow-sm">
                                             <span class="font-semibold text-blue-800">Internet Adicional:</span>
                                             <span class="ml-2">{{ addon.pivot.addon_name }}</span>
 
@@ -472,8 +430,8 @@ const openDetails = ref({
                                                 <span class="text-xs font-semibold text-gray-700">Fibra Oro:</span>
                                                 <span class="ml-1 text-xs">Incluida</span>
                                             </div>
-                                            </div>
                                         </div>
+                                    </div>
                                     
                                     <div v-if="tvAddons.length > 0" class="text-sm bg-purple-50 p-3 rounded mt-2 shadow-sm">
                                         <span class="font-semibold block mb-1 text-purple-800">Televisión:</span>
@@ -499,7 +457,7 @@ const openDetails = ref({
                                 
                                 <div class="mt-4 space-y-4 border-t pt-4">
                                     
-                                    <!-- Centralita Principal (si existe) -->
+                                    <!-- Centralita Principal -->
                                     <div v-if="centralitaInfo" class="text-sm bg-indigo-50 p-4 rounded shadow-sm space-y-2">
                                         <p class="font-medium text-indigo-900">Centralita Principal</p>
                                         <p v-if="centralitaInfo.centralita"><span class="font-semibold text-indigo-800">Base:</span> {{ centralitaInfo.centralita.name }}</p>
@@ -531,7 +489,7 @@ const openDetails = ref({
                                         </div>
                                     </div>
                                     
-                                    <!-- Centralitas Multisede (si existen) -->
+                                    <!-- Centralitas Multisede -->
                                     <div v-if="centralitasMultisede.length > 0" class="space-y-3">
                                         <div v-for="multi in centralitasMultisede" :key="multi.id" class="text-sm bg-indigo-50 p-4 rounded shadow-sm">
                                             <p class="font-medium text-indigo-900 mb-2">Centralita Multisede (en {{ multi.lineName }})</p>
@@ -544,18 +502,15 @@ const openDetails = ref({
                                                 </ul>
                                             </div>
                                             
-                                            <!-- IP Fija en Multisede -->
                                             <div v-if="multi.has_ip_fija" class="mt-2 pt-2 border-t border-indigo-200">
                                                 <span class="text-xs font-semibold text-gray-700">IP Fija:</span>
                                                 <span class="ml-1 text-xs">Incluida (Gratis por Centralita)</span>
                                             </div>
 
-                                            <!-- Fibra Oro en Multisede -->
                                             <div v-if="multi.has_fibra_oro" class="mt-2 pt-2 border-t border-indigo-200">
                                                 <span class="text-xs font-semibold text-gray-700">Fibra Oro:</span>
                                                 <span class="ml-1 text-xs">Incluida</span>
                                             </div>
-                                            
                                         </div>
                                     </div>
 
@@ -603,7 +558,7 @@ const openDetails = ref({
                                 </div>
                             </details>
                         </section>
-                        </div> 
+                    </div> 
                     
                     <div class="lg:col-span-1 space-y-8">
                          <div class="sticky top-8 space-y-8"> 
@@ -613,19 +568,22 @@ const openDetails = ref({
                                      <h4 class="font-semibold text-gray-800 text-center mb-3">Resumen Precios</h4>
                                      <div class="flex flex-wrap justify-between items-baseline gap-x-4 mb-2">
                                          <span class="text-2xl font-bold text-gray-900">Precio Final:</span>
-                                         <span class="text-2xl font-bold text-indigo-600">{{ formatCurrency(offer.summary?.finalPrice) }}<span class="text-md font-medium text-gray-600">/mes</span></span>
+                                         <!-- USAMOS EL CÁLCULO DEL COMPOSABLE -->
+                                         <span class="text-2xl font-bold text-indigo-600">{{ formatCurrency(calculationSummary.finalPrice) }}<span class="text-md font-medium text-gray-600">/mes</span></span>
                                      </div>
                                      <div class="flex flex-wrap justify-between items-baseline gap-x-4 text-md font-semibold text-gray-800">
                                          <span>Pago Inicial:</span>
-                                         <span>{{ formatCurrency(offer.summary?.totalInitialPayment) }}</span>
+                                         <!-- USAMOS EL CÁLCULO DEL COMPOSABLE -->
+                                         <span>{{ formatCurrency(calculationSummary.totalInitialPayment) }}</span>
                                      </div>
                                      <div class="border-t border-gray-300 pt-3 mt-3 space-y-1">
                                          <h5 class="text-xs font-semibold text-gray-500 mb-1 uppercase">Desglose Mensual:</h5>
-                                         <div v-for="(item, index) in offer.summary?.summaryBreakdown" :key="'sum-'+index" class="flex justify-between text-xs" :class="{'text-gray-600': item.price >= 0, 'text-red-500': item.price < 0}">
+                                         <!-- USAMOS EL CÁLCULO DEL COMPOSABLE -->
+                                         <div v-for="(item, index) in calculationSummary.summaryBreakdown" :key="'sum-'+index" class="flex justify-between text-xs" :class="{'text-gray-600': item.price >= 0, 'text-red-500': item.price < 0}">
                                              <span>{{ item.description }}</span>
                                              <span class="font-medium font-mono">{{ formatPrice(item.price) }}</span>
                                          </div>
-                                         <p v-if="!offer.summary?.summaryBreakdown || offer.summary.summaryBreakdown.length === 0" class="italic text-gray-400 text-xs">No hay desglose de precios.</p>
+                                         <p v-if="!calculationSummary.summaryBreakdown || calculationSummary.summaryBreakdown.length === 0" class="italic text-gray-400 text-xs">No hay desglose de precios.</p>
                                      </div>
                                  </div>
                              </section>
@@ -640,33 +598,41 @@ const openDetails = ref({
                                          </span>
                                      </summary>
                                      <div class="mt-3 space-y-3 text-xs border-t border-yellow-200 pt-3">
-                                         <div v-for="(commissions, category) in offer.summary?.commissionDetails" :key="'com-cat-'+category">
+                                         <!-- USAMOS EL CÁLCULO DEL COMPOSABLE -->
+                                         <div v-for="(commissions, category) in calculationSummary.commissionDetails" :key="'com-cat-'+category">
                                              <p class="font-semibold text-yellow-700 mb-1 capitalize">{{ category.replace('_', ' ') }}</p>
                                              <div class="space-y-1 border-l-2 border-yellow-400 pl-2 ml-1">
                                                  <div v-for="(commission, index) in commissions" :key="'com-item-'+index" class="flex justify-between">
                                                      <span class="text-gray-600">{{ commission.description }}</span>
                                                      <span class="font-medium text-gray-800 font-mono">{{ formatCurrency(commission.amount) }}</span>
-                                                     </div>
+                                                 </div>
                                              </div>
                                          </div>
-                                         <p v-if="!offer.summary?.commissionDetails || Object.keys(offer.summary.commissionDetails).length === 0" class="italic text-gray-500">No hay desglose detallado.</p>
+                                         <p v-if="!calculationSummary.commissionDetails || Object.keys(calculationSummary.commissionDetails).length === 0" class="italic text-gray-500">No hay desglose detallado.</p>
                                      </div>
                                  </details>
 
                                  <div class="space-y-2 text-sm bg-green-50 p-4 rounded-lg border border-green-200 shadow-sm">
-                                     <div v-if="commissionTotals.showGross" class="flex justify-between font-medium text-gray-600">
+                                     <!-- USAMOS EL CÁLCULO DEL COMPOSABLE -->
+                                     
+                                     <!-- ADMIN VE BRUTA -->
+                                     <div v-if="currentUser.role === 'admin'" class="flex justify-between font-medium text-gray-600">
                                          <span>Comisión Bruta (100%):</span>
-                                         <span class="font-mono">{{ formatCurrency(commissionTotals.gross) }}</span>
+                                         <span class="font-mono">{{ formatCurrency(calculationSummary.totalCommission) }}</span>
                                      </div>
-                                     <div v-if="commissionTotals.showTeam" class="flex justify-between font-medium text-gray-700">
-                                         <span>Comisión Equipo ({{ commissionTotals.teamPerc }}%):</span>
-                                         <span class="font-mono">{{ formatCurrency(commissionTotals.team) }}</span>
+                                     
+                                     <!-- ADMIN Y MANAGER VEN EQUIPO -->
+                                     <div v-if="currentUser.role === 'admin' || currentUser.is_manager" class="flex justify-between font-medium text-gray-700">
+                                         <span>Comisión Equipo:</span>
+                                         <span class="font-mono">{{ formatCurrency(calculationSummary.teamCommission) }}</span>
                                      </div>
-                                     <div v-if="commissionTotals.showUser" class="flex justify-between text-lg font-bold text-emerald-700 pt-2 border-t border-green-300 mt-2">
-                                         <span>{{ commissionTotals.userLabel }}</span>
-                                         <span class="font-mono">{{ formatCurrency(commissionTotals.user) }}</span>
+
+                                     <!-- TODOS VEN SU PROPIA COMISIÓN (O LA DEL VENDEDOR SI ERES ADMIN) -->
+                                     <div class="flex justify-between text-lg font-bold text-emerald-700 pt-2 border-t border-green-300 mt-2">
+                                         <span>{{ currentUser.role === 'admin' || currentUser.is_manager ? 'Comisión Vendedor:' : 'Tu Comisión:' }}</span>
+                                         <span class="font-mono">{{ formatCurrency(calculationSummary.userCommission) }}</span>
                                      </div>
-                                     </div>
+                                 </div>
                              </section>
                              <section v-else class="bg-white p-6 shadow-sm sm:rounded-lg italic text-sm text-gray-500">
                                  El desglose de comisiones no está visible para tu rol.
@@ -735,5 +701,5 @@ const openDetails = ref({
                 </div>
             </div>
         </Modal>
-        </AuthenticatedLayout>
+    </AuthenticatedLayout>
 </template>

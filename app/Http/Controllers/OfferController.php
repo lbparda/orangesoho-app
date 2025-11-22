@@ -62,9 +62,28 @@ class OfferController extends Controller
         }
         // --- FIN LÓGICA DE BÚSQUEDA ---
 
+        // --- NUEVO: OBTENER USUARIOS PARA EL SELECT DE REASIGNAR ---
+        $assignableUsers = [];
+
+        if ($user->role === 'admin') {
+            // Admin puede asignar a cualquiera
+            $assignableUsers = User::select('id', 'name', 'team_id')
+                ->with('team:id,name')
+                ->orderBy('name')
+                ->get();
+        } elseif ($user->isManager() && $user->team_id) {
+            // Jefe de ventas solo a su equipo
+            $assignableUsers = User::where('team_id', $user->team_id)
+                ->select('id', 'name')
+                ->orderBy('name')
+                ->get();
+        }
+        // -----------------------------------------------------------
+
         return Inertia::render('Offers/Index', [
             'offers' => $query->paginate(10)->withQueryString(), // Mantiene los filtros en la URL
             'filters' => $request->only(['search']), 
+            'assignableUsers' => $assignableUsers, // <--- Pasamos la lista a la vista
         ]);
     }
 
@@ -384,7 +403,6 @@ class OfferController extends Controller
                 
                 // --- INICIO: AÑADIR LÓGICA DDI ---
                 if (!empty($validated['ddi_quantity']) && $validated['ddi_quantity'] > 0) {
-                    // Se busca el addon DDI por nombre y tipo (asumiendo que es un feature de centralita)
                     $ddiAddon = Addon::where('name', 'DDI')->where('type', 'centralita_feature')->first();
                     if ($ddiAddon) {
                         $offer->addons()->attach($ddiAddon->id, [
@@ -454,6 +472,7 @@ class OfferController extends Controller
         $offer->load([
             'lines', 
             'client',
+            'user.team', // <-- ¡AÑADIDO! Carga el usuario y su equipo
             'benefits', // <-- ¡AÑADIDO! Carga los beneficios ya seleccionados
             'addons' => function ($query) {
                 $query->withPivot(
@@ -845,7 +864,7 @@ class OfferController extends Controller
                 }
                 // --- FIN: AÑADIR LÓGICA DE GUARDADO ---
                 
-                // --- INICIO: AÑADIR LÓGICA DDI (CORREGIDO: ¡ESTABA FALTANDO EN UPDATE!) ---
+                // --- INICIO: AÑADIR LÓGICA DDI ---
                 if (!empty($validated['ddi_quantity']) && $validated['ddi_quantity'] > 0) {
                     $ddiAddon = Addon::where('name', 'DDI')->where('type', 'centralita_feature')->first();
                     if ($ddiAddon) {
@@ -875,10 +894,11 @@ class OfferController extends Controller
         // --- INICIO: CARGAR PIVOTES (ACTUALIZADO CON BENEFICIOS) ---
         $offer->load([
             'package.addons', 
+            'package.o2oDiscounts', // <-- ¡CORREGIDO! Faltaba cargar los descuentos del paquete
             'user.team', 
             'lines', 
             'client',
-            'benefits.addon', // <-- ¡AÑADIDO!
+            'benefits.addon', 
             'addons' => function ($query) {
                 $query->withPivot(
                     'quantity', 'has_ip_fija', 'selected_centralita_id',
@@ -901,10 +921,27 @@ class OfferController extends Controller
             }
         });
 
+        // --- INICIO FIX: CARGAR DATOS MAESTROS NECESARIOS PARA EL COMPOSABLE EN SHOW ---
+        $allAddons = Addon::all(); 
+        $discounts = Discount::where('is_active', true)->get();
+        $portabilityCommission = config('commissions.portability_extra', 0.00);
+        $portabilityExceptions = config('commissions.portability_group_exceptions', []);
+        $additionalInternetAddons = Addon::where('type', 'internet_additional')->get();
         $centralitaExtensions = Addon::where('type', 'centralita_extension')->get();
+        $fiberFeatures = Addon::where('type', 'internet_feature')->get(); 
+        // --- FIN FIX ---
+
         return Inertia::render('Offers/Show', [
             'offer' => $offer,
             'centralitaExtensions' => $centralitaExtensions,
+            
+            // --- NUEVAS PROPS PARA EL COMPOSABLE ---
+            'allAddons' => $allAddons,
+            'discounts' => $discounts,
+            'portabilityCommission' => $portabilityCommission,
+            'portabilityExceptions' => $portabilityExceptions,
+            'additionalInternetAddons' => $additionalInternetAddons,
+            'fiberFeatures' => $fiberFeatures,
         ]);
     }
 
@@ -916,6 +953,7 @@ class OfferController extends Controller
         // --- INICIO: CARGAR PIVOTES (ACTUALIZADO CON BENEFICIOS) ---
         $offer->load([
             'package.addons', 
+            'package.o2oDiscounts', // <-- Asegurarse de cargarlo aquí también por consistencia
             'user', 
             'lines', 
             'client',
@@ -975,6 +1013,37 @@ class OfferController extends Controller
             \Log::error('Error locking offer '.$offer->id.': '.$e->getMessage());
             return back()->with('error', 'No se pudo bloquear la oferta.');
         }
+    }
+
+    // --- NUEVO MÉTODO PARA REASIGNACIÓN (Necesario para que la ruta PUT funcione) ---
+    public function reassign(Request $request, Offer $offer)
+    {
+        $authUser = $request->user();
+
+        $validated = $request->validate([
+            'user_id' => 'required|exists:users,id',
+        ]);
+
+        $targetUser = User::findOrFail($validated['user_id']);
+
+        // Validaciones de seguridad
+        if ($authUser->role !== 'admin') {
+            // Si no es admin, tiene que ser manager y el usuario destino debe ser de su equipo
+            if (!$authUser->isManager()) {
+                return back()->with('error', 'No tienes permisos para reasignar.');
+            }
+            if ($targetUser->team_id !== $authUser->team_id) {
+                return back()->with('error', 'Solo puedes reasignar a miembros de tu equipo.');
+            }
+            // Opcional: Validar que la oferta también pertenezca a alguien de su equipo actualmente
+            if ($offer->user && $offer->user->team_id !== $authUser->team_id) {
+                 return back()->with('error', 'No puedes modificar ofertas de otros equipos.');
+            }
+        }
+
+        $offer->update(['user_id' => $targetUser->id]);
+
+        return back()->with('success', "Oferta reasignada a {$targetUser->name} correctamente.");
     }
     
     public function exportFunnel(Request $request)
