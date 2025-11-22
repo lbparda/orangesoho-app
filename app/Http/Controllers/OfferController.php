@@ -919,6 +919,29 @@ class OfferController extends Controller
             } else {
                 $line->terminal_details = null;
             }
+            
+            // --- FIX: Cargar datos para cálculo de comisiones de terminales ---
+            if ($line->package_terminal_id) {
+                $pivotData = DB::table('package_terminal')
+                    ->where('id', $line->package_terminal_id)
+                    ->first();
+
+                if ($pivotData) {
+                    // Asignamos el objeto que espera useOfferCalculations
+                    $line->terminal_pivot = $pivotData;
+                    $line->selected_duration = $pivotData->duration_months;
+                    
+                    // Mapeamos los costes guardados a las props "original_*" que espera el cálculo
+                    $line->original_initial_cost = $line->initial_cost;
+                    $line->original_monthly_cost = $line->monthly_cost;
+
+                    // (Opcional) Mejorar el detalle visual
+                    if ($line->terminal_details) {
+                        $line->terminal_details->duration_months = $pivotData->duration_months;
+                    }
+                }
+            }
+            // --- FIN FIX ---
         });
 
         // --- INICIO FIX: CARGAR DATOS MAESTROS NECESARIOS PARA EL COMPOSABLE EN SHOW ---
