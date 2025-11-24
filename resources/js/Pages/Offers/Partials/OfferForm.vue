@@ -117,6 +117,19 @@ const initLines = () => {
 };
 const lines = ref(initLines());
 
+// --- NUEVA FUNCIÓN: Calcular etiqueta de línea ---
+const getLineLabel = (index) => {
+    const currentLine = lines.value[index];
+    if (!currentLine) return '';
+    // Contamos cuántas líneas del mismo tipo hay hasta este índice
+    const count = lines.value
+        .slice(0, index + 1)
+        .filter(l => l.is_extra === currentLine.is_extra)
+        .length;
+    return `${currentLine.is_extra ? 'Línea Adicional' : 'Línea Principal'} ${count}`;
+};
+// -------------------------------------------------
+
 // --- 3. Internet y Centralita ---
 const additionalInternetLines = ref(isEditing.value ? props.initialAdditionalInternetLines : []);
 const selectedCentralitaId = ref(null);
@@ -266,16 +279,13 @@ const getO2oDiscountsForLine = (line, index) => {
     return isPromotionalExtra ? availableO2oDiscounts.value.filter(d => (parseFloat(d.total_discount_amount) / parseFloat(d.duration_months)) <= 1) : availableO2oDiscounts.value;
 };
 
-// --- 9. Watchers Globales (CORREGIDO DEFINITIVO) ---
+// --- 9. Watchers Globales ---
 watch(selectedPackageId, (newId, oldId) => {
     if (isEditing.value && oldId === undefined) return;
     
     lines.value = []; selectedInternetAddonId.value = null; additionalInternetLines.value = [];
     selectedCentralitaId.value = null; centralitaExtensionQuantities.value = {}; 
     isOperadoraAutomaticaSelected.value = false; selectedTvAddonIds.value = [];
-    // No reseteamos la IP fija a ciegas aquí
-    // form.is_ip_fija_selected = false; // <--- ELIMINADO
-    
     form.is_fibra_oro_selected = false; form.ddi_quantity = 0;
     selectedBenefitIds.value = []; selectedDigitalAddonIds.value = [];
 
@@ -300,9 +310,6 @@ watch(selectedPackageId, (newId, oldId) => {
         addWatchersToLine(lines.value[lines.value.length - 1]);
     }
 
-    // --- CORRECCIÓN IP FIJA ---
-    // Verificamos directamente el nuevo paquete. Si tiene centralita, forzamos true.
-    // Si NO tiene centralita (y selectedCentralitaId es null por el reset), forzamos false.
     const pkgHasCentralita = newPkg.addons.some(a => a.type === 'centralita' && a.pivot.is_included);
     form.is_ip_fija_selected = pkgHasCentralita;
 });
@@ -312,7 +319,6 @@ watch(() => form.client_id, (id) => {
     if (id) isReassigningClient.value = false;
 }, { immediate: true });
 
-// Watcher IP Fija reactivo a cambios posteriores (manuales)
 watch(isCentralitaActive, (isActive) => {
     if (isActive) {
         form.is_ip_fija_selected = true;
@@ -645,7 +651,9 @@ const changeClient = () => form.client_id = null;
                         <div v-for="(line, index) in lines" :key="line.id" class="p-6 border rounded-lg" :class="{'bg-gray-50': !line.is_extra, 'bg-green-50': line.is_extra}">
                             <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-center mb-4">
                                 <div class="md:col-span-2 flex justify-between items-center">
-                                    <span class="font-medium text-gray-700">{{ line.is_extra ? 'Adicional' : 'Principal' }}</span>
+                                    <span class="font-medium text-gray-700">
+                                        {{ getLineLabel(index) }}
+                                    </span>
                                     <div class="flex space-x-2">
                                         <button
                                             v-if="index > 0"
