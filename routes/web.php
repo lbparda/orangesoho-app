@@ -5,6 +5,7 @@ use Inertia\Inertia;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\OfferController;
+use App\Http\Controllers\PymeOfferController;
 use App\Http\Controllers\ImportController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\TeamController;
@@ -40,7 +41,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
     // Gestión de Ofertas
+   // 1. SOHO: Usa OfferController
     Route::resource('offers', OfferController::class);
+    // ... (rutas extra de OfferController)
+
+    // 2. PYME: Usa PymeOfferController
+    // La ruta 'create' también carga la vista 'Offers/Create', pero con datos de PYME
+    Route::get('/pyme/offers/create', [PymeOfferController::class, 'create'])->name('pyme.offers.create');
+    Route::post('/pyme/offers', [PymeOfferController::class, 'store'])->name('pyme.offers.store');
     Route::get('/offers/{offer}/pdf', [OfferController::class, 'generatePDF'])->name('offers.pdf');
     Route::post('offers/{offer}/lock', [OfferController::class, 'lock'])->name('offers.lock');
     
