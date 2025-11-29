@@ -3,7 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Client;
-use App\Models\PymePackage; // Importamos el modelo correcto
+use App\Models\PymePackage;
 use App\Models\PymeO2oDiscount;
 use App\Models\User;
 use Illuminate\Http\Request;
@@ -16,7 +16,7 @@ class PymeOfferController extends Controller
     {
         $user = Auth::user();
 
-        // 1. Clientes
+        // 1. Cargar Clientes
         $clientsQuery = Client::query();
         if ($user->isManager()) {
             $teamMembersIds = User::where('team_id', $user->team_id)->pluck('id');
@@ -26,10 +26,13 @@ class PymeOfferController extends Controller
         }
         $clients = $clientsQuery->select('id', 'name', 'cif_nif')->orderBy('name')->get();
 
-        // 2. Paquetes PYME (Leemos de la tabla 'pyme_packages')
-        $pymePackages = PymePackage::orderBy('base_price', 'asc')->get();
+        // 2. Cargar Paquetes PYME CON sus terminales y precios (Eager Loading)
+        // Esto es CRUCIAL para que el autocompletado de precios funcione en el frontend
+        $pymePackages = PymePackage::with(['terminalsVap', 'terminalsSub'])
+            ->orderBy('base_price', 'asc')
+            ->get();
 
-        // 3. Descuentos PYME
+        // 3. Cargar Descuentos O2O
         $pymeO2oDiscounts = PymeO2oDiscount::where('is_active', true)
             ->orderBy('percentage', 'asc')
             ->get();
@@ -41,7 +44,7 @@ class PymeOfferController extends Controller
             'pymeO2oDiscounts' => $pymeO2oDiscounts,
             'auth' => ['user' => $user->load('team')],
             
-            // Props vacías para SOHO (para evitar errores en el componente compartido)
+            // Props vacías para SOHO
             'packages' => [],
             'allAddons' => [],
             'discounts' => [],
@@ -57,7 +60,7 @@ class PymeOfferController extends Controller
 
     public function store(Request $request)
     {
-        // Pendiente
+        // Lógica de guardado pendiente
         return redirect()->route('offers.index');
     }
 }

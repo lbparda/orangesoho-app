@@ -68,14 +68,16 @@ class PymeImportController extends Controller
                         // IMPORTANTE: Asumimos que la columna C (índice 2) indica si es VAP o SUB.
                         // Si no existe, habría que deducirlo o cambiar la lógica.
                         $type = strtoupper(trim($row[2] ?? 'VAP')); 
-                        $duration = (int) ($row[5] ?? 24);
+                        $duration = (int) ($row[4] ?? 24);
                         
                         if (empty($brand) || empty($model)) continue;
 
                         // Limpieza de precios
-                        $price1 = (float) str_replace(['€', ' ', ','], ['', '', '.'], $row[7] ?? 0);
-                        $price2 = (float) str_replace(['€', ' ', ','], ['', '', '.'], $row[8] ?? 0);
-
+                        $price1 = (float) str_replace(['€', ' ', ','], ['', '', '.'], $row[6] ?? 0);
+                        $price2 = (float) str_replace(['€', ' ', ','], ['', '', '.'], $row[7] ?? 0);
+                        $price3 = (float) str_replace(['€', ' ', ','], ['', '', '.'], $row[5] ?? 0);
+                        $price4 = (float) str_replace(['€', ' ', ','], ['', '', '.'], $row[3] ?? 0);
+                        $price5 = (float) str_replace(['€', ' ', ','], ['', '', '.'], $row[8] ?? 0);
                         // 2. Buscar o Crear Terminal
                         $terminal = PymeTerminal::firstOrCreate(
                             ['model' => trim($model)],
@@ -105,8 +107,8 @@ class PymeImportController extends Controller
                                     'duration_months' => $duration
                                 ],
                                 [
-                                    'cession_price' => $price1, // Precio 1 = Cesión
-                                    'subsidy_price' => $price2, // Precio 2 = Subvención
+                                    'cession_price' => $price4, // Precio 1 = Cesión
+                                    'subsidy_price' => $price5, // Precio 2 = Subvención
                                     'updated_at' => now(),
                                     'created_at' => now()
                                 ]
