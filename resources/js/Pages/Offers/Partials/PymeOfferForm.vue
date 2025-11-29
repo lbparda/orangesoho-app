@@ -10,7 +10,7 @@ import { usePymeOfferCalculations } from '@/composables/PymeuseOfferCalculations
 const props = defineProps({
     clients: { type: Array, default: () => [] },
     packages: { type: Array, default: () => [] }, 
-    discounts: { type: Array, default: () => [] }, 
+    discounts: { type: Array, default: () => [] }, // Aquí vienen los O2O con sus penalizaciones
     
     allAddons: Array,
     operators: Array,
@@ -28,16 +28,19 @@ const props = defineProps({
 const emit = defineEmits(['update:offerType']);
 
 const tariffType = ref('OPTIMA'); 
-const o2oOptions = [
-    { label: 'SinNNN O2O (0%)', value: 0 }, { label: '5%', value: 5 }, { label: '10%', value: 10 },
-    { label: '15%', value: 15 }, { label: '20%', value: 20 }, { label: '25%', value: 25 },
-    { label: '30%', value: 30 }, { label: '35%', value: 35 }, { label: '40%', value: 40 },
-];
+
+// Eliminamos la variable antigua 'o2oOptions' que ya no sirve
 
 const mobileLines = ref([createNewLine()]);
 const fixedLines = ref([createFixedLine()]);
 
-const { getPackagePrice, calculateLineCommission, totalCommission } = usePymeOfferCalculations(props.packages, mobileLines, tariffType);
+// Pasamos 'props.discounts' al composable para que pueda calcular las penalizaciones
+const { getPackagePrice, calculateLinePrice, calculateLineCommission, totalCommission } = usePymeOfferCalculations(
+    props.packages, 
+    mobileLines, 
+    tariffType, 
+    props.discounts
+);
 
 // --- LÓGICA DE AUTOCOMPLETADO DE PRECIOS ---
 
@@ -47,11 +50,9 @@ const getAvailableBrands = (line) => {
     const pkg = props.packages.find(p => p.id === line.package_id);
     if (!pkg) return [];
 
-    // Elegimos la lista correcta según el tipo de venta seleccionado
     const terminals = line.terminal_type === 'VAP' ? pkg.terminals_vap : pkg.terminals_sub;
     
     if (!terminals) return [];
-    // Extraemos marcas únicas
     return [...new Set(terminals.map(t => t.brand))].sort();
 };
 
@@ -64,7 +65,6 @@ const getAvailableModels = (line) => {
     const terminals = line.terminal_type === 'VAP' ? pkg.terminals_vap : pkg.terminals_sub;
     
     if (!terminals) return [];
-    // Filtramos por marca seleccionada
     return terminals.filter(t => t.brand === line.brand);
 };
 
@@ -78,7 +78,6 @@ const updateTerminalPrices = (line) => {
     const terminalData = collection.find(t => t.id === line.terminal_id);
 
     if (terminalData && terminalData.pivot) {
-        // Asignamos el nombre del modelo para guardado fácil
         line.model = terminalData.model; 
 
         if (line.terminal_type === 'VAP') {
@@ -91,7 +90,6 @@ const updateTerminalPrices = (line) => {
     }
 };
 
-// Al cambiar tipo de venta (VAP/SUB) o Paquete, reseteamos selección
 const resetTerminalSelection = (line) => {
     line.brand = '';
     line.model = '';
@@ -114,13 +112,13 @@ function createNewLine() {
         quantity: 1,
         type: 'portabilidad',
         package_id: defaultPackageId,
-        cp_duration: 0,
+        cp_duration: 0, // Por defecto 0, el usuario puede cambiar a 24 o 36
         o2o_discount_id: defaultDiscountId,
         has_terminal: 'no',
         terminal_type: 'VAP',
-        brand: '', // Texto para UI
-        model: '', // Texto para UI
-        terminal_id: null, // ID real para búsqueda
+        brand: '', 
+        model: '', 
+        terminal_id: null, 
         vap_initial_payment: 0,
         vap_monthly_payment: 0,
         sub_cession_price: 0,
@@ -181,7 +179,7 @@ const goBack = () => emit('update:offerType', null);
                                 <th class="p-2 border border-gray-300 w-24">CP (Meses)</th>
                                 <th class="p-2 border border-gray-300 w-16">Term?</th>
                                 <th class="p-2 border border-gray-300 w-24">Modalidad</th>
-                                <th class="p-2 border border-gray-300 w-40">Terminal (Marca/Modelo)</th> <!-- Columna Ampliada -->
+                                <th class="p-2 border border-gray-300 w-40">Terminal</th>
                                 <th class="p-2 border border-gray-300 w-28">O2O</th>
                                 <th class="p-2 border border-gray-300 w-20 bg-green-100 text-green-900">PVP Unit.</th>
                                 <th class="p-2 border border-gray-300 w-20 bg-blue-100 text-blue-900">Comisión U.</th>
@@ -191,9 +189,7 @@ const goBack = () => emit('update:offerType', null);
                         </thead>
                         <tbody class="text-gray-700">
                             <tr v-for="(line, index) in mobileLines" :key="line.id" class="hover:bg-gray-50 text-center group">
-                                <!-- Cantidad -->
                                 <td class="p-1 border border-gray-200"><input type="number" v-model="line.quantity" min="1" class="w-full text-center border-0 bg-transparent focus:ring-1 focus:ring-orange-500 font-bold text-lg p-0" /></td>
-                                <!-- Tipo -->
                                 <td class="p-1 border border-gray-200">
                                     <select v-model="line.type" class="w-full text-xs border-gray-200 rounded focus:border-orange-500 bg-yellow-50 p-1">
                                         <option value="portabilidad">Portabilidad</option>
@@ -201,28 +197,24 @@ const goBack = () => emit('update:offerType', null);
                                         <option value="migracion">Migración</option>
                                     </select>
                                 </td>
-                                <!-- Tarifa (Resetea terminal al cambiar) -->
                                 <td class="p-1 border border-gray-200">
                                     <select v-model="line.package_id" @change="resetTerminalSelection(line)" class="w-full text-xs border-gray-200 rounded font-bold text-gray-800 focus:border-orange-500 p-1">
                                         <option v-for="pkg in packages" :key="pkg.id" :value="pkg.id">{{ pkg.name }}</option>
                                     </select>
                                 </td>
-                                <!-- CP -->
                                 <td class="p-1 border border-gray-200">
                                     <select v-model="line.cp_duration" class="w-full text-xs border-gray-200 rounded text-center focus:border-orange-500 p-1 font-medium">
-                                        <option :value="0">Sin CP</option>
+                                        <option :value="12">12 Meses</option> <!-- Agregado 12 meses -->
                                         <option :value="24">24 Meses</option>
                                         <option :value="36">36 Meses</option>
                                     </select>
                                 </td>
-                                <!-- Terminal? -->
                                 <td class="p-1 border border-gray-200">
                                     <select v-model="line.has_terminal" class="w-full text-xs border-gray-200 rounded focus:border-orange-500 p-1">
                                         <option value="no">NO</option>
                                         <option value="si">SI</option>
                                     </select>
                                 </td>
-                                <!-- Tipo Venta (Resetea terminal al cambiar) -->
                                 <td class="p-1 border border-gray-200 bg-gray-50">
                                     <select v-if="line.has_terminal === 'si'" v-model="line.terminal_type" @change="resetTerminalSelection(line)" class="w-full text-[10px] border-transparent bg-transparent focus:ring-0 text-center font-medium p-0">
                                         <option value="VAP">VAP</option>
@@ -230,11 +222,8 @@ const goBack = () => emit('update:offerType', null);
                                     </select>
                                     <span v-else class="text-gray-300">-</span>
                                 </td>
-                                
-                                <!-- COLUMNA TERMINAL INTELIGENTE -->
                                 <td class="p-1 border border-gray-200 text-left bg-white">
                                     <div v-if="line.has_terminal === 'si'" class="space-y-1">
-                                        <!-- Selectores de Marca y Modelo -->
                                         <div class="flex gap-1">
                                             <select v-model="line.brand" class="w-1/2 text-[9px] py-0 px-1 border-gray-200 h-6 rounded-sm bg-gray-50 focus:ring-1">
                                                 <option value="" disabled>Marca</option>
@@ -245,41 +234,31 @@ const goBack = () => emit('update:offerType', null);
                                                 <option v-for="t in getAvailableModels(line)" :key="t.id" :value="t.id">{{ t.model }}</option>
                                             </select>
                                         </div>
-                                        
-                                        <!-- Inputs de Precios (Se rellenan solos, pero editables) -->
                                         <div v-if="line.terminal_type === 'VAP'" class="flex gap-1">
-                                            <div class="relative w-1/2">
-                                                <input v-model="line.vap_initial_payment" type="number" step="0.01" class="w-full text-[9px] border-blue-200 rounded px-1 h-6 bg-blue-50 text-right" />
-                                                <span class="absolute left-1 top-1 text-[8px] text-blue-400">Ini</span>
-                                            </div>
-                                            <div class="relative w-1/2">
-                                                <input v-model="line.vap_monthly_payment" type="number" step="0.01" class="w-full text-[9px] border-blue-200 rounded px-1 h-6 bg-blue-50 text-right" />
-                                                <span class="absolute left-1 top-1 text-[8px] text-blue-400">Mes</span>
-                                            </div>
+                                            <div class="relative w-1/2"><input v-model="line.vap_initial_payment" type="number" step="0.01" class="w-full text-[9px] border-blue-200 rounded px-1 h-6 bg-blue-50 text-right" /><span class="absolute left-1 top-1 text-[8px] text-blue-400">Ini</span></div>
+                                            <div class="relative w-1/2"><input v-model="line.vap_monthly_payment" type="number" step="0.01" class="w-full text-[9px] border-blue-200 rounded px-1 h-6 bg-blue-50 text-right" /><span class="absolute left-1 top-1 text-[8px] text-blue-400">Mes</span></div>
                                         </div>
                                         <div v-else class="flex gap-1">
-                                            <div class="relative w-1/2">
-                                                <input v-model="line.sub_cession_price" type="number" step="0.01" class="w-full text-[9px] border-green-200 rounded px-1 h-6 bg-green-50 text-right" />
-                                                <span class="absolute left-1 top-1 text-[8px] text-green-600">Ces</span>
-                                            </div>
-                                            <div class="relative w-1/2">
-                                                <input v-model="line.sub_subsidy_price" type="number" step="0.01" class="w-full text-[9px] border-green-200 rounded px-1 h-6 bg-green-50 text-right" />
-                                                <span class="absolute left-1 top-1 text-[8px] text-green-600">Sub</span>
-                                            </div>
+                                            <div class="relative w-1/2"><input v-model="line.sub_cession_price" type="number" step="0.01" class="w-full text-[9px] border-green-200 rounded px-1 h-6 bg-green-50 text-right" /><span class="absolute left-1 top-1 text-[8px] text-green-600">Ces</span></div>
+                                            <div class="relative w-1/2"><input v-model="line.sub_subsidy_price" type="number" step="0.01" class="w-full text-[9px] border-green-200 rounded px-1 h-6 bg-green-50 text-right" /><span class="absolute left-1 top-1 text-[8px] text-green-600">Sub</span></div>
                                         </div>
                                     </div>
                                     <div v-else class="text-center text-gray-400 italic text-[10px] p-1">Sin terminal</div>
                                 </td>
-
-                                <!-- O2O -->
                                 <td class="p-1 border border-gray-200">
                                     <select v-model="line.o2o_discount_id" class="w-full text-[10px] font-bold text-center border-2 border-yellow-400 rounded bg-white focus:border-orange-500 p-1">
                                         <option v-for="disc in discounts" :key="disc.id" :value="disc.id">{{ disc.name }}</option>
                                     </select>
                                 </td>
-                                
-                                <!-- Totales -->
-                                <td class="p-1 border border-gray-200 bg-green-50 font-mono text-right pr-2 text-green-800 font-medium">{{ getPackagePrice(line.package_id).toFixed(2) }}€</td>
+                                <!-- COLUMNA PVP UNITARIO ACTUALIZADA -->
+                                <td class="p-1 border border-gray-200 bg-green-50 font-mono text-right pr-2 text-green-800 font-medium">
+                                    {{ calculateLinePrice(line).toFixed(2) }}€
+                                    <!-- Mostrar precio original tachado si hay descuento -->
+                                    <div v-if="getPackagePrice(line.package_id) > calculateLinePrice(line)" class="text-[9px] text-gray-400 line-through">
+                                        {{ getPackagePrice(line.package_id).toFixed(2) }}€
+                                    </div>
+                                </td>
+                                <!-- COLUMNA COMISIÓN ACTUALIZADA -->
                                 <td class="p-1 border border-gray-200 bg-blue-50 font-mono text-right pr-2 text-blue-700 font-bold">{{ calculateLineCommission(line).toFixed(2) }}€</td>
                                 <td class="p-1 border border-gray-200 bg-blue-100 font-mono text-right pr-2 text-blue-900 font-extrabold text-sm border-l-2 border-blue-300">{{ (calculateLineCommission(line) * line.quantity).toFixed(2) }}€</td>
                                 <td class="p-1 border border-gray-200 text-center"><button @click="removeMobileLine(index)" class="text-red-400 hover:text-red-600">&times;</button></td>
@@ -292,7 +271,6 @@ const goBack = () => emit('update:offerType', null);
                 </div>
             </div>
             
-            <!-- Parte Fija (Sin cambios, solo visual) -->
             <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg border-t-4 border-purple-500 mt-8">
                 <div class="p-4 border-b bg-gray-50"><h3 class="text-lg font-bold text-gray-800 uppercase">Oferta Fija</h3></div>
                 <div class="overflow-x-auto">

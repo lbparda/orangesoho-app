@@ -21,6 +21,8 @@ return new class extends Migration
             // Bonus Permanencia
             $table->decimal('bonus_cp_24', 10, 2)->default(0);
             $table->decimal('bonus_cp_36', 10, 2)->default(0);
+            $table->decimal('bonus_cp_24_terminal', 10, 2)->default(0);
+            $table->decimal('bonus_cp_36_terminal', 10, 2)->default(0);
 
             $table->timestamps();
         });

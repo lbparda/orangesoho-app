@@ -13,6 +13,9 @@ class PymeO2oDiscount extends Model
         'name',
         'percentage',
         'is_active',
+        'penalty_12m', // Nuevo
+        'penalty_24m', // Nuevo
+        'penalty_36m',  // Nuevo
     ];
 
     protected $casts = [

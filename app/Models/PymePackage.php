@@ -20,6 +20,9 @@ class PymePackage extends Model
         'commission_porta',
         'bonus_cp_24',
         'bonus_cp_36',
+        'bonus_cp_24_terminal',
+        'bonus_cp_36_terminal',
+
     ];
 
     protected $casts = [
@@ -29,6 +32,8 @@ class PymePackage extends Model
         'commission_porta' => 'decimal:2',
         'bonus_cp_24' => 'decimal:2',
         'bonus_cp_36' => 'decimal:2',
+        'bonus_cp_24_terminal' => 'decimal:2',
+        'bonus_cp_36_terminal' => 'decimal:2',
     ];
 
     // Relación con terminales en modalidad VAP
