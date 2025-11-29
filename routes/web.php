@@ -7,13 +7,12 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\OfferController;
 use App\Http\Controllers\PymeOfferController;
 use App\Http\Controllers\ImportController;
+use App\Http\Controllers\PymeImportController; 
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\TeamController;
-// --- INICIO: IMPORTACIÓN AÑADIDA ---
 use App\Http\Controllers\Admin\PackageController; 
 use App\Http\Controllers\Admin\DiscountController;
 use App\Http\Controllers\Admin\DiscountImportController; 
-// --- FIN: IMPORTACIÓN AÑADIDA ---
 use App\Http\Controllers\TeamLead\ManagementController;
 use App\Http\Controllers\ClientController;
 
@@ -64,6 +63,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Importación de Terminales
     Route::get('/terminals/import', [ImportController::class, 'create'])->name('terminals.import.create');
     Route::post('/terminals/import', [ImportController::class, 'store'])->name('terminals.import.store');
+    Route::get('/pyme/terminals/import', [PymeImportController::class, 'create'])->name('pyme.terminals.import.create');
+    Route::post('/pyme/terminals/import', [PymeImportController::class, 'store'])->name('pyme.terminals.import.store');
 
     // Gestión de Clientes
     Route::resource('clients', ClientController::class);
