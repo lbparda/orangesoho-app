@@ -9,7 +9,7 @@ import { usePymeOfferCalculations } from '@/composables/PymeuseOfferCalculations
 // Props recibidas
 const props = defineProps({
     clients: { type: Array, default: () => [] },
-    packages: { type: Array, default: () => [] }, 
+    packages: { type: Array, default: () => [] }, // Aquí vienen todos los paquetes (móvil y fija)
     discounts: { type: Array, default: () => [] }, // Aquí vienen los O2O con sus penalizaciones
     
     allAddons: Array,
@@ -29,7 +29,18 @@ const emit = defineEmits(['update:offerType']);
 
 const tariffType = ref('OPTIMA'); 
 
-// Eliminamos la variable antigua 'o2oOptions' que ya no sirve
+// --- LÓGICA DE FILTRADO DE PAQUETES ---
+const mobilePackages = computed(() => {
+    // Filtra para mostrar solo paquetes de tipo 'movil'
+    return props.packages.filter(pkg => pkg.type === 'movil');
+});
+
+const fixedPackages = computed(() => {
+    // Filtra para mostrar solo paquetes de tipo 'fija'
+    return props.packages.filter(pkg => pkg.type === 'fija');
+});
+// ---------------------------------------
+
 
 const mobileLines = ref([createNewLine()]);
 const fixedLines = ref([createFixedLine()]);
@@ -101,7 +112,8 @@ const resetTerminalSelection = (line) => {
 };
 
 function createNewLine() {
-    const defaultPackageId = (props.packages && props.packages.length > 0) ? props.packages[0].id : null;
+    // Usar el primer paquete móvil como valor por defecto
+    const defaultPackageId = (mobilePackages.value && mobilePackages.value.length > 0) ? mobilePackages.value[0].id : null;
     
     // Buscar el descuento del 0% para ponerlo por defecto
     const zeroDiscount = props.discounts ? props.discounts.find(d => parseFloat(d.percentage) === 0) : null;
@@ -111,7 +123,7 @@ function createNewLine() {
         id: Date.now() + Math.random(),
         quantity: 1,
         type: 'portabilidad',
-        package_id: defaultPackageId,
+        package_id: defaultPackageId, // <-- Usamos el paquete móvil por defecto
         cp_duration: 0, // Por defecto 0, el usuario puede cambiar a 24 o 36
         o2o_discount_id: defaultDiscountId,
         has_terminal: 'no',
@@ -127,7 +139,14 @@ function createNewLine() {
 }
 
 function createFixedLine() {
-    return { id: Date.now(), quantity: 1, name: '', discount: 0 };
+    // Usar el primer paquete fijo como valor por defecto y usar package_id
+    const defaultFixedPackageId = (fixedPackages.value && fixedPackages.value.length > 0) ? fixedPackages.value[0].id : null;
+    return { 
+        id: Date.now(), 
+        quantity: 1, 
+        package_id: defaultFixedPackageId, // <-- Usamos el paquete fijo por defecto
+        discount: 0 
+    };
 }
 
 const addMobileLine = () => mobileLines.value.push(createNewLine());
@@ -199,13 +218,12 @@ const goBack = () => emit('update:offerType', null);
                                 </td>
                                 <td class="p-1 border border-gray-200">
                                     <select v-model="line.package_id" @change="resetTerminalSelection(line)" class="w-full text-xs border-gray-200 rounded font-bold text-gray-800 focus:border-orange-500 p-1">
-                                        <option v-for="pkg in packages" :key="pkg.id" :value="pkg.id">{{ pkg.name }}</option>
+                                        <option v-for="pkg in mobilePackages" :key="pkg.id" :value="pkg.id">{{ pkg.name }}</option>
                                     </select>
                                 </td>
                                 <td class="p-1 border border-gray-200">
                                     <select v-model="line.cp_duration" class="w-full text-xs border-gray-200 rounded text-center focus:border-orange-500 p-1 font-medium">
-                                        <option :value="12">12 Meses</option> <!-- Agregado 12 meses -->
-                                        <option :value="24">24 Meses</option>
+                                        <option :value="12">12 Meses</option> <option :value="24">24 Meses</option>
                                         <option :value="36">36 Meses</option>
                                     </select>
                                 </td>
@@ -250,15 +268,12 @@ const goBack = () => emit('update:offerType', null);
                                         <option v-for="disc in discounts" :key="disc.id" :value="disc.id">{{ disc.name }}</option>
                                     </select>
                                 </td>
-                                <!-- COLUMNA PVP UNITARIO ACTUALIZADA -->
                                 <td class="p-1 border border-gray-200 bg-green-50 font-mono text-right pr-2 text-green-800 font-medium">
                                     {{ calculateLinePrice(line).toFixed(2) }}€
-                                    <!-- Mostrar precio original tachado si hay descuento -->
                                     <div v-if="getPackagePrice(line.package_id) > calculateLinePrice(line)" class="text-[9px] text-gray-400 line-through">
                                         {{ getPackagePrice(line.package_id).toFixed(2) }}€
                                     </div>
                                 </td>
-                                <!-- COLUMNA COMISIÓN ACTUALIZADA -->
                                 <td class="p-1 border border-gray-200 bg-blue-50 font-mono text-right pr-2 text-blue-700 font-bold">{{ calculateLineCommission(line).toFixed(2) }}€</td>
                                 <td class="p-1 border border-gray-200 bg-blue-100 font-mono text-right pr-2 text-blue-900 font-extrabold text-sm border-l-2 border-blue-300">{{ (calculateLineCommission(line) * line.quantity).toFixed(2) }}€</td>
                                 <td class="p-1 border border-gray-200 text-center"><button @click="removeMobileLine(index)" class="text-red-400 hover:text-red-600">&times;</button></td>
@@ -278,18 +293,31 @@ const goBack = () => emit('update:offerType', null);
                         <thead>
                             <tr class="bg-purple-100 text-gray-800 font-bold text-center uppercase border-b-2 border-purple-300">
                                 <th class="p-2 border border-gray-300 w-16">Cant.</th>
-                                <th class="p-2 border border-gray-300">Producto</th>
-                                <th class="p-2 border border-gray-300 w-32">Descuento</th>
-                                <th class="p-2 border border-gray-300 w-24">Importe</th>
-                                <th class="p-2 border border-gray-300 w-10"></th>
+                                <th class="p-2 border border-gray-300">Paquete / Tarifa Fija</th> <th class="p-2 border border-gray-300 w-32">Descuento</th>
+                                <th class="p-2 border border-gray-300 w-24">PVP Unit.</th> <th class="p-2 border border-gray-300 w-10"></th>
                             </tr>
                         </thead>
                         <tbody class="text-gray-700">
                             <tr v-for="(line, index) in fixedLines" :key="line.id" class="hover:bg-gray-50 text-center">
                                 <td class="p-1 border border-gray-200"><input type="number" v-model="line.quantity" min="1" class="w-full text-center border-0 bg-transparent font-bold" /></td>
-                                <td class="p-1 border border-gray-200 text-left"><TextInput v-model="line.name" placeholder="Descripción" class="w-full text-xs border-transparent bg-transparent" /></td>
-                                <td class="p-1 border border-gray-200"><select class="w-full text-xs border-gray-200 rounded text-center"><option value="0">Sin Dto</option><option value="10">10%</option></select></td>
-                                <td class="p-1 border border-gray-200 text-right pr-2">0,00 €</td>
+                                
+                                <td class="p-1 border border-gray-200 text-left">
+                                    <select v-model="line.package_id" class="w-full text-xs border-gray-200 rounded font-bold text-gray-800 focus:border-purple-500 p-1">
+                                        <option v-for="pkg in fixedPackages" :key="pkg.id" :value="pkg.id">{{ pkg.name }}</option>
+                                    </select>
+                                </td>
+
+                                <td class="p-1 border border-gray-200">
+                                    <select v-model="line.discount" class="w-full text-xs border-gray-200 rounded text-center">
+                                        <option :value="0">Sin Dto</option>
+                                        <option :value="10">10%</option>
+                                    </select>
+                                </td>
+                                
+                                <td class="p-1 border border-gray-200 text-right pr-2 font-mono bg-purple-50">
+                                    {{ getPackagePrice(line.package_id).toFixed(2) }} €
+                                </td>
+                                
                                 <td class="p-1 border border-gray-200"><button @click="removeFixedLine(index)" class="text-red-400 hover:text-red-600">&times;</button></td>
                             </tr>
                             <tr class="bg-gray-50 border-t-2 border-purple-200">

@@ -13,6 +13,7 @@ class PymePackageSeeder extends Seeder
         $packages = [
             [
                 'name' => 'EMPRESAS VOZ', 
+                'type' => 'movil',
                 'base_price' => 6.00,
                 'commission_optima' => 6.00, 'commission_custom' => 4.00,
                 'bonus_cp_24' => 5.00, 'bonus_cp_36' => 17.00,
@@ -20,6 +21,7 @@ class PymePackageSeeder extends Seeder
             ],         
             [
                 'name' => 'EMPRESAS 5', 
+                'type' => 'movil',
                 'base_price' => 15.00,
                 'commission_optima' =>130.00, 'commission_custom' => 50.00,
                 'bonus_cp_24' => 12.00, 'bonus_cp_36' => 42.00,
@@ -27,6 +29,7 @@ class PymePackageSeeder extends Seeder
             ],
             [
                 'name' => 'EMPRESAS 20', 
+                'type' => 'movil',
                 'base_price' => 23.00,
                 'commission_optima' => 200.00, 'commission_custom' => 78.00,
                 'bonus_cp_24' => 18.00, 'bonus_cp_36' => 64.00, 
@@ -34,6 +37,7 @@ class PymePackageSeeder extends Seeder
             ],
             [
                 'name' => 'EMPRESAS ILIMITADA', 
+                'type' => 'movil',
                 'base_price' => 29.00,
                 'commission_optima' => 250.00, 'commission_custom' => 150.00,
                 'bonus_cp_24' => 23.00, 'bonus_cp_36' => 81.00,
@@ -42,17 +46,37 @@ class PymePackageSeeder extends Seeder
             ],
             [
                 'name' => 'EMPRESAS INTERNACIONAL', 
+                'type' => 'movil',
                 'base_price' => 48.00,
                 'commission_optima' => 415.00, 'commission_custom' => 245.00,
                 'bonus_cp_24' => 38.00, 'bonus_cp_36' => 134.00, 
                 'bonus_cp_24_terminal' => 72.00, 'bonus_cp_36_terminal' => 168.00
             ],
+            // Paquetes Fijos Nuevos (type: fija)
+            [
+                'name' => 'EMPRESAS FIBRA 600', 
+                'type' => 'fija', // <-- Nuevo
+                'base_price' => 30.00,
+                'commission_optima' => 150.00, 'commission_custom' => 80.00,
+                'bonus_cp_24' => 0.00, 'bonus_cp_36' => 0.00,
+                'bonus_cp_24_terminal' => 0.00, 'bonus_cp_36_terminal' => 0.00 
+            ],
+            [
+                'name' => 'EMPRESAS FIBRA 1000', 
+                'type' => 'fija', // <-- Nuevo
+                'base_price' => 40.00,
+                'commission_optima' => 200.00, 'commission_custom' => 120.00,
+                'bonus_cp_24' => 0.00, 'bonus_cp_36' => 0.00,
+                'bonus_cp_24_terminal' => 0.00, 'bonus_cp_36_terminal' => 0.00 
+            ],
+            // Puedes añadir más paquetes fijos aquí...
         ];
+        
 
         foreach ($packages as $pkg) {
             PymePackage::updateOrCreate(
                 ['name' => $pkg['name']], 
-                [
+                [   'type' => $pkg['type'], 
                     'base_price' => $pkg['base_price'],
                     'commission_optima' => $pkg['commission_optima'],
                     'commission_custom' => $pkg['commission_custom'],

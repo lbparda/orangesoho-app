@@ -14,6 +14,7 @@ class PymePackage extends Model
 
     protected $fillable = [
         'name',
+        'type',
         'base_price',
         'commission_optima',
         'commission_custom',
