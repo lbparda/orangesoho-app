@@ -16,21 +16,21 @@ class PymePackageSeeder extends Seeder
                 'base_price' => 6.00,
                 'commission_optima' => 6.00, 'commission_custom' => 4.00,
                 'bonus_cp_24' => 5.00, 'bonus_cp_36' => 17.00,
-                'bonus_cp_24_terminal' => 43.00, 'bonus_cp_36_terminal' => 102.00 
+                'bonus_cp_24_terminal' => 9.00, 'bonus_cp_36_terminal' => 21.00 
             ],         
             [
                 'name' => 'EMPRESAS 5', 
                 'base_price' => 15.00,
-                'commission_optima' =>130.00, 'commission_custom' => 20.00,
+                'commission_optima' =>130.00, 'commission_custom' => 50.00,
                 'bonus_cp_24' => 12.00, 'bonus_cp_36' => 42.00,
-                'bonus_cp_24_terminal' => 43.00, 'bonus_cp_36_terminal' => 102.00 
+                'bonus_cp_24_terminal' => 22.00, 'bonus_cp_36_terminal' => 53.00 
             ],
             [
                 'name' => 'EMPRESAS 20', 
                 'base_price' => 23.00,
-                'commission_optima' => 200.00, 'commission_custom' => 30.00,
+                'commission_optima' => 200.00, 'commission_custom' => 78.00,
                 'bonus_cp_24' => 18.00, 'bonus_cp_36' => 64.00, 
-                'bonus_cp_24_terminal' => 43.00, 'bonus_cp_36_terminal' => 102.00
+                'bonus_cp_24_terminal' => 34.00, 'bonus_cp_36_terminal' => 80.00
             ],
             [
                 'name' => 'EMPRESAS ILIMITADA', 
@@ -43,9 +43,9 @@ class PymePackageSeeder extends Seeder
             [
                 'name' => 'EMPRESAS INTERNACIONAL', 
                 'base_price' => 48.00,
-                'commission_optima' => 415.00, 'commission_custom' => 170.00,
+                'commission_optima' => 415.00, 'commission_custom' => 245.00,
                 'bonus_cp_24' => 38.00, 'bonus_cp_36' => 134.00, 
-                'bonus_cp_24_terminal' => 43.00, 'bonus_cp_36_terminal' => 102.00
+                'bonus_cp_24_terminal' => 72.00, 'bonus_cp_36_terminal' => 168.00
             ],
         ];
 

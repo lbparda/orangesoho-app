@@ -18,13 +18,13 @@ class PymeO2oDiscountSeeder extends Seeder
         
         // ¡¡IMPORTANTE!!: Sustituye los 0 por los valores reales de tu tabla.
         $discounts = [
-            ['name' => 'Sin O2O (0%)', 'percentage' => 0,  'p12' => 0,  'p24' => 0,  'p36' => 0],
-            ['name' => 'O2O 5%',       'percentage' => 5,  'p12' => 0,  'p24' => 0,  'p36' => 0], // Ejemplo: Si merma es 2%, pon 2
-            ['name' => 'O2O 10%',      'percentage' => 10, 'p12' => 0,  'p24' => 0,  'p36' => 0],
-            ['name' => 'O2O 15%',      'percentage' => 15, 'p12' => 0,  'p24' => 0,  'p36' => 0],
-            ['name' => 'O2O 20%',      'percentage' => 20, 'p12' => 0,  'p24' => 0,  'p36' => 0],
-            ['name' => 'O2O 25%',      'percentage' => 25, 'p12' => 0,  'p24' => 0,  'p36' => 0],
-            ['name' => 'O2O 30%',      'percentage' => 30, 'p12' => 0,  'p24' => 0,  'p36' => 0],
+            ['name' => 'Sin O2O (0%)', 'percentage' => 0,  'p12' => 75,  'p24' => 50,  'p36' => 50],
+            ['name' => 'O2O 5%',       'percentage' => 5,  'p12' => 75,  'p24' => 50,  'p36' => 50], 
+            ['name' => 'O2O 10%',      'percentage' => 10, 'p12' => 75,  'p24' => 50,  'p36' => 50],
+            ['name' => 'O2O 15%',      'percentage' => 15, 'p12' => 75,  'p24' => 50,  'p36' => 50],
+            ['name' => 'O2O 20%',      'percentage' => 20, 'p12' => 75,  'p24' => 50,  'p36' => 50],
+            ['name' => 'O2O 25%',      'percentage' => 25, 'p12' => 50,  'p24' => 50,  'p36' => 50],
+            ['name' => 'O2O 30%',      'percentage' => 30, 'p12' => 50,  'p24' => 50,  'p36' => 50],
             ['name' => 'O2O 35%',      'percentage' => 35, 'p12' => 50,  'p24' => 60,  'p36' => 50],
             ['name' => 'O2O 40%',      'percentage' => 40, 'p12' => 50,  'p24' => 60,  'p36' => 50],
         ];

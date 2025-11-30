@@ -20,14 +20,15 @@ export function usePymeOfferCalculations(packages, mobileLines, tariffType, disc
         if (line.o2o_discount_id && discounts.length > 0) {
             const discount = discounts.find(d => d.id === line.o2o_discount_id);
             if (discount && discount.percentage > 0) {
+                // Aplicar descuento porcentual sobre la cuota base
                 finalPrice = basePrice * (1 - (discount.percentage / 100));
             }
         }
 
-        return finalPrice;
+        return finalPrice > 0 ? finalPrice : 0;
     };
 
-    // 3. Calcular COMISIÓN DE LÍNEA (Aplicando la MERMA O2O sobre el TOTAL del contrato)
+    // 3. Calcular COMISIÓN DE LÍNEA (Aplicando la MERMA O2O y el BONUS de Terminal)
     const calculateLineCommission = (line) => {
         if (!packages) return 0;
         const pkg = packages.find(p => p.id === line.package_id);
@@ -35,7 +36,7 @@ export function usePymeOfferCalculations(packages, mobileLines, tariffType, disc
 
         let commission = 0;
 
-        // A. Base por Tarifa
+        // A. Comisión Base por Tarifa (OPTIMA/PERSONALIZADA)
         if (tariffType.value === 'OPTIMA') {
             commission += parseFloat(pkg.commission_optima || 0);
         } else {
@@ -55,19 +56,41 @@ export function usePymeOfferCalculations(packages, mobileLines, tariffType, disc
             commission += parseFloat(pkg.bonus_cp_36 || 0);
         }
 
-        // --- D. CÁLCULO DE LA MERMA (PENALIZACIÓN) O2O ---
-        // Fórmula: (Cuota Base x Meses Permanencia) x (% Penalización Tabla) = Dinero a restar de la comisión
+        // --- D. LÓGICA Y BONUS POR TERMINAL (VAP o SUBVENCIONADO) ---
+        if (line.has_terminal === 'si') {
+             // 1. APLICAR BONUS DE COMISIÓN POR TERMINAL (PARA VAP Y SUBVENCIONADO)
+             // Se aplica si hay permanencia de terminal (24/36)
+             if (cp === 24) {
+                 commission += parseFloat(pkg.bonus_cp_24_terminal || 0);
+             } else if (cp === 36) {
+                 commission += parseFloat(pkg.bonus_cp_36_terminal || 0);
+             }
+
+             // 2. APLICAR AJUSTE ESPECÍFICO DE SUBVENCIÓN
+             if (line.terminal_type === 'SUBVENCIONADO') {
+                 // LÓGICA SUBVENCIONADO (SUMAR SUBVENCIÓN y RESTAR CESIÓN)
+                 const subsidy = parseFloat(line.sub_subsidy_price || 0);
+                 const cession = parseFloat(line.sub_cession_price || 0);
+                 
+                 // Comisión = Comisión + Subvención - Precio de Cesión
+                 // NOTA: El bonus de terminal (punto 1) ya se ha sumado arriba.
+                 commission = commission + subsidy - cession;
+             }
+             // Para VAP no hay ajuste adicional en la comisión, solo el bonus ya sumado en el punto 1.
+        }
+
+        // --- E. CÁLCULO DE LA MERMA (PENALIZACIÓN) O2O ---
         if (line.o2o_discount_id && discounts.length > 0) {
             const discount = discounts.find(d => d.id === line.o2o_discount_id);
             
-            // Solo aplicamos merma si hay un descuento válido y permanencia seleccionada
             if (discount && cp > 0) {
                 let penaltyPercentage = 0;
                 let effectiveCp = cp;
+                
                 // 1. Buscamos el % de penalización en la tabla según la permanencia de la línea
                 if (cp === 12) {
                     penaltyPercentage = parseFloat(discount.penalty_12m || 0);
-                     effectiveCp = 24; 
+                    effectiveCp = 24; // <-- Aplicar base de cálculo de 24 meses SIEMPRE que CP sea 12
                 } else if (cp === 24) {
                     penaltyPercentage = parseFloat(discount.penalty_24m || 0);
                 } else if (cp === 36) {
@@ -78,22 +101,22 @@ export function usePymeOfferCalculations(packages, mobileLines, tariffType, disc
                 if (penaltyPercentage > 0) {
                     const basePrice = getPackagePrice(line.package_id);
                     const finalPrice = calculateLinePrice(line);
-                    // Calculamos el valor total que pagará el cliente durante la permanencia (antes de dtos)
-                    // "MULTIPLICAS LA CUOTA BASE DE LA LINEA POR EL NUMERO DE MESES DE PERMANENCIA"
-                   // if(cp==12){cp=24;}
-                    const totalContractValue = (basePrice-finalPrice) * effectiveCp;
-                    
-                    // Calculamos cuánto dinero supone el porcentaje de merma sobre ese total
-                    // "LE APLICAS EL PORCENTAJE... Y ESO ES LO QUE QUITAS"
-                    const penaltyAmount = totalContractValue * (penaltyPercentage / 100);
 
-                    // 3. Restamos ese importe a la comisión de la línea
+                    // BASE DE CÁLCULO: (Cuota Base - Cuota Final) x Meses CP Efectivos
+                    const monthlyDiscount = basePrice - finalPrice;
+                    
+                    const totalDiscountValue = monthlyDiscount * effectiveCp; // Se multiplica por 24 si cp=12
+                    
+                    // Importe Merma: Aplicamos el % de penalización a ese valor total de descuento.
+                    const penaltyAmount = totalDiscountValue * (penaltyPercentage / 100);
+
+                    // 3. Restamos el importe de la merma a la comisión de la línea
                     commission = commission - penaltyAmount;
                 }
             }
         }
 
-        return commission > 0 ? commission : 0; // Evitamos comisiones negativas
+        return commission > 0 ? commission : 0;
     };
 
     // Computed para el total general de comisiones sumando las líneas
