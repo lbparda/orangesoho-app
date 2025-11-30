@@ -13,6 +13,7 @@ class DatabaseSeeder extends Seeder
             PackageSeeder::class,
             PymePackageSeeder::class,
             AddonSeeder::class,
+            PymeAddonSeeder::class,
             DiscountSeeder::class,
             O2oDiscountSeeder::class,
             PymeO2oDiscountSeeder::class,
