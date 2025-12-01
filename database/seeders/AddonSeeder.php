@@ -28,7 +28,7 @@ class AddonSeeder extends Seeder
         // --- FIBRA ADICIONAL ---
         Addon::updateOrCreate(
             ['name' => 'Fibra Adicional 600Mb'],
-            ['type' => 'internet_additional', 'price' => 8.22, 'commission' => 60.00]
+            ['type' => 'internet_additional', 'price' => 13, 'commission' => 60.00]
         );
         Addon::updateOrCreate(
             ['name' => 'Fibra Adicional 1Gb'],
