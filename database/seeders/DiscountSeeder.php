@@ -11,8 +11,8 @@ class DiscountSeeder extends Seeder
     {
         // --- DESCUENTOS PARA PAQUETES 'NEGOCIO Extra 1, 3, 5' ---
         Discount::create([
-            'name' => '30% Portabilidad con VAP (No Movistar) - Grupo 1',
-            'percentage' => 30, 'duration_months' => 24,
+            'name' => '25% Portabilidad con VAP (No Movistar) - Grupo 1',
+            'percentage' => 25, 'duration_months' => 24,
             'conditions' => [
                 'applies_to' => 'principal_line', 'requires_portability' => true,
                 'requires_vap' => true, 'excluded_operators' => ['Movistar'],
@@ -56,8 +56,8 @@ class DiscountSeeder extends Seeder
         
         // --- DESCUENTOS PARA PAQUETES 'NEGOCIO Extra 10, 20' ---
         Discount::create([
-            'name' => '20% con VAP (No Movistar) - Grupo 2',
-            'percentage' => 20, 'duration_months' => 24,
+            'name' => '15% con VAP (No Movistar) - Grupo 2',
+            'percentage' => 15, 'duration_months' => 24,
             'conditions' => [
                 'applies_to' => 'principal_line', 'requires_portability' => true,
                 'requires_vap' => true, 'excluded_operators' => ['Movistar'],

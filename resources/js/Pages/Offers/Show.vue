@@ -93,8 +93,9 @@ const formMock = {
     ddi_quantity: props.offer.addons.find(a => a.name === 'DDI' && a.type === 'centralita_feature')?.pivot?.quantity || 0
 };
 
-// --- LLAMADA AL COMPOSABLE ---
-const { calculationSummary } = useOfferCalculations(
+// --- LLAMADA AL COMPOSABLE (MODIFICADA PARA INMUTABILIDAD) ---
+// 1. Obtenemos el cálculo "en vivo" pero lo renombramos a liveCalculationSummary
+const { calculationSummary: liveCalculationSummary } = useOfferCalculations(
     composablePropsMock,
     selectedPackageIdRef,
     linesRef,
@@ -107,8 +108,18 @@ const { calculationSummary } = useOfferCalculations(
     selectedDigitalAddonIdsRef,
     formMock,
     selectedBenefitsRef,
-    props.offer.user // <--- CLAVE: Usamos el dueño para el cálculo
+    props.offer.user 
 );
+
+// 2. Creamos una computed property que decide qué resumen mostrar
+const calculationSummary = computed(() => {
+    // Si la oferta está finalizada y tiene un snapshot, usamos el guardado en BDD (INMUTABLE)
+    if (props.offer.status === 'finalizada' && props.offer.summary) {
+        return props.offer.summary;
+    }
+    // Si es borrador o no hay snapshot, usamos el cálculo en tiempo real
+    return liveCalculationSummary.value;
+});
 // --- FIN INTEGRACIÓN COMPOSABLE ---
 
 
@@ -457,19 +468,16 @@ const openDetails = ref({
                                 
                                 <div class="mt-4 space-y-4 border-t pt-4">
                                     
-                                    <!-- Centralita Principal -->
                                     <div v-if="centralitaInfo" class="text-sm bg-indigo-50 p-4 rounded shadow-sm space-y-2">
                                         <p class="font-medium text-indigo-900">Centralita Principal</p>
                                         <p v-if="centralitaInfo.centralita"><span class="font-semibold text-indigo-800">Base:</span> {{ centralitaInfo.centralita.name }}</p>
                                         <p v-if="centralitaInfo.operadora"><span class="font-semibold text-indigo-800">Operadora Automática:</span> {{ centralitaInfo.operadora.pivot.addon_name }}</p>
 
-                                        <!-- DDI -->
                                         <div v-if="centralitaInfo.ddi" class="mt-2 pt-2 border-t border-indigo-200">
                                             <p class="font-semibold text-indigo-800">DDI</p>
                                             <p class="ml-4 text-xs">{{ centralitaInfo.ddi.pivot.quantity }} unidades contratadas</p>
                                         </div>
                                         
-                                        <!-- Extensiones Principal -->
                                         <div class="mt-2 pt-2 border-t border-indigo-200">
                                             <span class="font-semibold block text-indigo-800 mb-1">Extensiones (Principal):</span>
                                             
@@ -489,7 +497,6 @@ const openDetails = ref({
                                         </div>
                                     </div>
                                     
-                                    <!-- Centralitas Multisede -->
                                     <div v-if="centralitasMultisede.length > 0" class="space-y-3">
                                         <div v-for="multi in centralitasMultisede" :key="multi.id" class="text-sm bg-indigo-50 p-4 rounded shadow-sm">
                                             <p class="font-medium text-indigo-900 mb-2">Centralita Multisede (en {{ multi.lineName }})</p>
@@ -568,17 +575,14 @@ const openDetails = ref({
                                      <h4 class="font-semibold text-gray-800 text-center mb-3">Resumen Precios</h4>
                                      <div class="flex flex-wrap justify-between items-baseline gap-x-4 mb-2">
                                          <span class="text-2xl font-bold text-gray-900">Precio Final:</span>
-                                         <!-- USAMOS EL CÁLCULO DEL COMPOSABLE -->
                                          <span class="text-2xl font-bold text-indigo-600">{{ formatCurrency(calculationSummary.finalPrice) }}<span class="text-md font-medium text-gray-600">/mes</span></span>
                                      </div>
                                      <div class="flex flex-wrap justify-between items-baseline gap-x-4 text-md font-semibold text-gray-800">
                                          <span>Pago Inicial:</span>
-                                         <!-- USAMOS EL CÁLCULO DEL COMPOSABLE -->
                                          <span>{{ formatCurrency(calculationSummary.totalInitialPayment) }}</span>
                                      </div>
                                      <div class="border-t border-gray-300 pt-3 mt-3 space-y-1">
                                          <h5 class="text-xs font-semibold text-gray-500 mb-1 uppercase">Desglose Mensual:</h5>
-                                         <!-- USAMOS EL CÁLCULO DEL COMPOSABLE -->
                                          <div v-for="(item, index) in calculationSummary.summaryBreakdown" :key="'sum-'+index" class="flex justify-between text-xs" :class="{'text-gray-600': item.price >= 0, 'text-red-500': item.price < 0}">
                                              <span>{{ item.description }}</span>
                                              <span class="font-medium font-mono">{{ formatPrice(item.price) }}</span>
@@ -598,7 +602,6 @@ const openDetails = ref({
                                          </span>
                                      </summary>
                                      <div class="mt-3 space-y-3 text-xs border-t border-yellow-200 pt-3">
-                                         <!-- USAMOS EL CÁLCULO DEL COMPOSABLE -->
                                          <div v-for="(commissions, category) in calculationSummary.commissionDetails" :key="'com-cat-'+category">
                                              <p class="font-semibold text-yellow-700 mb-1 capitalize">{{ category.replace('_', ' ') }}</p>
                                              <div class="space-y-1 border-l-2 border-yellow-400 pl-2 ml-1">
@@ -613,21 +616,16 @@ const openDetails = ref({
                                  </details>
 
                                  <div class="space-y-2 text-sm bg-green-50 p-4 rounded-lg border border-green-200 shadow-sm">
-                                     <!-- USAMOS EL CÁLCULO DEL COMPOSABLE -->
-                                     
-                                     <!-- ADMIN VE BRUTA -->
                                      <div v-if="currentUser.role === 'admin'" class="flex justify-between font-medium text-gray-600">
                                          <span>Comisión Bruta (100%):</span>
                                          <span class="font-mono">{{ formatCurrency(calculationSummary.totalCommission) }}</span>
                                      </div>
                                      
-                                     <!-- ADMIN Y MANAGER VEN EQUIPO -->
                                      <div v-if="currentUser.role === 'admin' || currentUser.is_manager" class="flex justify-between font-medium text-gray-700">
                                          <span>Comisión Equipo:</span>
                                          <span class="font-mono">{{ formatCurrency(calculationSummary.teamCommission) }}</span>
                                      </div>
 
-                                     <!-- TODOS VEN SU PROPIA COMISIÓN (O LA DEL VENDEDOR SI ERES ADMIN) -->
                                      <div class="flex justify-between text-lg font-bold text-emerald-700 pt-2 border-t border-green-300 mt-2">
                                          <span>{{ currentUser.role === 'admin' || currentUser.is_manager ? 'Comisión Vendedor:' : 'Tu Comisión:' }}</span>
                                          <span class="font-mono">{{ formatCurrency(calculationSummary.userCommission) }}</span>
