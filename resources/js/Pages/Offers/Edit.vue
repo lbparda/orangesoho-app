@@ -11,6 +11,7 @@ defineProps({
     discounts: Array,
     operators: Array,
     portabilityCommission: Number,
+    portabilityExceptions: Array,
     additionalInternetAddons: Array,
     centralitaExtensions: Array,
     auth: Object,
