@@ -75,5 +75,28 @@ class PymeAddonSeeder extends Seeder
                 'description' => 'Servicio de operadora automática para la centralita.',
             ]
         );
+
+        // 4. Funcionalidades de CENTRALITA OPLUS (NUEVO)
+        PymeAddon::updateOrCreate(
+            ['name' => 'MFO'],
+            [
+                'type' => 'centralita_mobile', 
+                'price' => 5.00,
+                'commission' => 10.00,
+                'decommission' => 0.00, 
+                'description' => 'Funcionalidad MFO para centralita móvil.',
+            ]
+        );
+
+        PymeAddon::updateOrCreate(
+            ['name' => 'Agente Centralita'],
+            [
+                'type' => 'centralita_mobile', 
+                'price' => 5.00,
+                'commission' => 10.00,
+                'decommission' => 0.00, 
+                'description' => 'Licencia de Agente para centralita móvil.',
+            ]
+        );
     }
 }

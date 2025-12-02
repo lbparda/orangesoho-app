@@ -1,137 +1,275 @@
-import { computed } from 'vue';
+import { computed, unref } from 'vue'; // Importamos unref para seguridad
 
-export function usePymeOfferCalculations(packages, mobileLines, tariffType, discounts = []) {
+export function usePymeOfferCalculations(packages, mobileLines, fixedLines, tariffType, discounts, addonsData = {}) {
+    // addonsData: { mobileAddons, fiberFeatures, extensions, extensionsQty, features, selectedFeatures }
 
-    // 1. Obtener precio BASE del paquete (sin dtos)
+    // --- HELPER: Obtener Paquete ---
+    const getPackage = (id) => {
+        const list = Array.isArray(packages) ? packages : (packages.value || []);
+        return list.find(p => p.id === id);
+    };
+
     const getPackagePrice = (id) => {
-        if (!packages) return 0;
-        const pkg = packages.find(p => p.id === id);
+        const pkg = getPackage(id);
         return pkg ? parseFloat(pkg.base_price) : 0;
     };
 
-    // 2. Calcular PRECIO CLIENTE (Descuento O2O directo sobre la cuota)
-    const calculateLinePrice = (line) => {
-        const basePrice = getPackagePrice(line.package_id);
-        if (basePrice === 0) return 0;
+    // --- 1. CALCULAR PRECIO LÍNEA MÓVIL (Con O2O + Terminal + MFO/Agente) ---
+    const calculateMobileLinePrice = (line) => {
+        // A. Precio Base
+        let price = getPackagePrice(line.package_id);
+        if (price === 0) return 0;
 
-        let finalPrice = basePrice;
+        let debugMsg = `[DEBUG Precio Línea ${line.id}] Base: ${price}`;
 
-        // Si tiene descuento O2O, aplicamos el % de descuento a la cuota mensual
-        if (line.o2o_discount_id && discounts.length > 0) {
-            const discount = discounts.find(d => d.id === line.o2o_discount_id);
+        // B. Descuento O2O (Aplicado sobre la cuota base)
+        const discountList = Array.isArray(discounts) ? discounts : (discounts?.value || []);
+        if (line.o2o_discount_id) {
+            const discount = discountList.find(d => d.id === line.o2o_discount_id);
             if (discount && discount.percentage > 0) {
-                // Aplicar descuento porcentual sobre la cuota base
-                finalPrice = basePrice * (1 - (discount.percentage / 100));
+                const discountAmount = price * (parseFloat(discount.percentage) / 100);
+                price = price - discountAmount;
+                debugMsg += ` | Tras Dto O2O (-${discountAmount}): ${price}`;
             }
         }
 
-        return finalPrice > 0 ? finalPrice : 0;
+        // C. Terminal VAP (Cuota mensual)
+        if (line.has_terminal === 'si' && line.terminal_type === 'VAP') {
+            const vapCost = parseFloat(line.vap_monthly_payment || 0);
+            price += vapCost;
+            debugMsg += ` | +VAP: ${vapCost}`;
+        }
+
+        // D. Addons Móviles (MFO y Agente) - AQUÍ ESTÁ EL DEBUG CLAVE
+        // Usamos unref() por si addonsData.mobileAddons es una ref
+        const mobAddons = unref(addonsData.mobileAddons) || [];
+        
+        // DEBUG: Descomentado para ver la lista de addons disponibles
+        console.log("DEBUG: Listado Addons Móviles disponibles:", mobAddons);
+        console.log(`DEBUG: Línea ${line.id} - Has MFO: ${line.has_mfo}, Has Agente: ${line.has_agente}`);
+
+        if (line.has_mfo) {
+            // Buscamos por nombre exacto (asegúrate que en BBDD es 'MFO')
+            const mfo = mobAddons.find(a => a.name === 'MFO');
+            if (mfo) {
+                const mfoPrice = parseFloat(mfo.price || 0);
+                price += mfoPrice;
+                debugMsg += ` | +MFO: ${mfoPrice}€`;
+            } else {
+                console.warn("⚠️ MFO seleccionado pero no encontrado en la lista. Nombres disponibles:", mobAddons.map(a => a.name));
+            }
+        }
+
+        if (line.has_agente) {
+            // Buscamos por nombre exacto
+            const agente = mobAddons.find(a => a.name === 'Agente Centralita');
+            if (agente) {
+                const agentePrice = parseFloat(agente.price || 0);
+                price += agentePrice;
+                debugMsg += ` | +Agente: ${agentePrice}€`;
+            } else {
+                console.warn("⚠️ Agente seleccionado pero no encontrado en la lista. Nombres disponibles:", mobAddons.map(a => a.name));
+            }
+        }
+
+        // DEBUG: Ver el desglose final
+        console.log(debugMsg + ` = TOTAL: ${price}`);
+
+        return price > 0 ? price : 0;
     };
 
-    // 3. Calcular COMISIÓN DE LÍNEA (Aplicando la MERMA O2O y el BONUS de Terminal)
-    const calculateLineCommission = (line) => {
-        if (!packages) return 0;
-        const pkg = packages.find(p => p.id === line.package_id);
+    // --- 2. CALCULAR COMISIÓN LÍNEA MÓVIL (Con Merma O2O + Addons) ---
+    const calculateMobileLineCommission = (line) => {
+        const pkg = getPackage(line.package_id);
         if (!pkg) return 0;
 
-        let commission = 0;
+        let comm = 0;
 
-        // A. Comisión Base por Tarifa (OPTIMA/PERSONALIZADA)
-        if (tariffType.value === 'OPTIMA') {
-            commission += parseFloat(pkg.commission_optima || 0);
-        } else {
-            commission += parseFloat(pkg.commission_custom || 0);
-        }
+        // A. Comisión Base (Tarifa)
+        const type = (tariffType.value || tariffType) === 'OPTIMA' ? 'commission_optima' : 'commission_custom';
+        comm += parseFloat(pkg[type] || 0);
 
-        // B. Plus por Portabilidad
+        // B. Portabilidad
         if (line.type === 'portabilidad') {
-            commission += parseFloat(pkg.commission_porta || 0); 
+            comm += parseFloat(pkg.commission_porta || 0);
         }
 
-        // C. Bonus por Permanencia (CP)
+        // C. Permanencia (CP)
         const cp = parseInt(line.cp_duration || 0);
-        if (cp === 24) {
-            commission += parseFloat(pkg.bonus_cp_24 || 0);
-        } else if (cp === 36) {
-            commission += parseFloat(pkg.bonus_cp_36 || 0);
-        }
+        if (cp === 24) comm += parseFloat(pkg.bonus_cp_24 || 0);
+        else if (cp === 36) comm += parseFloat(pkg.bonus_cp_36 || 0);
 
-        // --- D. LÓGICA Y BONUS POR TERMINAL (VAP o SUBVENCIONADO) ---
+        // D. Terminal (Bonus y Ajuste Subvención)
         if (line.has_terminal === 'si') {
-             // 1. APLICAR BONUS DE COMISIÓN POR TERMINAL (PARA VAP Y SUBVENCIONADO)
-             // Se aplica si hay permanencia de terminal (24/36)
-             if (cp === 24) {
-                 commission += parseFloat(pkg.bonus_cp_24_terminal || 0);
-             } else if (cp === 36) {
-                 commission += parseFloat(pkg.bonus_cp_36_terminal || 0);
-             }
+            if (cp === 24) comm += parseFloat(pkg.bonus_cp_24_terminal || 0);
+            else if (cp === 36) comm += parseFloat(pkg.bonus_cp_36_terminal || 0);
 
-             // 2. APLICAR AJUSTE ESPECÍFICO DE SUBVENCIÓN
-             if (line.terminal_type === 'SUBVENCIONADO') {
-                 // LÓGICA SUBVENCIONADO (SUMAR SUBVENCIÓN y RESTAR CESIÓN)
-                 const subsidy = parseFloat(line.sub_subsidy_price || 0);
-                 const cession = parseFloat(line.sub_cession_price || 0);
-                 
-                 // Comisión = Comisión + Subvención - Precio de Cesión
-                 // NOTA: El bonus de terminal (punto 1) ya se ha sumado arriba.
-                 commission = commission + subsidy - cession;
-             }
-             // Para VAP no hay ajuste adicional en la comisión, solo el bonus ya sumado en el punto 1.
+            if (line.terminal_type === 'SUBVENCIONADO') {
+                const subsidy = parseFloat(line.sub_subsidy_price || 0);
+                const cession = parseFloat(line.sub_cession_price || 0);
+                comm = comm + subsidy - cession;
+            }
         }
 
-        // --- E. CÁLCULO DE LA MERMA (PENALIZACIÓN) O2O ---
-        if (line.o2o_discount_id && discounts.length > 0) {
-            const discount = discounts.find(d => d.id === line.o2o_discount_id);
-            
+        // E. MERMA (PENALIZACIÓN) O2O
+        const discountList = Array.isArray(discounts) ? discounts : (discounts?.value || []);
+        if (line.o2o_discount_id) {
+            const discount = discountList.find(d => d.id === line.o2o_discount_id);
             if (discount && cp > 0) {
                 let penaltyPercentage = 0;
                 let effectiveCp = cp;
-                
-                // 1. Buscamos el % de penalización en la tabla según la permanencia de la línea
-                if (cp === 12) {
-                    penaltyPercentage = parseFloat(discount.penalty_12m || 0);
-                    effectiveCp = 24; // <-- Aplicar base de cálculo de 24 meses SIEMPRE que CP sea 12
-                } else if (cp === 24) {
-                    penaltyPercentage = parseFloat(discount.penalty_24m || 0);
-                } else if (cp === 36) {
-                    penaltyPercentage = parseFloat(discount.penalty_36m || 0);
+
+                if (cp === 12) { 
+                    penaltyPercentage = parseFloat(discount.penalty_12m || 0); 
+                    effectiveCp = 24; 
+                } else if (cp === 24) { 
+                    penaltyPercentage = parseFloat(discount.penalty_24m || 0); 
+                } else if (cp === 36) { 
+                    penaltyPercentage = parseFloat(discount.penalty_36m || 0); 
                 }
 
-                // 2. Si hay penalización definida en la tabla, calculamos el importe a quitar
                 if (penaltyPercentage > 0) {
-                    const basePrice = getPackagePrice(line.package_id);
-                    const finalPrice = calculateLinePrice(line);
-
-                    // BASE DE CÁLCULO: (Cuota Base - Cuota Final) x Meses CP Efectivos
-                    const monthlyDiscount = basePrice - finalPrice;
+                    const basePrice = parseFloat(pkg.base_price);
+                    let discountedPrice = basePrice;
+                    if (discount.percentage > 0) {
+                        discountedPrice = basePrice * (1 - (parseFloat(discount.percentage) / 100));
+                    }
                     
-                    const totalDiscountValue = monthlyDiscount * effectiveCp; // Se multiplica por 24 si cp=12
+                    const monthlySavings = basePrice - discountedPrice;
+                    const totalSavings = monthlySavings * effectiveCp;
+                    const penaltyAmount = totalSavings * (penaltyPercentage / 100);
                     
-                    // Importe Merma: Aplicamos el % de penalización a ese valor total de descuento.
-                    const penaltyAmount = totalDiscountValue * (penaltyPercentage / 100);
-
-                    // 3. Restamos el importe de la merma a la comisión de la línea
-                    commission = commission - penaltyAmount;
+                    comm -= penaltyAmount;
                 }
             }
         }
 
-        return commission > 0 ? commission : 0;
+        // F. Comisiones de Addons (MFO, Agente) - DEBUG AQUÍ TAMBIÉN
+        const mobAddons = unref(addonsData.mobileAddons) || [];
+        
+        if (line.has_mfo) {
+            const mfo = mobAddons.find(a => a.name === 'MFO');
+            if (mfo) {
+                comm += parseFloat(mfo.commission || 0);
+                console.log(`DEBUG Comision: Sumando comisión MFO (${mfo.commission})`);
+            }
+        }
+        if (line.has_agente) {
+            const agente = mobAddons.find(a => a.name === 'Agente Centralita');
+            if (agente) {
+                comm += parseFloat(agente.commission || 0);
+                console.log(`DEBUG Comision: Sumando comisión Agente (${agente.commission})`);
+            }
+        }
+
+        return comm > 0 ? comm : 0;
     };
 
-    // Computed para el total general de comisiones sumando las líneas
+    // --- 3. CALCULAR PRECIO LÍNEA FIJA (Con IP/Oro) ---
+    const calculateFixedLinePrice = (line) => {
+        let price = getPackagePrice(line.package_id);
+        if (price === 0) return 0;
+
+        // Descuento manual
+        if (line.discount > 0) {
+            price = price * (1 - line.discount / 100);
+        }
+
+        // Addons Fibra
+        const fiberList = unref(addonsData.fiberFeatures) || [];
+        if (line.has_ip_fija) {
+            const ip = fiberList.find(f => f.name === 'IP Fija');
+            if (ip) price += parseFloat(ip.price || 0);
+        }
+        if (line.has_fibra_oro) {
+            const oro = fiberList.find(f => f.name === 'Fibra Oro');
+            if (oro) price += parseFloat(oro.price || 0);
+        }
+
+        return price * (line.quantity || 1);
+    };
+
+    // --- 4. CALCULAR COMISIÓN LÍNEA FIJA ---
+    const calculateFixedLineCommission = (line) => {
+        const listPackages = Array.isArray(packages) ? packages : (packages.value || []);
+        const pkg = listPackages.find(p => p.id === line.package_id);
+        if (!pkg) return 0;
+
+        let comm = 0;
+        const type = (tariffType.value || tariffType) === 'OPTIMA' ? 'commission_optima' : 'commission_custom';
+        comm += parseFloat(pkg[type] || 0);
+
+        const fiberList = unref(addonsData.fiberFeatures) || [];
+        if (line.has_ip_fija) {
+            const ip = fiberList.find(f => f.name === 'IP Fija');
+            if (ip) comm += parseFloat(ip.commission || 0);
+        }
+        if (line.has_fibra_oro) {
+            const oro = fiberList.find(f => f.name === 'Fibra Oro');
+            if (oro) comm += parseFloat(oro.commission || 0);
+        }
+
+        return comm * (line.quantity || 1);
+    };
+
+    // --- 5. COMISIONES EXTRAS ---
+    const calculateExtensionsCommission = () => {
+        let total = 0;
+        const qtyMap = unref(addonsData.extensionsQty) || {};
+        const list = unref(addonsData.extensions) || [];
+        
+        for (const [id, qty] of Object.entries(qtyMap)) {
+            if (qty > 0) {
+                const ext = list.find(e => e.id == id);
+                if (ext) total += parseFloat(ext.commission || 0) * qty;
+            }
+        }
+        return total;
+    };
+
+    const calculateFeaturesCommission = () => {
+        let total = 0;
+        const selectedMap = unref(addonsData.selectedFeatures) || {};
+        const list = unref(addonsData.features) || [];
+
+        for (const [id, selected] of Object.entries(selectedMap)) {
+            if (selected) {
+                const feat = list.find(f => f.id == id);
+                if (feat) total += parseFloat(feat.commission || 0);
+            }
+        }
+        return total;
+    };
+
+    // --- 6. COMISIÓN TOTAL GLOBAL ---
     const totalCommission = computed(() => {
-        return mobileLines.value.reduce((sum, line) => {
-            const lineComm = calculateLineCommission(line);
-            const qty = parseInt(line.quantity) || 0;
-            return sum + (lineComm * qty);
-        }, 0);
+        let total = 0;
+        
+        // Sumar Móviles
+        const mLines = mobileLines.value || mobileLines;
+        mLines.forEach(line => {
+            total += calculateMobileLineCommission(line) * (line.quantity || 1);
+        });
+
+        // Sumar Fijos
+        const fLines = fixedLines.value || fixedLines;
+        fLines.forEach(line => {
+            total += calculateFixedLineCommission(line);
+        });
+
+        // Sumar Extras
+        total += calculateExtensionsCommission();
+        total += calculateFeaturesCommission();
+
+        return total;
     });
 
     return {
         getPackagePrice,
-        calculateLinePrice,
-        calculateLineCommission,
+        calculateMobileLinePrice,
+        calculateMobileLineCommission,
+        calculateFixedLinePrice,
+        calculateFixedLineCommission,
         totalCommission
     };
 }

@@ -12,7 +12,7 @@ const props = defineProps({
     initialClientId: [Number, String, null],
     probabilityOptions: Array,
     
-    // Props SOHO
+    // Props SOHO (Algunas compartidas)
     packages: Array,
     allAddons: Array,
     discounts: Array,
@@ -26,6 +26,9 @@ const props = defineProps({
     // Props PYME
     pymePackages: Array,
     pymeO2oDiscounts: Array,
+    // --- NUEVAS PROPS RECIBIDAS DEL CONTROLADOR PYME ---
+    centralitaMobileAddons: Array,
+    centralitaFeatures: Array,
     
     // Prop para forzar el modo inicial (viene del PymeOfferController)
     initialMode: { type: String, default: null }
@@ -36,12 +39,11 @@ const offerType = ref(props.initialMode);
 
 const selectType = (type) => {
     if (type === 'pyme') {
-        // Si estamos en modo PYME y ya tenemos el modo inicial, solo cambiamos el estado local (raro, pero posible)
+        // Si estamos en modo PYME y ya tenemos el modo inicial, solo cambiamos el estado local
         if (props.initialMode === 'pyme') {
              offerType.value = 'pyme';
         } else {
-             // Si estamos en la ruta base (/offers/create) y seleccionamos PYME,
-             // redirigimos al controlador de PYME para cargar los datos necesarios.
+             // Si estamos en la ruta base y seleccionamos PYME, redirigimos al controlador de PYME
              window.location.href = route('pyme.offers.create');
         }
     } else {
@@ -53,8 +55,6 @@ const selectType = (type) => {
 // Resetear selección
 const resetSelection = () => {
     if (props.initialMode === 'pyme') {
-        // Si estamos en el controlador PYME, "volver" significa ir a la ruta base (SOHO controller)
-        // para volver a ver el selector neutral.
         window.location.href = route('offers.create'); 
     } else {
         offerType.value = null;
@@ -98,22 +98,26 @@ const resetSelection = () => {
             </div>
         </div>
 
-        <!-- 2. FORMULARIO PYME -->
+        <!-- 2. FORMULARIO PYME (CORREGIDO) -->
         <PymeOfferForm 
             v-else-if="offerType === 'pyme'" 
             :clients="clients"
             :packages="pymePackages" 
-            :allAddons="[]"
             :discounts="pymeO2oDiscounts"
             :operators="['Movistar', 'Vodafone', 'Orange', 'Yoigo', 'Otros']"
-            :portabilityCommission="0"
-            :additionalInternetAddons="[]"
-            :centralitaExtensions="[]"
             :auth="auth"
             :initialClientId="initialClientId"
             :probabilityOptions="[0, 25, 50, 75, 90, 100]"
+            
+            :allAddons="allAddons" 
+            :centralitaMobileAddons="centralitaMobileAddons"
+            :centralitaExtensions="centralitaExtensions"
+            :centralitaFeatures="centralitaFeatures"
+            :fiberFeatures="fiberFeatures"
+            
+            :portabilityCommission="0"
+            :additionalInternetAddons="[]"
             :portabilityExceptions="[]"
-            :fiberFeatures="[]"
             @update:offerType="resetSelection" 
         />
 
