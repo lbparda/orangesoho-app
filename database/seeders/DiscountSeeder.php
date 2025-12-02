@@ -21,8 +21,8 @@ class DiscountSeeder extends Seeder
         ]);
 
         Discount::create([
-            'name' => '20% Portabilidad sin VAP (No Movistar) - Grupo 1',
-            'percentage' => 20, 'duration_months' => 24,
+            'name' => '15% Portabilidad sin VAP (No Movistar) - Grupo 1',
+            'percentage' => 15, 'duration_months' => 24,
             'conditions' => [
                 'applies_to' => 'principal_line', 'requires_portability' => true,
                 'requires_vap' => false, 'excluded_operators' => ['Movistar'],
