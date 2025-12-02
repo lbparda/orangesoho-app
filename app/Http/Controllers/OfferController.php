@@ -405,10 +405,14 @@ class OfferController extends Controller
                 if (!empty($validated['ddi_quantity']) && $validated['ddi_quantity'] > 0) {
                     $ddiAddon = Addon::where('name', 'DDI')->where('type', 'centralita_feature')->first();
                     if ($ddiAddon) {
+                        // LÓGICA DE PRECIO GRATUITO SEGÚN PAQUETE
+                        $freeDdiPackages = ['NEGOCIO Extra 10', 'NEGOCIO Extra 20'];
+                        $finalDdiPrice = in_array($package->name, $freeDdiPackages) ? 0 : $ddiAddon->price;
+
                         $offer->addons()->attach($ddiAddon->id, [
                             'quantity' => $validated['ddi_quantity'],
                             'addon_name' => $ddiAddon->name,
-                            'addon_price' => $ddiAddon->price, 
+                            'addon_price' => $finalDdiPrice, // <-- Usamos el precio calculado
                             'addon_commission' => $ddiAddon->commission,
                         ]);
                     }
@@ -868,10 +872,14 @@ class OfferController extends Controller
                 if (!empty($validated['ddi_quantity']) && $validated['ddi_quantity'] > 0) {
                     $ddiAddon = Addon::where('name', 'DDI')->where('type', 'centralita_feature')->first();
                     if ($ddiAddon) {
+                        // LÓGICA DE PRECIO GRATUITO SEGÚN PAQUETE
+                        $freeDdiPackages = ['NEGOCIO Extra 10', 'NEGOCIO Extra 20'];
+                        $finalDdiPrice = in_array($package->name, $freeDdiPackages) ? 0 : $ddiAddon->price;
+
                         $offer->addons()->attach($ddiAddon->id, [
                             'quantity' => $validated['ddi_quantity'],
                             'addon_name' => $ddiAddon->name,
-                            'addon_price' => $ddiAddon->price, 
+                            'addon_price' => $finalDdiPrice, // <-- Usamos el precio calculado
                             'addon_commission' => $ddiAddon->commission,
                         ]);
                     }

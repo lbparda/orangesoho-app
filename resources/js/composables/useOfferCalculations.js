@@ -717,13 +717,13 @@ export function useOfferCalculations(
             }
         }
         
-        // --- INICIO: LÓGICA DE DDI (AÑADIDO) ---
+       // --- INICIO: LÓGICA DE DDI (AÑADIDO) ---
         // Asumimos que form.ddi_quantity está disponible en el formulario
         const ddiQuantity = form.ddi_quantity || 0; 
         if (isCentralitaActive.value && ddiQuantity > 0 && ddiAddonInfo.value) {
             
-            // Regla: Gratis para 'Negocio 10' y 'Negocio 20'. 1€ por unidad para el resto.
-            const isFreePackage = ['Negocio 10', 'Negocio 20'].includes(selectedPackage.value.name);
+            // CORRECCIÓN: Nombres exactos según PackageSeeder (NEGOCIO Extra 10 y 20)
+            const isFreePackage = ['NEGOCIO Extra 10', 'NEGOCIO Extra 20'].includes(selectedPackage.value.name);
             
             let itemPrice = 0;
             let commissionAmount = 0;
@@ -733,7 +733,7 @@ export function useOfferCalculations(
             const baseCommission = parseFloat(ddiAddonInfo.value.commission) || 0;
             
             if (isFreePackage) {
-                // Para Negocio 10/20, DDI es gratuito (0€)
+                // Para NEGOCIO Extra 10/20, DDI es gratuito (0€)
                 itemPrice = 0; 
                 description = `${ddiQuantity}x DDI (Gratuito por Paquete)`;
                 commissionAmount = baseCommission; 
