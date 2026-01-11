@@ -88,11 +88,11 @@ class AddonSeeder extends Seeder
           // --- TV FUTBOL ---
         Addon::updateOrCreate(
             ['name' => 'Futbol'],
-            ['type' => 'tv', 'price' => 29.00, 'commission' => 50.00, 'description' => 'Todo el fútbol.']
+            ['type' => 'tv', 'price' => 31.00, 'commission' => 50.00, 'description' => 'Todo el fútbol.']
         );
         Addon::updateOrCreate(
             ['name' => 'Futbol y más deportes'],
-            ['type' => 'tv', 'price' => 33.00, 'commission' => 55.00, 'description' => 'Fútbol y una selección de otros deportes.']
+            ['type' => 'tv', 'price' => 35.00, 'commission' => 55.00, 'description' => 'Fútbol y una selección de otros deportes.']
         );
         // --- NUEVO: ADDONS PARA TV BARES POR HABITANTES ---
         Addon::updateOrCreate(

@@ -835,29 +835,41 @@ export function useOfferCalculations(
                     commissionDetails["Líneas Móviles"].push({ description: `Comisión ${lineName}`, amount: includedCommission });
                 }
 
-                // --- INICIO MODIFICACIÓN LA EXTRA (No pagar Portabilidad) ---
+                // --- INICIO MODIFICACIÓN LA EXTRA (Lógica Personalizada) ---
                 // Calculamos la comisión de portabilidad por separado
                 const exceptions = props.portabilityExceptions || [];
-                const isException = exceptions.includes(line.source_operator);
-                const portabilityCommissionAmount = isException ? 0 : (parseFloat(props.portabilityCommission) || 0);
+                const isGroup = exceptions.includes(line.source_operator);
+                
+                // Obtenemos el valor base del config (ahora será 20)
+                const basePortabilityCommission = parseFloat(props.portabilityCommission) || 0;
+
+                let portabilityCommissionAmount = 0;
+
+                // 1. Si es Movistar -> 60
+                if (line.source_operator === 'Movistar') {
+                    portabilityCommissionAmount = 60;
+                }
+                // 2. Si es del Grupo (excepción) -> -10
+                else if (isGroup) {
+                    portabilityCommissionAmount = -10;
+                }
+                // 3. El resto -> 20 (valor de config)
+                else {
+                    portabilityCommissionAmount = basePortabilityCommission;
+                }
 
                 if (line.is_portability) {
-                    if (isFreeExtraLineBenefitActive) {
-                        // Si la línea es gratis por el beneficio, no se paga comisión de portabilidad.
-                        // El usuario pidió dejar el código original comentado.
-                        /*
+                    // Si tienes activa la lógica de que la línea gratis NO paga porta, mantén el if(isFreeExtraLineBenefitActive)
+                    // Si quieres que aplique siempre, usa directamente el push:
+                    
+                     if (isFreeExtraLineBenefitActive) {
+                        // Lógica existente para línea gratis (probablemente 0 o lo que tengas definido)
+                     } else {
                         commissionDetails["Líneas Móviles"].push({
-                            description: `Portabilidad ${lineName}`,
+                            description: `Portabilidad ${lineName} (${line.source_operator})`,
                             amount: portabilityCommissionAmount
                         });
-                        */
-                    } else {
-                        // Si NO es la línea del beneficio, se paga la portabilidad normal.
-                        commissionDetails["Líneas Móviles"].push({
-                            description: `Portabilidad ${lineName}`,
-                            amount: portabilityCommissionAmount
-                        });
-                    }
+                     }
                 }
                 // --- FIN MODIFICACIÓN LA EXTRA ---
   if (line.terminal_pivot && line.selected_duration) {

@@ -123,24 +123,26 @@ class RelationshipSeeder extends Seeder
             }
             if (isset($o2o_discounts['120.00'])) {
                 $o2o_id = $o2o_discounts['120.00']->id;
+                $packages['NEGOCIO Extra 1']->o2oDiscounts()->attach($o2o_id, ['subsidy_percentage' => 0, 'dho_payment' => 120, 'osp_payment' => 0]);
+                $packages['NEGOCIO Extra 3']->o2oDiscounts()->attach($o2o_id, ['subsidy_percentage' => 0, 'dho_payment' => 120, 'osp_payment' => 0]);
                 $packages['NEGOCIO Extra 5']->o2oDiscounts()->attach($o2o_id, ['subsidy_percentage' => 30, 'dho_payment' => 84, 'osp_payment' =>36]);
-                $packages['NEGOCIO Extra 10']->o2oDiscounts()->attach($o2o_id, ['subsidy_percentage' => 70, 'dho_payment' => 36, 'osp_payment' => 84]);
-                $packages['NEGOCIO Extra 20']->o2oDiscounts()->attach($o2o_id, ['subsidy_percentage' => 70, 'dho_payment' => 36, 'osp_payment' => 84]);
+                $packages['NEGOCIO Extra 10']->o2oDiscounts()->attach($o2o_id, ['subsidy_percentage' => 50, 'dho_payment' => 60, 'osp_payment' => 60]);
+                $packages['NEGOCIO Extra 20']->o2oDiscounts()->attach($o2o_id, ['subsidy_percentage' => 50, 'dho_payment' => 60, 'osp_payment' => 60]);
             }
             if (isset($o2o_discounts['144.00'])) {
                 $o2o_id = $o2o_discounts['144.00']->id;
-                $packages['NEGOCIO Extra 10']->o2oDiscounts()->attach($o2o_id, ['subsidy_percentage' => 70, 'dho_payment' => 108, 'osp_payment' => 36]);
-                $packages['NEGOCIO Extra 20']->o2oDiscounts()->attach($o2o_id, ['subsidy_percentage' => 70, 'dho_payment' => 108, 'osp_payment' => 36]);
+                $packages['NEGOCIO Extra 10']->o2oDiscounts()->attach($o2o_id, ['subsidy_percentage' => 25, 'dho_payment' => 108, 'osp_payment' => 36]);
+                $packages['NEGOCIO Extra 20']->o2oDiscounts()->attach($o2o_id, ['subsidy_percentage' => 25, 'dho_payment' => 108, 'osp_payment' => 36]);
             }
             if (isset($o2o_discounts['168.00'])) {
                 $o2o_id = $o2o_discounts['168.00']->id;
-                $packages['NEGOCIO Extra 10']->o2oDiscounts()->attach($o2o_id, ['subsidy_percentage' => 70, 'dho_payment' => 132, 'osp_payment' => 36]);
-                $packages['NEGOCIO Extra 20']->o2oDiscounts()->attach($o2o_id, ['subsidy_percentage' => 70, 'dho_payment' => 132, 'osp_payment' => 36]);
+                $packages['NEGOCIO Extra 10']->o2oDiscounts()->attach($o2o_id, ['subsidy_percentage' => 21, 'dho_payment' => 132, 'osp_payment' => 36]);
+                $packages['NEGOCIO Extra 20']->o2oDiscounts()->attach($o2o_id, ['subsidy_percentage' => 21, 'dho_payment' => 132, 'osp_payment' => 36]);
             }
             if (isset($o2o_discounts['192.00'])) {
                 $o2o_id = $o2o_discounts['192.00']->id;
-                $packages['NEGOCIO Extra 10']->o2oDiscounts()->attach($o2o_id, ['subsidy_percentage' => 70, 'dho_payment' => 156, 'osp_payment' => 36]);
-                $packages['NEGOCIO Extra 20']->o2oDiscounts()->attach($o2o_id, ['subsidy_percentage' => 70, 'dho_payment' => 156, 'osp_payment' => 36]);
+                $packages['NEGOCIO Extra 10']->o2oDiscounts()->attach($o2o_id, ['subsidy_percentage' => 19, 'dho_payment' => 156, 'osp_payment' => 36]);
+                $packages['NEGOCIO Extra 20']->o2oDiscounts()->attach($o2o_id, ['subsidy_percentage' => 19, 'dho_payment' => 156, 'osp_payment' => 36]);
             }
         }
         
