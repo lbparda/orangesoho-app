@@ -62,6 +62,7 @@ const isReassigningClient = ref(false);
 const selectedInternetAddonId = ref(form.internet_addon_id);
 const selectedTvAddonIds = ref(form.tv_addons);
 const selectedDigitalAddonIds = ref(form.digital_addons);
+const digitalAddonQuantities = ref({});
 const selectedBenefitIds = ref(form.applied_benefit_ids);
 const showCommissionDetails = ref(false);
 
@@ -188,7 +189,7 @@ const digitalSolutionAddons = computed(() => props.allAddons ? props.allAddons.f
 const { calculationSummary, ipFijaAddonInfo, fibraOroAddonInfo, ddiAddonInfo } = useOfferCalculations(
     props, selectedPackageId, lines, selectedInternetAddonId, additionalInternetLines,
     selectedCentralitaId, centralitaExtensionQuantities, isOperadoraAutomaticaSelected,
-    selectedTvAddonIds, selectedDigitalAddonIds, form, selectedBenefits, props.offer?.user
+    selectedTvAddonIds, selectedDigitalAddonIds, form, selectedBenefits, props.offer?.user,digitalAddonQuantities
 );
 
 // --- 6. Lógica de Precios ---
@@ -330,6 +331,20 @@ watch(isCentralitaActive, (isActive) => {
 onMounted(() => {
     lines.value.forEach(addWatchersToLine);
     additionalInternetLines.value.forEach(addWatchersToAdditionalLine);
+
+    // --- AÑADE ESTE BLOQUE PARA LAS LICENCIAS ---
+    props.allAddons.filter(a => ['service', 'software'].includes(a.type)).forEach(addon => {
+        digitalAddonQuantities.value[addon.id] = 1;
+    });
+    
+    if (props.offer) {
+        props.offer.addons.forEach(a => {
+            if (['service', 'software'].includes(a.type)) {
+                digitalAddonQuantities.value[a.id] = a.pivot.quantity || 1;
+            }
+        });
+    }
+    // --------------------------------------------
 });
 
 // --- 10. Submit ---
@@ -366,7 +381,10 @@ const submitForm = () => {
             extensions: finalExtensions
         };
         form.tv_addons = selectedTvAddonIds.value;
-        form.digital_addons = selectedDigitalAddonIds.value;
+        form.digital_addons = selectedDigitalAddonIds.value.map(id => ({
+            id: id,
+            quantity: digitalAddonQuantities.value[id] || 1     
+        }));
         form.applied_benefit_ids = selectedBenefitIds.value;
         form.summary = calculationSummary.value;
 
@@ -611,11 +629,24 @@ const changeClient = () => form.client_id = null;
                     <div v-if="digitalSolutionAddons.length > 0" class="bg-white shadow-sm sm:rounded-lg p-8 space-y-6">
                         <h3 class="text-lg font-semibold text-gray-800 text-center">Soluciones Digitales</h3>
                         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <div v-for="addon in digitalSolutionAddons" :key="addon.id" class="flex items-center p-3 border rounded-md hover:bg-gray-50">
-                                <Checkbox :value="addon.id" v-model:checked="selectedDigitalAddonIds" :id="`dig_${addon.id}`" />
-                                <label :for="`dig_${addon.id}`" class="ml-3 text-sm text-gray-700">
-                                    {{ addon.name }} <span class="text-xs text-gray-500">({{ parseFloat(addon.price).toFixed(2) }}€)</span>
-                                </label>
+                            <div v-for="addon in digitalSolutionAddons" :key="addon.id" class="flex flex-col p-3 border rounded-md hover:bg-gray-50">
+                                <div class="flex items-center justify-between w-full">
+                                    <div class="flex items-center">
+                                        <Checkbox :value="addon.id" v-model:checked="selectedDigitalAddonIds" :id="`dig_${addon.id}`" />
+                                        <label :for="`dig_${addon.id}`" class="ml-3 text-sm text-gray-700">
+                                            {{ addon.name }} <span class="text-xs text-gray-500">({{ parseFloat(addon.price).toFixed(2) }}€)</span>
+                                        </label>
+                                    </div>
+                                    <div v-if="selectedDigitalAddonIds.includes(addon.id) && addon.name.includes('Microsoft')" class="flex items-center gap-2">
+                                        <span class="text-[10px] uppercase font-bold text-gray-400">Unidades</span>
+                                        <input 
+                                            type="number" 
+                                            v-model.number="digitalAddonQuantities[addon.id]" 
+                                            min="1" 
+                                            class="w-16 h-8 text-sm border-gray-300 rounded text-center focus:ring-indigo-500 focus:border-indigo-500"
+                                        >
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>

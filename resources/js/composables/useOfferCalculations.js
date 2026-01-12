@@ -44,7 +44,8 @@ export function useOfferCalculations(
     // --- INICIO MODIFICACIÓN BENEFICIOS ---
     selectedBenefits, // <-- Un computed ref de los objetos de beneficio seleccionados
     // --- FIN MODIFICACIÓN BENEFICIOS ---
-    offerOwner = null // <--- NUEVO PARÁMETRO: Dueño de la oferta (opcional)
+    offerOwner = null,// <--- NUEVO PARÁMETRO: Dueño de la oferta (opcional)
+    digitalAddonQuantities 
 ) {
     const page = usePage(); // Necesario si offerOwner es null
 
@@ -906,44 +907,64 @@ export function useOfferCalculations(
         
         price += extraLinesCost;
 
-        // --- INICIO MODIFICACIÓN BENEFICIOS (Cálculo de otros addons de servicio) ---
-        // Esta sección calcula el precio de addons como MS365, Disney+, etc.
-        // que no se seleccionan en ninguna otra parte del formulario.
-        
-        if (props.allAddons && selectedDigitalAddonIds.value) { // <--- CAMBIADO
-            const serviceTypes = ['service', 'software']; // Tipos de addons que son "beneficios"
+        // --- CÁLCULO DE SERVICIOS DIGITALES (Microsoft Office, etc.) ---
+        if (props.allAddons && selectedDigitalAddonIds.value) {
+            const serviceTypes = ['service', 'software'];
             
-            selectedDigitalAddonIds.value.forEach(addonId => { // <--- CAMBIADO
+            selectedDigitalAddonIds.value.forEach(addonId => {
                 const addonInfo = props.allAddons.find(a => a.id === addonId);
-                
-                // Solo calcula los que NO son de TV (porque TV ya se calculó arriba)
+                // Obtenemos la cantidad del ref (si no existe, por defecto 1)
+                const quantity = digitalAddonQuantities.value[addonId] || 1;
+
                 if (addonInfo && serviceTypes.includes(addonInfo.type)) {
                     const originalPrice = parseFloat(addonInfo.price) || 0;
                     const benefit = activeBenefitsMap.value.get(addonInfo.id);
-                    const itemPrice = applyBenefit(originalPrice, benefit);
-                    const description = benefit 
-                        ? `${addonInfo.name} (Beneficio)` 
-                        : addonInfo.name;
                     
-                    // --- INICIO CORRECCIÓN 10: Servicios (Benefit Rule) ---
-                    const baseCommission = parseFloat(addonInfo.commission) || 0;
-                    const decommission = parseFloat(addonInfo.decommission) || 0;
-                    const commission = baseCommission; // "Ponerla toda"
+                    let itemPrice = 0;
+                    let description = '';
 
-                    if (benefit && benefit.apply_type === 'percentage_discount' && decommission > 0) {
-                        commissionDetails.Ajustes.push({ description: `Ajuste Decomisión (${addonInfo.name})`, amount: -decommission });
+                    // LÓGICA: 1ª unidad con beneficio (si existe), las demás al 100%
+                    if (benefit) {
+                        // Calculamos la primera con descuento (50% en Standard)
+                        const firstUnitDiscounted = applyBenefit(originalPrice, benefit);
+                        // El resto de unidades (cantidad - 1) van a precio normal
+                        const restAtNormalPrice = originalPrice * (quantity - 1);
+                        
+                        itemPrice = firstUnitDiscounted + restAtNormalPrice;
+                        
+                        description = quantity > 1 
+                            ? `${quantity}x ${addonInfo.name} (1ª al 50% dto.)` 
+                            : `${addonInfo.name} (Beneficio)`;
+                    } else {
+                        // Sin beneficio (Básica o Standard no elegida como beneficio)
+                        itemPrice = originalPrice * quantity;
+                        description = quantity > 1 ? `${quantity}x ${addonInfo.name}` : addonInfo.name;
                     }
-                    // --- FIN CORRECCIÓN 10 ---
+
+                    // COMISIÓN: Se multiplica la comisión base por la cantidad total
+                    const commission = (parseFloat(addonInfo.commission) || 0) * quantity;
+                    
+                    // Ajuste de decomisión (si aplica por el beneficio)
+                    const decommission = parseFloat(addonInfo.decommission) || 0;
+                    if (benefit && benefit.apply_type === 'percentage_discount' && decommission > 0) {
+                        commissionDetails.Ajustes.push({ 
+                            description: `Ajuste Decomisión (${addonInfo.name})`, 
+                            amount: -decommission 
+                        });
+                    }
 
                     price += itemPrice;
                     summaryBreakdown.push({ description: description, price: itemPrice });
+                    
                     if(commission > 0) {
-                        commissionDetails.Servicios.push({ description: addonInfo.name, amount: commission });
+                        commissionDetails.Servicios.push({ 
+                            description: `${quantity}x ${addonInfo.name}`, 
+                            amount: commission 
+                        });
                     }
                 }
             });
         }
-        // --- FIN MODIFICACIÓN BENEFICIOS ---
 
         Object.keys(commissionDetails).forEach(key => {
             if (commissionDetails[key].length === 0) {

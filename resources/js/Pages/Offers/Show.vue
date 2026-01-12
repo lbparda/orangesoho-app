@@ -84,6 +84,18 @@ const selectedTvAddonIdsRef = computed(() =>
 const selectedDigitalAddonIdsRef = computed(() => 
     props.offer.addons.filter(a => ['service', 'software'].includes(a.type)).map(a => a.id)
 );
+// --- AÑADE ESTE BLOQUE AQUÍ ---
+const digitalAddonQuantitiesRef = computed(() => {
+    const qtys = {};
+    props.offer.addons.forEach(addon => {
+        if (['service', 'software'].includes(addon.type)) {
+            // Extraemos la cantidad guardada en la tabla pivote
+            qtys[addon.id] = addon.pivot.quantity || 1;
+        }
+    });
+    return qtys;
+});
+// ---------------
 
 const selectedBenefitsRef = computed(() => props.offer.benefits || []);
 
@@ -108,7 +120,8 @@ const { calculationSummary: liveCalculationSummary } = useOfferCalculations(
     selectedDigitalAddonIdsRef,
     formMock,
     selectedBenefitsRef,
-    props.offer.user 
+    props.offer.user,
+    digitalAddonQuantitiesRef
 );
 
 // 2. Creamos una computed property que decide qué resumen mostrar
@@ -540,8 +553,16 @@ const openDetails = ref({
                                 <div class="mt-4 space-y-2 border-t pt-4 text-sm">
                                     <ul class="list-disc list-inside ml-4 space-y-1">
                                         <li v-for="solution in digitalSolutions" :key="solution.id">
+                                            
+                                            
                                             {{ solution.pivot.addon_name }} 
-                                            <span class="text-xs text-gray-500">({{ formatCurrency(solution.pivot.addon_price) }}/mes)</span>
+                                            
+                                            <span class="text-xs text-gray-500">
+                                                ({{ formatCurrency(solution.pivot.addon_price) }} c/u)
+                                            </span>
+                                            <span v-if="solution.pivot.quantity > 1" class="font-bold text-indigo-700">
+                                                x{{ solution.pivot.quantity }}
+                                            </span>
                                         </li>
                                     </ul>
                                 </div>

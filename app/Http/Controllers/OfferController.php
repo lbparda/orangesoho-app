@@ -174,7 +174,8 @@ class OfferController extends Controller
 
             // --- INICIO: AÑADIR VALIDACIÓN ---
             'digital_addons' => 'nullable|array',
-            'digital_addons.*' => 'exists:addons,id',
+            'digital_addons.*.id' => 'required|exists:addons,id',
+            'digital_addons.*.quantity' => 'required|integer|min:1',
             // --- FIN: AÑADIR VALIDACIÓN ---
 
             'is_ip_fija_selected' => 'nullable|boolean',
@@ -384,14 +385,13 @@ class OfferController extends Controller
                     }
                 }
 
-                // --- INICIO: AÑADIR LÓGICA DE GUARDADO ---
-                // 7. Soluciones Digitales (Addons de tipo 'service')
+               // 7. Soluciones Digitales (Microsoft Office, etc.)
                 if (!empty($validated['digital_addons'])) {
-                    foreach ($validated['digital_addons'] as $digitalAddonId) {
-                        $digitalAddon = Addon::find($digitalAddonId);
+                    foreach ($validated['digital_addons'] as $item) {
+                        $digitalAddon = Addon::find($item['id']);
                         if ($digitalAddon) {
                              $offer->addons()->attach($digitalAddon->id, [
-                                'quantity' => 1,
+                                'quantity' => $item['quantity'], // <-- GUARDAMOS LA CANTIDAD ENVIADA
                                 'addon_name' => $digitalAddon->name,
                                 'addon_price' => $digitalAddon->price,
                                 'addon_commission' => $digitalAddon->commission,
@@ -635,10 +635,10 @@ class OfferController extends Controller
              'tv_addons' => 'nullable|array',
              'tv_addons.*' => 'exists:addons,id',
              
-             // --- INICIO: AÑADIR VALIDACIÓN ---
+             // Validación actualizada para recibir objetos con id y cantidad
              'digital_addons' => 'nullable|array',
-             'digital_addons.*' => 'exists:addons,id',
-             // --- FIN: AÑADIR VALIDACIÓN ---
+             'digital_addons.*.id' => 'required|exists:addons,id',
+             'digital_addons.*.quantity' => 'required|integer|min:1',
              
              'is_ip_fija_selected' => 'nullable|boolean',
              'is_fibra_oro_selected' => 'nullable|boolean', // <-- AÑADIDO
@@ -851,14 +851,13 @@ class OfferController extends Controller
                     }
                 }
                 
-                // --- INICIO: AÑADIR LÓGICA DE GUARDADO ---
-                // 7. Soluciones Digitales (Addons de tipo 'service')
+                // 7. Soluciones Digitales (Microsoft Office, etc.)
                 if (!empty($validated['digital_addons'])) {
-                    foreach ($validated['digital_addons'] as $digitalAddonId) {
-                        $digitalAddon = Addon::find($digitalAddonId);
+                    foreach ($validated['digital_addons'] as $item) {
+                        $digitalAddon = Addon::find($item['id']);
                         if ($digitalAddon) {
                              $offer->addons()->attach($digitalAddon->id, [
-                                'quantity' => 1,
+                                'quantity' => $item['quantity'], // <-- ACTUALIZAMOS CON LA NUEVA CANTIDAD
                                 'addon_name' => $digitalAddon->name,
                                 'addon_price' => $digitalAddon->price,
                                 'addon_commission' => $digitalAddon->commission,
@@ -866,7 +865,6 @@ class OfferController extends Controller
                         }
                     }
                 }
-                // --- FIN: AÑADIR LÓGICA DE GUARDADO ---
                 
                 // --- INICIO: AÑADIR LÓGICA DDI ---
                 if (!empty($validated['ddi_quantity']) && $validated['ddi_quantity'] > 0) {
