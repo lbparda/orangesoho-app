@@ -122,14 +122,12 @@ const lines = ref(initLines());
 const getLineLabel = (index) => {
     const currentLine = lines.value[index];
     if (!currentLine) return '';
-    // Contamos cuántas líneas del mismo tipo hay hasta este índice
     const count = lines.value
         .slice(0, index + 1)
         .filter(l => l.is_extra === currentLine.is_extra)
         .length;
     return `${currentLine.is_extra ? 'Línea Adicional' : 'Línea Principal'} ${count}`;
 };
-// -------------------------------------------------
 
 // --- 3. Internet y Centralita ---
 const additionalInternetLines = ref(isEditing.value ? props.initialAdditionalInternetLines : []);
@@ -142,14 +140,36 @@ const selectedPackage = computed(() => props.packages.find(p => p.id === selecte
 
 // Inicialización Centralita en Edit
 const includedCentralita = computed(() => selectedPackage.value?.addons.find(a => a.type === 'centralita' && a.pivot.is_included));
+
 if (isEditing.value && props.offer) {
     const optionalCentralita = props.offer.addons.find(a => a.type === 'centralita' && !a.pivot.is_included && a.pivot.selected_centralita_id === null);
     selectedCentralitaId.value = optionalCentralita?.id || null;
     isOperadoraAutomaticaSelected.value = props.offer.addons.some(a => a.type === 'centralita_feature' && a.name === 'Operadora Automática');
     
+    // --- CORRECCIÓN 1: NO MOSTRAR LA INCLUIDA EN EL CONTADOR DE ADICIONALES ---
     const savedExtensions = props.offer.addons.filter(a => a.type === 'centralita_extension');
     savedExtensions.forEach(ext => {
-         if(ext.pivot.quantity > 0) centralitaExtensionQuantities.value[ext.id] = ext.pivot.quantity;
+         let quantity = ext.pivot.quantity;
+
+         // Si es Negocio 1, 3, 5 (centralita opcional), la 1ª extensión va "gratis".
+         if (selectedCentralitaId.value && !includedCentralita.value) {
+             const pkgAddons = selectedPackage.value ? selectedPackage.value.addons : [];
+             const currentCentralita = pkgAddons.find(a => a.type === 'centralita' && !a.pivot.is_included && a.id === selectedCentralitaId.value);
+             
+             if (currentCentralita) {
+                 const typeName = currentCentralita.name.split(' ')[1]; // Ej: "IP"
+                 const autoExt = props.centralitaExtensions.find(e => e.name.includes(typeName));
+                 
+                 // Si la extensión actual coincide con la automática, restamos 1 para visualización
+                 if (autoExt && autoExt.id === ext.id) {
+                     quantity = Math.max(0, quantity - 1);
+                 }
+             }
+         }
+
+         if (quantity > 0) {
+             centralitaExtensionQuantities.value[ext.id] = quantity;
+         }
     });
 }
 
@@ -229,7 +249,7 @@ const assignTerminalPrices = (line) => {
     line.package_terminal_id = pivot?.id || null;
 };
 
-// --- 7. Watchers Líneas ---
+// --- 7. Watchers ---
 const addWatchersToLine = (line) => {
     watch(() => line.is_portability, (val, old) => { if (old && !val) { line.has_vap = false; line.selected_brand = null; assignTerminalPrices(line); } });
     watch(() => line.has_vap, (val, old) => { if (old && !val) { line.selected_brand = null; assignTerminalPrices(line); } });
@@ -332,7 +352,6 @@ onMounted(() => {
     lines.value.forEach(addWatchersToLine);
     additionalInternetLines.value.forEach(addWatchersToAdditionalLine);
 
-    // --- AÑADE ESTE BLOQUE PARA LAS LICENCIAS ---
     props.allAddons.filter(a => ['service', 'software'].includes(a.type)).forEach(addon => {
         digitalAddonQuantities.value[addon.id] = 1;
     });
@@ -344,7 +363,6 @@ onMounted(() => {
             }
         });
     }
-    // --------------------------------------------
 });
 
 // --- 10. Submit ---
@@ -357,9 +375,17 @@ const submitForm = () => {
         for (const [id, qty] of Object.entries(centralitaExtensionQuantities.value)) {
             if (qty > 0) finalExtensions.push({ addon_id: parseInt(id), quantity: qty });
         }
+
+        // --- CORRECCIÓN 2: Lógica de guardado que RESTAURA la cantidad incluida ---
         if (!includedCentralita.value && autoIncludedExtension.value) {
             const existing = finalExtensions.find(e => e.addon_id == autoIncludedExtension.value.id);
-            if (existing) existing.quantity++; else finalExtensions.push({ addon_id: autoIncludedExtension.value.id, quantity: 1 });
+            if (existing) {
+                // Si el usuario puso adicionales, el total será (Adicionales + 1 Incluida)
+                existing.quantity++; 
+            } else {
+                // Si no hay adicionales, añadimos solo la gratuita
+                finalExtensions.push({ addon_id: autoIncludedExtension.value.id, quantity: 1 }); 
+            }
         }
 
         form.package_id = selectedPackageId.value;
@@ -567,7 +593,9 @@ const changeClient = () => form.client_id = null;
                                     </div>
                                     <div v-if="autoIncludedExtension && !includedCentralita" class="mb-4">
                                         <p class="text-sm font-medium text-gray-700">Ext. Incluida:</p>
-                                        <div class="p-2 bg-gray-100 rounded-md text-sm text-gray-800">✅ 1x {{ autoIncludedExtension.name }}</div>
+                                        <div class="p-2 bg-gray-100 rounded-md text-sm text-gray-800">
+                                            ✅ 1x {{ autoIncludedExtension.name }}
+                                        </div>
                                     </div>
                                     <p class="text-sm font-medium text-gray-700">Ext. Adicionales:</p>
                                     <div v-for="ext in availableAdditionalExtensions" :key="ext.id" class="flex items-center justify-between mt-2">
