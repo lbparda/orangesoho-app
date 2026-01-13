@@ -1,6 +1,6 @@
 <script setup>
 import { Link, useForm } from '@inertiajs/vue3';
-import { ref, computed, watch, onMounted } from 'vue';
+import { ref, computed, watch, onMounted,unref } from 'vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import InputError from '@/Components/InputError.vue';
@@ -122,12 +122,14 @@ const lines = ref(initLines());
 const getLineLabel = (index) => {
     const currentLine = lines.value[index];
     if (!currentLine) return '';
+    // Contamos cuántas líneas del mismo tipo hay hasta este índice
     const count = lines.value
         .slice(0, index + 1)
         .filter(l => l.is_extra === currentLine.is_extra)
         .length;
     return `${currentLine.is_extra ? 'Línea Adicional' : 'Línea Principal'} ${count}`;
 };
+// -------------------------------------------------
 
 // --- 3. Internet y Centralita ---
 const additionalInternetLines = ref(isEditing.value ? props.initialAdditionalInternetLines : []);
@@ -138,41 +140,67 @@ const isOperadoraAutomaticaSelected = ref(false);
 // Computed principal
 const selectedPackage = computed(() => props.packages.find(p => p.id === selectedPackageId.value) || null);
 
-// Inicialización Centralita en Edit
+// --- Inicialización Centralita en Edit ---
 const includedCentralita = computed(() => selectedPackage.value?.addons.find(a => a.type === 'centralita' && a.pivot.is_included));
 
 if (isEditing.value && props.offer) {
+    // 1. Recuperar la centralita opcional seleccionada (si la hay)
     const optionalCentralita = props.offer.addons.find(a => a.type === 'centralita' && !a.pivot.is_included && a.pivot.selected_centralita_id === null);
     selectedCentralitaId.value = optionalCentralita?.id || null;
+    
+    // 2. Recuperar estado de operadora automática
     isOperadoraAutomaticaSelected.value = props.offer.addons.some(a => a.type === 'centralita_feature' && a.name === 'Operadora Automática');
     
-    // --- CORRECCIÓN 1: NO MOSTRAR LA INCLUIDA EN EL CONTADOR DE ADICIONALES ---
+    // 3. Lógica SEGURA para detectar la extensión incluida
+    let autoIncludedExtId = null;
+
+    try {
+        let centralitaName = "";
+        
+        // Si hay una opcional seleccionada, usamos su nombre
+        if (optionalCentralita) {
+            centralitaName = optionalCentralita.name;
+        } 
+        // Si no, miramos si el paquete trae una incluida
+        else if (selectedPackage.value) {
+            const pkgIncluded = selectedPackage.value.addons.find(a => a.type === 'centralita' && a.pivot.is_included);
+            if (pkgIncluded) centralitaName = pkgIncluded.name;
+        }
+
+        // Si tenemos nombre (ej: "Centralita Básica"), buscamos el tipo
+        if (centralitaName) {
+            // Buscamos una extensión que contenga parte del nombre de la centralita
+            // Ej: Si centralita es "Centralita Básica", buscamos extensión con "Básica"
+            const match = props.centralitaExtensions.find(ext => centralitaName.includes(ext.name.replace('Extensión ', '').replace('Extension ', '')));
+            
+            // Si no coincide directo, probamos dividiendo el string (fallback)
+            if (!match && centralitaName.includes(' ')) {
+                 const type = centralitaName.split(' ')[1]; // "Básica"
+                 const match2 = props.centralitaExtensions.find(ext => ext.name.includes(type));
+                 if (match2) autoIncludedExtId = match2.id;
+            } else if (match) {
+                autoIncludedExtId = match.id;
+            }
+        }
+    } catch (err) {
+        console.error("No se pudo determinar la extensión automática al editar:", err);
+    }
+
+    // 4. Cargar las extensiones guardadas
     const savedExtensions = props.offer.addons.filter(a => a.type === 'centralita_extension');
     savedExtensions.forEach(ext => {
-         let quantity = ext.pivot.quantity;
+         // Cantidad que viene de la BD (Total)
+         let qty = ext.pivot.quantity;
 
-         // Si es Negocio 1, 3, 5 (centralita opcional), la 1ª extensión va "gratis".
-         if (selectedCentralitaId.value && !includedCentralita.value) {
-             const pkgAddons = selectedPackage.value ? selectedPackage.value.addons : [];
-             const currentCentralita = pkgAddons.find(a => a.type === 'centralita' && !a.pivot.is_included && a.id === selectedCentralitaId.value);
-             
-             if (currentCentralita) {
-                 const typeName = currentCentralita.name.split(' ')[1]; // Ej: "IP"
-                 const autoExt = props.centralitaExtensions.find(e => e.name.includes(typeName));
-                 
-                 // Si la extensión actual coincide con la automática, restamos 1 para visualización
-                 if (autoExt && autoExt.id === ext.id) {
-                     quantity = Math.max(0, quantity - 1);
-                 }
-             }
+         // Si esta es la extensión incluida, le restamos 1 para mostrar solo las adicionales
+         if (autoIncludedExtId && ext.id === autoIncludedExtId) {
+             qty = qty - 1;
          }
 
-         if (quantity > 0) {
-             centralitaExtensionQuantities.value[ext.id] = quantity;
-         }
+         // Guardamos solo si la cantidad es positiva
+         if(qty > 0) centralitaExtensionQuantities.value[ext.id] = qty;
     });
 }
-
 // --- 4. Computeds ---
 const benefitLimit = computed(() => selectedPackage.value?.benefit_limit || 0);
 const availableBenefits = computed(() => selectedPackage.value?.benefits || []);
@@ -190,13 +218,23 @@ const tvAddonOptions = computed(() => selectedPackage.value?.addons.filter(a => 
 const centralitaAddonOptions = computed(() => selectedPackage.value?.addons.filter(a => a.type === 'centralita' && !a.pivot.is_included) || []);
 const operadoraAutomaticaInfo = computed(() => selectedPackage.value?.addons.find(a => a.type === 'centralita_feature' && a.name === 'Operadora Automática'));
 const isCentralitaActive = computed(() => !!includedCentralita.value || !!selectedCentralitaId.value || additionalInternetLines.value.some(line => !!line.selected_centralita_id));
+
+// Detectar qué extensión está incluida automáticamente
 const autoIncludedExtension = computed(() => {
-    if (!selectedCentralitaId.value) return null;
-    const selected = centralitaAddonOptions.value.find(c => c.id === selectedCentralitaId.value);
-    if (!selected) return null;
-    const type = selected.name.split(' ')[1];
-    return props.centralitaExtensions.find(ext => ext.name.includes(type));
+    if (selectedCentralitaId.value) {
+        const selected = centralitaAddonOptions.value.find(c => c.id === selectedCentralitaId.value);
+        if (selected) {
+             const type = selected.name.split(' ')[1]; 
+             return props.centralitaExtensions.find(ext => ext.name.includes(type));
+        }
+    }
+    if (includedCentralita.value) {
+        const type = includedCentralita.value.name.split(' ')[1];
+        return props.centralitaExtensions.find(ext => ext.name.includes(type));
+    }
+    return null;
 });
+
 const includedCentralitaExtensions = computed(() => isCentralitaActive.value ? selectedPackage.value?.addons.filter(a => a.type === 'centralita_extension' && a.pivot.is_included) : []);
 const availableAdditionalExtensions = computed(() => props.centralitaExtensions);
 const canAddLine = computed(() => !!selectedPackage.value);
@@ -205,11 +243,29 @@ const availableO2oDiscounts = computed(() => selectedPackage.value?.o2o_discount
 const brandsForSelectedPackage = computed(() => [...new Set(availableTerminals.value.map(t => t.brand))]);
 const digitalSolutionAddons = computed(() => props.allAddons ? props.allAddons.filter(a => ['service', 'software'].includes(a.type)) : []);
 
+// === VARIABLE CRÍTICA PARA EL PRECIO VISUAL ===
+// Esta variable debe estar ANTES de llamar a useOfferCalculations
+const quantitiesForCalculation = computed(() => {
+    const qtys = { ...centralitaExtensionQuantities.value };
+    if (autoIncludedExtension.value) {
+        const id = autoIncludedExtension.value.id;
+        const userQty = parseInt(qtys[id] || 0);
+        // TRUCO: Si el usuario pone 1, decimos a la calculadora que son 2.
+        // Calculadora: 2 - 1 gratis = 1 a pagar.
+        if (userQty > 0) {
+            qtys[id] = userQty + 1;
+        }
+    }
+    return qtys;
+});
+
 // --- 5. Composable ---
 const { calculationSummary, ipFijaAddonInfo, fibraOroAddonInfo, ddiAddonInfo } = useOfferCalculations(
     props, selectedPackageId, lines, selectedInternetAddonId, additionalInternetLines,
-    selectedCentralitaId, centralitaExtensionQuantities, isOperadoraAutomaticaSelected,
-    selectedTvAddonIds, selectedDigitalAddonIds, form, selectedBenefits, props.offer?.user,digitalAddonQuantities
+    selectedCentralitaId, 
+    quantitiesForCalculation, // <--- Pasamos la variable modificada aquí
+    isOperadoraAutomaticaSelected,
+    selectedTvAddonIds, selectedDigitalAddonIds, form, selectedBenefits, props.offer?.user, digitalAddonQuantities
 );
 
 // --- 6. Lógica de Precios ---
@@ -249,7 +305,7 @@ const assignTerminalPrices = (line) => {
     line.package_terminal_id = pivot?.id || null;
 };
 
-// --- 7. Watchers ---
+// --- 7. Watchers Líneas ---
 const addWatchersToLine = (line) => {
     watch(() => line.is_portability, (val, old) => { if (old && !val) { line.has_vap = false; line.selected_brand = null; assignTerminalPrices(line); } });
     watch(() => line.has_vap, (val, old) => { if (old && !val) { line.selected_brand = null; assignTerminalPrices(line); } });
@@ -370,21 +426,26 @@ const submitForm = () => {
     if (!form.client_id) return alert("Por favor, selecciona un cliente.");
     if (!selectedPackage.value) return alert("Por favor, selecciona un paquete.");
 
+    // DEPURACIÓN: Ver qué se va a enviar
+    console.log("Calculation Summary (unref):", unref(calculationSummary));
+
     try {
         let finalExtensions = [];
+        const autoInc = autoIncludedExtension.value;
+        
+        // Recorremos los inputs del usuario
         for (const [id, qty] of Object.entries(centralitaExtensionQuantities.value)) {
-            if (qty > 0) finalExtensions.push({ addon_id: parseInt(id), quantity: qty });
-        }
+            let numericQty = parseInt(qty);
+            
+            if (numericQty > 0) {
+                let quantityToSend = numericQty;
 
-        // --- CORRECCIÓN 2: Lógica de guardado que RESTAURA la cantidad incluida ---
-        if (!includedCentralita.value && autoIncludedExtension.value) {
-            const existing = finalExtensions.find(e => e.addon_id == autoIncludedExtension.value.id);
-            if (existing) {
-                // Si el usuario puso adicionales, el total será (Adicionales + 1 Incluida)
-                existing.quantity++; 
-            } else {
-                // Si no hay adicionales, añadimos solo la gratuita
-                finalExtensions.push({ addon_id: autoIncludedExtension.value.id, quantity: 1 }); 
+                // Lógica de compensación para la base de datos
+                if (autoInc && parseInt(id) === autoInc.id) {
+                    quantityToSend += 1;
+                }
+
+                finalExtensions.push({ addon_id: parseInt(id), quantity: quantityToSend });
             }
         }
 
@@ -412,11 +473,17 @@ const submitForm = () => {
             quantity: digitalAddonQuantities.value[id] || 1     
         }));
         form.applied_benefit_ids = selectedBenefitIds.value;
-        form.summary = calculationSummary.value;
+        
+        // CORRECCIÓN FINAL: Usar unref para asegurar que se asigna el objeto real
+        // Esto soluciona el error "Summary is required"
+        form.summary = unref(calculationSummary);
 
         const options = {
             onSuccess: () => alert(isEditing.value ? '¡Oferta actualizada!' : '¡Oferta guardada!'),
-            onError: (e) => { console.error(e); alert('Error al guardar.'); }
+            onError: (e) => { 
+                console.error("Errores de validación:", e); 
+                alert('Error al guardar. Revisa la consola para más detalles.'); 
+            }
         };
 
         if (isEditing.value) {
@@ -430,6 +497,7 @@ const submitForm = () => {
 const showReassignSelector = () => isReassigningClient.value = true;
 const changeClient = () => form.client_id = null;
 </script>
+
 
 <template>
     <div class="flex flex-col md:flex-row">
@@ -593,9 +661,7 @@ const changeClient = () => form.client_id = null;
                                     </div>
                                     <div v-if="autoIncludedExtension && !includedCentralita" class="mb-4">
                                         <p class="text-sm font-medium text-gray-700">Ext. Incluida:</p>
-                                        <div class="p-2 bg-gray-100 rounded-md text-sm text-gray-800">
-                                            ✅ 1x {{ autoIncludedExtension.name }}
-                                        </div>
+                                        <div class="p-2 bg-gray-100 rounded-md text-sm text-gray-800">✅ 1x {{ autoIncludedExtension.name }}</div>
                                     </div>
                                     <p class="text-sm font-medium text-gray-700">Ext. Adicionales:</p>
                                     <div v-for="ext in availableAdditionalExtensions" :key="ext.id" class="flex items-center justify-between mt-2">
