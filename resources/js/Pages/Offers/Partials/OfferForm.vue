@@ -307,8 +307,42 @@ const assignTerminalPrices = (line) => {
 
 // --- 7. Watchers Líneas ---
 const addWatchersToLine = (line) => {
-    watch(() => line.is_portability, (val, old) => { if (old && !val) { line.has_vap = false; line.selected_brand = null; assignTerminalPrices(line); } });
-    watch(() => line.has_vap, (val, old) => { if (old && !val) { line.selected_brand = null; assignTerminalPrices(line); } });
+    
+    // Watcher de Portabilidad
+    watch(() => line.is_portability, (val, old) => { 
+        if (old && !val) { 
+            line.has_vap = false; 
+            line.selected_brand = null; 
+            line.selected_model_id = null; // <--- Añadido para limpiar bien
+            line.selected_duration = null; // <--- Añadido
+            assignTerminalPrices(line); 
+        } 
+    });
+
+    // Watcher de VAP (AQUÍ ESTÁ LA CORRECCIÓN CLAVE)
+    watch(() => line.has_vap, (val, old) => { 
+        if (old && !val) { 
+            // 1. Limpiamos selectores visuales
+            line.selected_brand = null; 
+            line.selected_model_id = null; 
+            line.selected_duration = null;
+
+            // 2. Limpiamos datos internos (importante para la comisión)
+            line.terminal_pivot = null; 
+            line.package_terminal_id = null;
+
+            // 3. Reseteamos costes visuales
+            line.initial_cost = 0;
+            line.monthly_cost = 0;
+            line.original_initial_cost = 0;
+            line.original_monthly_cost = 0;
+
+            // 4. Recalculamos
+            assignTerminalPrices(line); 
+        } 
+    });
+
+    // Watcher de Modelo y Duración
     watch(() => [line.selected_model_id, line.selected_duration], () => assignTerminalPrices(line));
 };
 const addWatchersToAdditionalLine = (line) => {
