@@ -41,12 +41,14 @@ const selectType = (type) => {
     if (type === 'pyme') {
         // Si estamos en modo PYME y ya tenemos el modo inicial, solo cambiamos el estado local
         alert('El segmento PYME estará disponible próximamente.');
-       /* if (props.initialMode === 'pyme') {
+        /*
+        if (props.initialMode === 'pyme') {
              offerType.value = 'pyme';
         } else {
              // Si estamos en la ruta base y seleccionamos PYME, redirigimos al controlador de PYME
              window.location.href = route('pyme.offers.create');
-        }*/
+        }
+             */
     } else {
         // Para SOHO, nos quedamos en la vista actual
         offerType.value = type;

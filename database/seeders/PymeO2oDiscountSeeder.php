@@ -26,7 +26,7 @@ class PymeO2oDiscountSeeder extends Seeder
             ['name' => 'O2O 25%',      'percentage' => 25, 'p12' => 50,  'p24' => 50,  'p36' => 50],
             ['name' => 'O2O 30%',      'percentage' => 30, 'p12' => 50,  'p24' => 50,  'p36' => 50],
             ['name' => 'O2O 35%',      'percentage' => 35, 'p12' => 50,  'p24' => 60,  'p36' => 50],
-            ['name' => 'O2O 40%',      'percentage' => 40, 'p12' => 50,  'p24' => 60,  'p36' => 50],
+           // ['name' => 'O2O 40%',      'percentage' => 40, 'p12' => 50,  'p24' => 60,  'p36' => 50],
         ];
 
         foreach ($discounts as $discount) {

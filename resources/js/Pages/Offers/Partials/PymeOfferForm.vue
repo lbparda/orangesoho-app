@@ -7,19 +7,16 @@ import InputLabel from '@/Components/InputLabel.vue';
 import Modal from '@/Components/Modal.vue';
 import { usePymeOfferCalculations } from '@/composables/PymeuseOfferCalculations';
 
-// Props recibidas del Controlador (PymeOfferController.php)
+// Props recibidas del Controlador
 const props = defineProps({
     clients: { type: Array, default: () => [] },
     packages: { type: Array, default: () => [] },
     discounts: { type: Array, default: () => [] },
-    
-    // Props de Addons
     allAddons: { type: Array, default: () => [] },
-    centralitaMobileAddons: { type: Array, default: () => [] }, // MFO, Agente
-    centralitaExtensions: { type: Array, default: () => [] },   // Básica, Inalámbrica...
-    centralitaFeatures: { type: Array, default: () => [] },     // Operadora Automática
-    fiberFeatures: { type: Array, default: () => [] },          // IP Fija, Fibra Oro
-
+    centralitaMobileAddons: { type: Array, default: () => [] },
+    centralitaExtensions: { type: Array, default: () => [] },
+    centralitaFeatures: { type: Array, default: () => [] },
+    fiberFeatures: { type: Array, default: () => [] },
     operators: Array,
     auth: Object,
     offer: { type: Object, default: null }, 
@@ -27,11 +24,16 @@ const props = defineProps({
 
 const emit = defineEmits(['update:offerType']);
 
+// --- ESTADO DE TARIFAS ---
 const tariffType = ref('OPTIMA'); 
+const optimaType = ref('RPV');
+
+// Computada para saber si estamos en modo BIG
+const isBigOptima = computed(() => tariffType.value === 'OPTIMA' && optimaType.value === 'BIG');
 
 // --- ESTADO PARA ADDONS SELECCIONADOS ---
-const selectedCentralitaFeatures = ref({}); // { id: boolean }
-const centralitaExtensionsQty = ref({}); // { id: cantidad }
+const selectedCentralitaFeatures = ref({});
+const centralitaExtensionsQty = ref({});
 
 // --- LÓGICA DE FILTRADO DE PAQUETES ---
 const mobilePackages = computed(() => props.packages.filter(pkg => pkg.type === 'movil'));
@@ -41,14 +43,13 @@ const fixedPackages = computed(() => props.packages.filter(pkg => pkg.type === '
 const mobileLines = ref([createNewLine()]);
 const fixedLines = ref([createFixedLine()]);
 
-// --- COMPOSABLE DE CÁLCULOS (INTEGRADO) ---
-// Pasamos todos los datos necesarios para que el composable haga los cálculos completos
+// --- COMPOSABLE DE CÁLCULOS ---
 const { 
     getPackagePrice, 
-    calculateMobileLinePrice,      // <-- NOMBRE ACTUALIZADO
-    calculateMobileLineCommission, // <-- NOMBRE ACTUALIZADO
-    calculateFixedLinePrice,       // <-- NOMBRE ACTUALIZADO
-    calculateFixedLineCommission,  // <-- NOMBRE ACTUALIZADO
+    calculateMobileLinePrice,      
+    calculateMobileLineCommission, 
+    calculateFixedLinePrice,       
+    calculateFixedLineCommission,  
     totalCommission 
 } = usePymeOfferCalculations(
     props.packages, 
@@ -56,7 +57,7 @@ const {
     fixedLines, 
     tariffType, 
     props.discounts,
-    { // Objeto addonsData
+    { 
         mobileAddons: props.centralitaMobileAddons,
         fiberFeatures: props.fiberFeatures,
         extensions: props.centralitaExtensions,
@@ -65,6 +66,16 @@ const {
         selectedFeatures: selectedCentralitaFeatures
     }
 );
+
+// WATCHER: Limpiar MFO/Agente si cambia a BIG
+watch(isBigOptima, (isBig) => {
+    if (isBig) {
+        mobileLines.value.forEach(line => {
+            line.has_mfo = false;
+            line.has_agente = false;
+        });
+    }
+});
 
 // --- FUNCIONES AUXILIARES (UI y Terminales) ---
 const getAvailableBrands = (line) => {
@@ -140,12 +151,13 @@ const goBack = () => emit('update:offerType', null);
 
 const saveOffer = () => {
     console.log("Guardando Oferta PYME...", {
+        tariffType: tariffType.value,
+        optimaType: tariffType.value === 'OPTIMA' ? optimaType.value : null, 
         mobileLines: mobileLines.value,
         fixedLines: fixedLines.value,
         centralitaFeatures: selectedCentralitaFeatures.value,
         extensions: centralitaExtensionsQty.value
     });
-    // Aquí iría la llamada al backend para guardar
 };
 </script>
 
@@ -153,7 +165,6 @@ const saveOffer = () => {
     <div class="py-12 bg-gray-100 min-h-screen">
         <div class="max-w-[98%] mx-auto space-y-6">
             
-            <!-- CABECERA -->
             <div class="flex justify-between items-center mb-4 bg-white p-4 rounded shadow-sm">
                 <div>
                     <h2 class="text-2xl font-bold text-gray-800 flex items-center gap-2">
@@ -164,7 +175,6 @@ const saveOffer = () => {
                 <SecondaryButton @click="goBack">&larr; Volver al selector</SecondaryButton>
             </div>
 
-            <!-- SELECTOR TIPO TARIFA -->
             <div class="bg-white shadow-sm sm:rounded-lg p-6">
                 <div class="flex justify-center mb-2">
                     <div class="flex space-x-1 bg-gray-100 p-1 rounded-lg">
@@ -172,9 +182,27 @@ const saveOffer = () => {
                         <button @click="tariffType = 'PERSONALIZADA'" class="px-6 py-2 rounded-md text-sm font-bold transition-all duration-200" :class="tariffType === 'PERSONALIZADA' ? 'bg-white text-blue-600 shadow' : 'text-gray-500 hover:text-gray-700'">SOLUCIÓN PERSONALIZADA</button>
                     </div>
                 </div>
+
+                <div v-if="tariffType === 'OPTIMA'" class="flex justify-center mt-4 animate-fade-in-down">
+                     <div class="flex space-x-4">
+                        <button 
+                            @click="optimaType = 'RPV'" 
+                            class="px-4 py-1.5 rounded-full text-xs font-bold border-2 transition-all duration-200"
+                            :class="optimaType === 'RPV' ? 'border-orange-500 bg-orange-50 text-orange-700' : 'border-gray-200 text-gray-500 hover:border-gray-300'"
+                        >
+                            RPV
+                        </button>
+                        <button 
+                            @click="optimaType = 'BIG'" 
+                            class="px-4 py-1.5 rounded-full text-xs font-bold border-2 transition-all duration-200"
+                            :class="optimaType === 'BIG' ? 'border-orange-500 bg-orange-50 text-orange-700' : 'border-gray-200 text-gray-500 hover:border-gray-300'"
+                        >
+                            BIG
+                        </button>
+                     </div>
+                </div>
             </div>
 
-            <!-- 1. LÍNEAS MÓVILES -->
             <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg border-t-4 border-orange-500">
                 <div class="p-4 border-b bg-gray-50 flex justify-between items-center">
                     <h3 class="text-lg font-bold text-gray-800 uppercase tracking-wide">Líneas Móviles</h3>
@@ -183,21 +211,28 @@ const saveOffer = () => {
                         <span class="text-xl font-bold">{{ totalCommission.toFixed(2) }} €</span>
                     </div>
                 </div>
+                
                 <div class="overflow-x-auto">
-                    <table class="w-full min-w-[1400px] text-xs border-collapse">
+                    <table class="w-full min-w-[1600px] text-xs border-collapse">
                         <thead>
                             <tr class="bg-yellow-300 text-gray-800 font-bold text-center uppercase border-b-2 border-orange-400">
                                 <th class="p-2 border border-gray-300 w-14 bg-yellow-200">Nº</th>
                                 <th class="p-2 border border-gray-300 w-24">Tipo Alta</th>
                                 <th class="p-2 border border-gray-300 w-36">Tarifa</th>
                                 <th class="p-2 border border-gray-300 w-16">CP</th>
-                                <th class="p-2 border border-gray-300 w-12 bg-green-100">MFO</th>
-                                <th class="p-2 border border-gray-300 w-12 bg-green-100">Agente</th>
+                                
+                                <th v-if="!isBigOptima" class="p-2 border border-gray-300 w-12 bg-green-100">MFO</th>
+                                <th v-if="!isBigOptima" class="p-2 border border-gray-300 w-12 bg-green-100">Agente</th>
+                                
                                 <th class="p-2 border border-gray-300 w-16">Term?</th>
                                 <th class="p-2 border border-gray-300 w-20">Mod.</th>
-                                <th class="p-2 border border-gray-300 w-40">Terminal</th>
+                                <th class="p-2 border border-gray-300 w-60">Terminal</th>
+                                
+                                <th class="p-2 border border-gray-300 w-24 bg-orange-50 text-orange-900 border-l-2 border-orange-200">Ini. / Cesión</th>
+                                <th class="p-2 border border-gray-300 w-24 bg-orange-50 text-orange-900">Mes / Apoyo</th>
                                 <th class="p-2 border border-gray-300 w-24">O2O</th>
                                 <th class="p-2 border border-gray-300 w-20 bg-green-50 text-green-900">PVP U.</th>
+                                <th class="p-2 border border-gray-300 w-24 bg-green-100 text-green-900 border-l-2 border-green-200">PVP BLOQUE</th>
                                 <th class="p-2 border border-gray-300 w-20 bg-blue-50 text-blue-900">Com. U.</th>
                                 <th class="p-2 border border-gray-300 w-24 bg-blue-100 text-blue-900 font-extrabold">TOTAL</th>
                                 <th class="p-2 border border-gray-300 w-8"></th>
@@ -217,32 +252,52 @@ const saveOffer = () => {
                                 <td class="p-1 border border-gray-200">
                                     <select v-model="line.cp_duration" class="w-full text-xs border-gray-200 rounded text-center p-1"><option :value="12">12m</option><option :value="24">24m</option><option :value="36">36m</option></select>
                                 </td>
-                                <td class="p-1 border border-gray-200 bg-green-50 text-center"><input type="checkbox" v-model="line.has_mfo" class="rounded text-green-600 h-4 w-4"></td>
-                                <td class="p-1 border border-gray-200 bg-green-50 text-center"><input type="checkbox" v-model="line.has_agente" class="rounded text-green-600 h-4 w-4"></td>
+                                
+                                <td v-if="!isBigOptima" class="p-1 border border-gray-200 bg-green-50 text-center">
+                                    <input type="checkbox" v-model="line.has_mfo" class="rounded text-green-600 h-4 w-4">
+                                </td>
+                                <td v-if="!isBigOptima" class="p-1 border border-gray-200 bg-green-50 text-center">
+                                    <input type="checkbox" v-model="line.has_agente" class="rounded text-green-600 h-4 w-4">
+                                </td>
+
                                 <td class="p-1 border border-gray-200"><select v-model="line.has_terminal" class="w-full text-xs border-gray-200 rounded p-1"><option value="no">NO</option><option value="si">SI</option></select></td>
                                 <td class="p-1 border border-gray-200 bg-gray-50">
                                     <select v-if="line.has_terminal === 'si'" v-model="line.terminal_type" @change="resetTerminalSelection(line)" class="w-full text-[10px] bg-transparent border-0 text-center p-0"><option value="VAP">VAP</option><option value="SUBVENCIONADO">Sub</option></select>
                                     <span v-else class="text-gray-300">-</span>
                                 </td>
-                                <td class="p-1 border border-gray-200 text-left bg-white">
-                                    <div v-if="line.has_terminal === 'si'" class="flex flex-col gap-1">
-                                        <div class="flex gap-1">
+                                <td class="p-1 border border-gray-200 text-left bg-white align-middle">
+                                    <div v-if="line.has_terminal === 'si'" class="flex flex-col gap-1 w-full">
+                                        <div class="flex gap-1 w-full">
                                             <select v-model="line.brand" class="w-1/2 text-[9px] py-0 px-1 border-gray-200 h-6 rounded-sm bg-gray-50"><option value="" disabled>Marca</option><option v-for="b in getAvailableBrands(line)" :key="b" :value="b">{{ b }}</option></select>
                                             <select v-model="line.terminal_id" @change="updateTerminalPrices(line)" :disabled="!line.brand" class="w-1/2 text-[9px] py-0 px-1 border-gray-200 h-6 rounded-sm bg-gray-50"><option :value="null" disabled>Modelo</option><option v-for="t in getAvailableModels(line)" :key="t.id" :value="t.id">{{ t.model }}</option></select>
                                         </div>
                                     </div>
                                     <div v-else class="text-center text-gray-400 italic text-[10px]">Sin terminal</div>
                                 </td>
+
+                                <td class="p-1 border border-gray-200 text-center bg-orange-50 font-mono text-orange-900 text-[10px] font-bold border-l-2 border-orange-200">
+                                    <span v-if="line.has_terminal === 'si'">
+                                        {{ line.terminal_type === 'VAP' ? line.vap_initial_payment.toFixed(2) + '€' : line.sub_cession_price.toFixed(2) + '€' }}
+                                    </span>
+                                    <span v-else class="text-gray-300">-</span>
+                                </td>
+                                <td class="p-1 border border-gray-200 text-center bg-orange-50 font-mono text-orange-900 text-[10px] font-bold">
+                                    <span v-if="line.has_terminal === 'si'">
+                                        {{ line.terminal_type === 'VAP' ? line.vap_monthly_payment.toFixed(2) + '€' : line.sub_subsidy_price.toFixed(2) + '€' }}
+                                    </span>
+                                    <span v-else class="text-gray-300">-</span>
+                                </td>
                                 <td class="p-1 border border-gray-200">
                                     <select v-model="line.o2o_discount_id" class="w-full text-[10px] font-bold text-center border-2 border-yellow-400 rounded bg-white p-1"><option v-for="disc in discounts" :key="disc.id" :value="disc.id">{{ disc.name }}</option></select>
                                 </td>
                                 <td class="p-1 border border-gray-200 bg-green-50 font-mono text-right pr-2 text-green-800 font-medium">
-                                    <!-- CAMBIO: Usamos calculateMobileLinePrice -->
                                     {{ calculateMobileLinePrice(line).toFixed(2) }}€
                                     <div v-if="getPackagePrice(line.package_id) > calculateMobileLinePrice(line)" class="text-[9px] text-gray-400 line-through">{{ getPackagePrice(line.package_id).toFixed(2) }}€</div>
                                 </td>
+                                <td class="p-1 border border-gray-200 bg-green-100 font-mono text-right pr-2 text-green-900 font-bold border-l-2 border-green-200">
+                                    {{ (calculateMobileLinePrice(line) * (line.quantity || 1)).toFixed(2) }}€
+                                </td>
                                 <td class="p-1 border border-gray-200 bg-blue-50 font-mono text-right pr-2 text-blue-700 font-bold">
-                                    <!-- CAMBIO: Usamos calculateMobileLineCommission -->
                                     {{ calculateMobileLineCommission(line).toFixed(2) }}€
                                 </td>
                                 <td class="p-1 border border-gray-200 bg-blue-100 font-mono text-right pr-2 text-blue-900 font-extrabold text-sm border-l-2 border-blue-300">
@@ -250,13 +305,16 @@ const saveOffer = () => {
                                 </td>
                                 <td class="p-1 border border-gray-200 text-center"><button @click="removeMobileLine(index)" class="text-red-400 hover:text-red-600">&times;</button></td>
                             </tr>
-                            <tr class="bg-gray-50 border-t-2 border-orange-200"><td colspan="14" class="p-2 text-center"><button @click="addMobileLine" class="text-orange-600 font-bold text-xs uppercase">+ Añadir Línea</button></td></tr>
+                            <tr class="bg-gray-50 border-t-2 border-orange-200">
+                                <td :colspan="isBigOptima ? 15 : 17" class="p-2 text-center">
+                                    <button @click="addMobileLine" class="text-orange-600 font-bold text-xs uppercase">+ Añadir Línea</button>
+                                </td>
+                            </tr>
                         </tbody>
                     </table>
                 </div>
             </div>
             
-            <!-- 2. OFERTA FIJA -->
             <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg border-t-4 border-purple-500 mt-8">
                 <div class="p-4 border-b bg-gray-50"><h3 class="text-lg font-bold text-gray-800 uppercase">Oferta Fija</h3></div>
                 <div class="overflow-x-auto">
@@ -285,11 +343,9 @@ const saveOffer = () => {
                                 <td class="p-1 border border-gray-200 bg-blue-50 text-center"><input type="checkbox" v-model="line.has_ip_fija" class="rounded text-blue-600 h-4 w-4"></td>
                                 <td class="p-1 border border-gray-200 bg-yellow-50 text-center"><input type="checkbox" v-model="line.has_fibra_oro" class="rounded text-yellow-600 h-4 w-4"></td>
                                 <td class="p-1 border border-gray-200 text-right pr-2 font-mono bg-purple-50">
-                                    <!-- CAMBIO: Usamos calculateFixedLinePrice -->
                                     {{ calculateFixedLinePrice(line).toFixed(2) }} €
                                 </td>
                                 <td class="p-1 border border-gray-200 bg-blue-50 font-mono text-right pr-2 text-blue-700 font-bold">
-                                    <!-- CAMBIO: Usamos calculateFixedLineCommission -->
                                     {{ calculateFixedLineCommission(line).toFixed(2) }}€
                                 </td>
                                 <td class="p-1 border border-gray-200"><button @click="removeFixedLine(index)" class="text-red-400 hover:text-red-600">&times;</button></td>
@@ -300,7 +356,6 @@ const saveOffer = () => {
                 </div>
             </div>
 
-            <!-- 3. SECCIÓN: EXTRAS CENTRALITA -->
             <div class="bg-white p-6 rounded-lg shadow-sm border-t-4 border-green-500 mt-8">
                 <h3 class="font-bold text-lg text-gray-800 mb-4">Centralita y Puesto de Voz</h3>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
