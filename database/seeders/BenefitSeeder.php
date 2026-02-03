@@ -20,6 +20,7 @@ class BenefitSeeder extends Seeder
         $addon_la_extra = Addon::where('name', 'Líneas adicionales móviles')->firstOrFail(); 
         $addon_disney = Addon::where('name', 'Disney+ con +90 canales')->firstOrFail();
         $addon_amazon = Addon::where('name', 'Amazon Prime con +90 canales')->firstOrFail();
+        $addon_netflix = Addon::where('name', 'Netflix con +90 canales')->firstOrFail();
 
 
         // --- 2. CREAR LAS "REGLAS DE BENEFICIO" ---
@@ -58,12 +59,17 @@ class BenefitSeeder extends Seeder
             ['addon_id' => $addon_amazon->id, 'apply_type' => 'free'], // Asumo que Amazon es Gratis
             ['description' => 'Amazon Prime con +90 canales', 'category' => 'Hogar', 'apply_type' => 'free']
         );
+        $b_netflix = Benefit::updateOrCreate(
+            ['addon_id' => $addon_netflix->id, 'apply_type' => 'free'], // Asumo que Netflix es Gratis
+            ['description' => 'Netflix con +90 canales', 'category' => 'Hogar', 'apply_type' => 'free']
+        );
+
 
         // --- 3. ASIGNAR BENEFICIOS Y LÍMITES A PAQUETES ---
 
         // Listas de beneficios
         $empresa_comun = [$b_fibra_oro->id, $b_ms365standard->id, $b_presencia->id, $b_factura->id];
-        $hogar_comun = [$b_disney->id, $b_amazon->id];
+        $hogar_comun = [$b_disney->id, $b_amazon->id,$b_netflix];
         $empresa_10_20 = array_merge($empresa_comun, [$b_la_extra->id]);
 
         // Paquete 1

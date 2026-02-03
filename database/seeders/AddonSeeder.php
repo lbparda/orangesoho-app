@@ -215,14 +215,57 @@ class AddonSeeder extends Seeder
             ['name' => 'HBO MAX con +90 canales'],
             [
                 'type' => 'tv', // O 'service'
-                'price' => 5.78, // ¡Placeholder! Ajusta el precio real (PVP Amazon)
+                'price' => 5.78, // ¡Placeholder! Ajusta el precio real (PVP HBO)
                 'commission' => 10.00, // Ajusta la comisión
                 'decommission' => 0.00,
                 'description' => 'Producto HBO MAX',
                 'created_at' => now(),
                 'updated_at' => now()
             ]
-        );  
+        ); 
+        // 7. Netflix
+        Addon::updateOrCreate(
+            ['name' => 'Netflix con +90 canales'],
+            [
+                'type' => 'tv', // O 'service'
+                'price' => 6.99, // ¡Placeholder! Ajusta el precio real (PVP Netflix)
+                'commission' => 10.00, // Ajusta la comisión
+                'decommission' => 5.00,
+                'description' => 'Producto Netflix (para beneficio)',
+                'created_at' => now(),
+                'updated_at' => now()
+            ]
+        );    
+
+        // 8. Netflix
+        Addon::updateOrCreate(
+            ['name' => 'Dazn Motor con +90 canales'],
+            [
+                'type' => 'tv', // O 'service'
+                'price' => 16.52, // ¡Placeholder! Ajusta el precio real (PVP dazn motor)
+                'commission' => 10.00, // Ajusta la comisión
+                'decommission' => 5.00,
+                'description' => 'Producto Dazn Motor',
+                'created_at' => now(),
+                'updated_at' => now()
+            ]
+        );    
+        // 8. Netflix
+        Addon::updateOrCreate(
+            ['name' => 'Dazn Baloncesto con +90 canales'],
+            [
+                'type' => 'tv', // O 'service'
+                'price' => 8.22, // ¡Placeholder! Ajusta el precio real (PVP dazn basquet)
+                'commission' => 10.00, // Ajusta la comisión
+                'decommission' => 5.00,
+                'description' => 'Producto Dazn Baloncesto',
+                'created_at' => now(),
+                'updated_at' => now()
+            ]
+        );    
+        
+        
+
         // --- NUEVO ADDON: DDI (Marcación Directa de Entrada) ---
         Addon::updateOrCreate( // <-- AÑADIDO
             ['name' => 'DDI'],

@@ -86,6 +86,26 @@ class DiscountSeeder extends Seeder
                 'package_names' => ['Base Plus','NEGOCIO Extra 1', 'NEGOCIO Extra 3', 'NEGOCIO Extra 5']
             ]
         ]);
+        Discount::create([
+                    'name' => '10% Portabilidad sin VAP  - Grupo 1',
+                    'percentage' => 10, 'duration_months' => 12,
+                    'conditions' => [
+                        'applies_to' => 'principal_line', 'requires_portability' => true,
+                        'requires_vap' => false, 'excluded_operators' => [],
+                        'package_names' => ['Base Plus','NEGOCIO Extra 1', 'NEGOCIO Extra 3', 'NEGOCIO Extra 5']
+                    ]
+                ]);
+        
+        Discount::create([
+                    'name' => '10% Alta Nueva o Migración sin VAP - Grupo 1',
+                    'percentage' => 10, 'duration_months' => 12,
+                    'conditions' => [
+                        'applies_to' => 'principal_line',
+                        'requires_portability' => false, // <-- Se añade para que aplique a altas nuevas
+                        'requires_vap' => false,'excluded_operators' => ['Movistar','Vodafone'],
+                        'package_names' => ['Base Plus','NEGOCIO Extra 1', 'NEGOCIO Extra 3', 'NEGOCIO Extra 5']
+                    ]
+                ]);
 
 
 
